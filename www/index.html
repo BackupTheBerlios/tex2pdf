@@ -16,16 +16,19 @@ LaTeX or LyX document using pdf(la)tex, hyperref and other tools. There is a
 bash shell and Perl implementation available.<br>
 The bash port (tex2pdf 2.x) is no longer maintained and is considered
 deprecated. However, you can still find it in the
-<a href="http://download.berlios.de/tex2pdf/">download area of released versions</a>. tex2pdf is coded in Perl from version 3.0 on.<br>
+<a href="http://download.berlios.de/tex2pdf/">download area of released versions</a>. 
+tex2pdf is coded in Perl from version 3.0 on.<br>
 <br>
 When the input file is a LyX document the script produces a LaTeX file with the
 LyX export function first and than processes the exported LaTeX document.<br>
 LaTeX documents are searched for referenced files (other LaTeX docs, images),
-prepared for pdflatex, included EPS/PS/PSTEX images are converted to PDF with epstopdf and finally the script runs pdflatex, bibtex, makeindex and thumbpdf.
-The entire behavior can be adjusted to your personal needs and workarounds for
+prepared for pdflatex, included EPS/PS/PSTEX images are converted to PDF with 
+epstopdf and finally the script runs pdflatex, bibtex, makeindex, thumbpdf or 
+authorindex depending on the dependencies encountered. The entire behavior can
+be adjusted to your personal needs and workarounds for
 known problems with called applications are already integrated.<br>
 
-<h2>Dependencies</h2>
+<h2>Primary dependencies</h2>
 <ul>
    <li><a href="http://tug.org/applications/pdftex">pdftex</a>: generates PDF
    documents from LaTeX. Unfortunately, it cannot handle EPS graphics. This
@@ -34,18 +37,40 @@ known problems with called applications are already integrated.<br>
    EPS images in PDF ones.
    <li><a href="http://www.tug.org/applications/hyperref">hyperref</a>: LaTeX
    package to integrate (colored) links in your PDF doc. It's great!
-   <li>bibtex: handles a bibliograhy and its references
-   <li>makeindex: makes create an index from your LaTeX document.
-   <li>thumbpdf: creates little images of all your document pages and integrate them.
-   <li><a href="http://www-sp.iti.informatik.tu-darmstadt.de/software/ppower4/beta/">
-   ppower4</a>: A java class to postprocess PDF files adding pause effects
-   not only in the text but also in the image displaying. (Only required if
-   you want to process metapost files.)
-   <li><a href="http://www.lyx.org/">LyX</a>: A LaTeX word processor. It is
-   only required when you want to process Lyx documents.
    <li><a href="ftp://ftp.gnu.org/pub/gnu/sed">sed</a>: All sed expressions
    have been replaced by Perl now and it is only needed for the old bash port.
 </ul>
+
+<h2>Other dependencies</h2> Depending on the selected options tex2pdf supports the 
+following tools:
+<ul>
+   <li>bibtex: handles a bibliograhy and its references.
+   <li><a href="ftp://ftp.dante.de/tex-archive/help/Catalogue/entries/glosstex.html">glosstex</a>:
+   handles a glossary using bibtex
+   <li><a href="">makeindex</a>: creates an index from your LaTeX document.
+   <li><a href="ftp://ftp.dante.de/tex-archive/help/Catalogue/entries/authorindex.html">authorindex</a>:
+   creates an author index based on the citations made along the document
+   <li><a href="ftp://ftp.dante.de/tex-archive/help/Catalogue/entries/thumbpdf.html">thumbpdf</a>:
+   creates little images of all your document pages and integrate them.
+   <li><a href="http://www-sp.iti.informatik.tu-darmstadt.de/software/ppower4/beta/">
+   ppower4</a>: A java class to postprocess PDF files adding pause effects
+   not only in the text but also in the image displaying.
+   <li><a href="http://www.lyx.org/">LyX</a>: A LaTeX word processor. It is
+   only required when you want to process Lyx documents.
+</ul>
+
+<h2>Handled graphic formats</h2> Currently tex2pdf cvs version is able to handle automatically the following graphic formats
+<ul>
+   <li> eps/ps: tex2pdf convert eps or ps files to pdf file using eps2pdf
+   <li> eps.gz/ ps.gz:
+   <li> pstex: tex2pdf convert combined ps/latex files to pdf files
+   <li> metapost files can be included using includegraphics or \convertMPtoPDF and tex2pdf takes them into account.
+   In fact the metapost files are managed by pdflatex. xfig 3.2 patchlevel 3d or newer exports metapost files
+   <li> multimetapost files: when the resulting pdf file is postprocessed by ppower this format allows the incremental
+   presentation of graphic information. xfig 3.2 patchlevel 3d or newer exports multimetapost files
+</ul>
+
+
 <h2>Download</h2>
 You may download the current release via the
 <a href="http://developer.berlios.de/projects/tex2pdf/">BerliOS Project Info
