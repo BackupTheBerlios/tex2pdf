@@ -1565,7 +1565,7 @@ sub generate_tex_file {
          if ( -f $file ) { rename($file, $file.'~'); }
       }
 
-      $lyx_output = `$lyx_exec --export latex $lyx_doc 2>&1`;
+      $lyx_output = `$lyx_exec -userdir $lyx_dir --export latex $lyx_doc 2>&1`;
 
       ### check if LaTeX file now really exists
       if ( ! -f $tex_doc ) {
