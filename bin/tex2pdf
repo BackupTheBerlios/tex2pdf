@@ -1848,7 +1848,8 @@ sub identify_file {
 sub convert_epsfrag2pdf {
    my $text;
    my $item;
-   my $eps_file     = $_[0];
+   my $tex_file     = $_[0];
+   my $eps_file     = $_[1];
    my ($tex_target,$tex_src,$pdf_target,$frg_target,$tmp_target);
    my ($eps_base,$eps_path,$suffix);
    my $dvi_log;
@@ -1869,7 +1870,7 @@ sub convert_epsfrag2pdf {
 
    # It should be desirable taht the time check condition to process psfrag
    # substitutions could be based on latex source too. (latex document as global !)
-   if ( ! -f $pdf_target or -M $pdf_target > -M $eps_file ) {
+   if ( ! -f $pdf_target or -M $pdf_target > -M $eps_file or -M $tex_target > -M $tex_file) {
       foreach $item (@PSFRAG_TAGS){
         my %psfrag = %$item;
         $text .= '\\'.$psfrag{name}."{".$psfrag{contents}."}".$psfrag{extra_code}."\n";
@@ -2029,7 +2030,8 @@ sub comment_out {
 
 sub process_textags {
    #modifies global $CONTEXT_DEPTH, @PSFRAG_TAGS and @PATH_TAGS 
-   my $source = $_[0];
+   my $tex_source = $_[0];
+   my $source = $_[1];
    my $tmp_suffix = &param_value('tmp_base_suffix');
    my $mtp_preamble = &param_value('mtp_preamble');
    my $result="";
@@ -2150,7 +2152,7 @@ sub process_textags {
                if (@PSFRAG_TAGS != 0) {
                   report(7, "EPS graphic identified (psfrag tags present): "
                      .$found_file);
-                  &convert_epsfrag2pdf($found_file);
+                  &convert_epsfrag2pdf($tex_source,$found_file);
                } else {
                   report(7, "EPS graphic identified: $found_file");
                   &convert_eps2pdf($found_file);
@@ -2332,13 +2334,13 @@ sub convert_tex2tmp {
       $MAIN_PREAMBLE = $preamble;
       $body = $&.$';
       $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
-      $preamble = &process_textags($preamble);
+      $preamble = &process_textags($source,$preamble);
    } else {
       $preamble = "";
       $body = $contents;
    } 
    
-   $body = &process_textags($body);
+   $body = &process_textags($source,$body);
       
    ### write the new LaTeX target file
    open(TARGET_FILE, ">$target") or
@@ -3330,7 +3332,7 @@ sub generate_pdf_doc {
    ($base,$path,$suffix) = fileparse($source, ('\.tex'));
    $doc = $path.$base;
    $pdf_doc = $base.'.pdf';
-
+   ##### Preparing image container for ps4pdf management of postscript figures
    if ($RUN_PSforPDF eq $YES) {
      my $tex_doc = $doc.'-tmp.tex';
      my $latexlog_base = $log_dir."latex-$$-";
@@ -3346,6 +3348,18 @@ sub generate_pdf_doc {
      &report(6, "\n************ Running dvips on $dvi_doc *************");
      &run_dvips($dvi_doc,$dvilog_base,$dvi_target,'-Ppdf');
      system "ps2pdf $dvi_target $pics_target";
+
+     ### Some cleaning up of temporary files
+     if (&param_value('delete_pdf_images') eq $YES) {
+        push(@TMPFILES, $pics_target);
+     }
+     # Some cleaning up if tex2pdf is not in debug mode
+     push(@TMPFILES, $tex_doc);
+     push(@TMPFILES, $dvi_doc);
+     push(@TMPFILES, $latexlog_base);
+     push(@TMPFILES, $dvilog_base);
+     push(@TMPFILES, $dvi_target);
+
    }
    ### run pdftex until no more errors are reported (max MAXRUNNO)
    while ( $rerun and $runno < $max_run_no )
