@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0beta6";
+my $MYRELEASE="3.0beta7";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -378,29 +378,29 @@ sub file_tail {
    my @cache=();
 
    &check_file($file_name);
-   open(SOURCE_FILE, "<$file_name")
+   open(TAIL_SOURCE, "<$file_name")
       or &abort("Could not read file $file_name: $!");
 
    if($no_of_lines == 0) {
       # print entire file
-      while(<SOURCE_FILE>) {
+      while(<TAIL_SOURCE>) {
          print $_;
       }
       return;
    }
    
    # fill up cache
-   while(@cache < $no_of_lines and <SOURCE_FILE>) {
+   while(@cache < $no_of_lines and <TAIL_SOURCE>) {
       push(@cache, $_);
    }
    
    # always cache the last N lines up to the end of the file
-   while(<SOURCE_FILE>) {
+   while(<TAIL_SOURCE>) {
      shift(@cache);
      push(@cache, $_);
    }
    
-   close SOURCE_FILE;
+   close TAIL_SOURCE;
 
    print @cache;
 }
@@ -408,23 +408,28 @@ sub file_tail {
 ### return all lines of FILE which match match regexp EXPR 
 # parameter 1: FILE - file to read
 # parameter 2: EXPR - regular expression to match
+# parameter 3: true: exit on first occurence, otherwise get all (default: false)
 # return value: array of matching lines
 
 sub grep_file {
    my $file_name = $_[0];
    my $regexp = $_[1];
+   my $first_only = $_[2] ? $TRUE : $FALSE;
    my @result=();
 
-   ### extract all errors and warnings from the log file
+   ### open file and abort if not possible
    &check_file($file_name);
-   open(SOURCE_FILE, "<$file_name")
+   open(GREP_SOURCE, "<$file_name")
       or &abort("Could not read file $file_name: $!");
 
-   while(<SOURCE_FILE>) {
-      push(@result, $_) if(m#$regexp#);
+   while(<GREP_SOURCE>) {
+      if(m#$regexp#) {
+         push(@result, $_);
+         if($first_only) { last; }
+      }
    }
 
-   close SOURCE_FILE;
+   close GREP_SOURCE;
    return @result;
 }
    
@@ -1331,6 +1336,7 @@ sub generate_tex_file {
       &checkCommand("lyx","Cannot generate LaTeX document without LyX!");
       print "\n$MYNAME: Exporting LaTeX file\n";
       
+      ### move some files out of the way that stop LyX from exporting
       foreach my $file ($lyx_dir."lyxpipe.out",$lyx_dir."lyxpipe.in",$tex_doc) {
          if ( -f $file ) { rename($file, $file.'~'); }
       }
@@ -1355,20 +1361,23 @@ sub extract_tag_contents {
    my $error_message="Could not read TeX document to extract $tag_name";
 
    &check_file($source, $error_message.'.');
-   open(SOURCE_FILE, "<$source") or
+   open(EXTRACT_SOURCE, "<$source") or
       &abort($error_message." ($source).");
 
-   while(<SOURCE_FILE>) {
+   while(<EXTRACT_SOURCE>) {
+      # ignore commented text
       s/(^|[^\\])%.*$/$1/;
+
+      # add contents of all occurences of this tag in a line to result list
       while ( /\\($tag_name)(\[[^{]*\])?{+([^{}]*)}/ ) {
          $text=$3; 
-	 $text="" if (!defined($text));
-	 push(@results, $text);
-	 $_ = $';
+         $text="" if (!defined($text));
+         push(@results, $text);
+         $_ = $';
       }
    }
    
-   close SOURCE_FILE;
+   close EXTRACT_SOURCE;
    
    return @results;
 }
@@ -1429,7 +1438,7 @@ sub identify_files {
       # assume that this reference is of a different type and skip it
       # quietly   
       if (!$kpse_result) {
-         print " Ignoring '$tag_contents'.\n"; #FIXME
+         #print " Ignoring '$tag_contents'.\n";
          next;
       }
 
@@ -1443,43 +1452,6 @@ sub identify_files {
       if( &array_index($kpse_result, @found_files) < 0 ) {
          push(@found_files, $kpse_result);
       }
-   }
-   
-   return @found_files;
-}
-
-#### search for filenames in given TeX Tag in entire document
-### skip all comments and duplicates while parsing
-# parameter 1: file to parse
-# parameter 2: full TeX tag name
-# parameter 3: regular expression for the filname suffix (including '.')
-# parameter 4: different path for referenced material (default: docpath)
-# return value: list of found files
-
-sub extract_files {
-   my $source=$_[0];
-   my $tag_name=$_[1];
-   my $suffix=$_[2];
-   my $path_prefix=$_[3];
-   my @matched_tags;
-   my @found_files=();
-
-   if(!defined($path_prefix) or $path_prefix eq "") {
-      $path_prefix = dirname $source;
-   }
-
-   $path_prefix .= '/' if( $path_prefix ne "" and ! ($path_prefix =~ m#/$#) );
-
-   @matched_tags = &extract_tag_contents($source, $tag_name);
-   
-   foreach (@matched_tags) {
-      if( m#^([^{}]*/)?[^{}/.]+($suffix)$# ) {
-         # insert path of source if no absolute path is given
-         s#^([^/])#$path_prefix$1#;
-         if( &array_index($_, @found_files) < 0 ) {
-	    push(@found_files, $_);
-	 }
-      } 
    }
    
    return @found_files;
@@ -1539,32 +1511,54 @@ sub convert_tex2tmp {
    open(TARGET_FILE, ">$target") or
       &abort("Could not open file to write temporary TeX document ($target).");
    
-   ### set target file as stdout
-   select TARGET_FILE;
-   
    if ( $adjust_preamble eq $YES ) {
+      ### check if a4wide paper package is used
+      my $a4_regexp = '^[^%]*\\\\usepackage\{a4wide\}';
+      my $a4_extra_paper = (&grep_file($source, $a4_regexp, $TRUE) > 0);
+
       ### read, parse, modify and write the LaTeX preamble
       while(<SOURCE_FILE>) {
    
          # protect pdflatex execution mode
          s/^(\\batchmode)$/% $1/;
    
-         # print the read line
-         print $_;
+         if ( /^(\\documentclass)(\[[^]]*\])?(\{.*\})/ ) {
+            # insert a4paper in the documentclass when a4wide is used 
+            # fixes problem that hyperref defaults to letter otherwise
+            if ($a4_extra_paper) {
+               # check if package parameters with [] brackets are present
+               if ($2) {
+                  s/^(.documentclass\[.*)\]/$1,a4paper]/;
+               } else {
+                  s/^.documentclass/$&\[a4paper\]/;
+               }
+            }
+
+            ### set target file as stdout
+            select TARGET_FILE;
    
-         # append our extra TeX commands after the matching line
-         if ( /^\\documentclass(\[[^]]*\])?\{.*\}/ ) {
+            # append our extra TeX commands
+            print $_;
+
             print '\usepackage{pslatex}' . "\n";
-            
-   	    if ( &param_value('thumbpdf') eq $YES ) {
+
+            if ( &param_value('thumbpdf') eq $YES ) {
                print '\usepackage{thumbpdf}' . "\n";
-   	    } else {
-   	       print "% no thumbpdf support\n";
-   	    }
-   	 
+            } else {
+               print "% no thumbpdf support\n";
+            }
+ 
             print '\makeatletter' . "\n";
-            print '\usepackage['. join(',', @$hyperref_params_ref) . ']{hyperref}' . "\n";
+            print '\usepackage['.join(',', @$hyperref_params_ref).']{hyperref}'
+               ."\n";
             print '\makeatother' . "\n";
+   
+            ### set STDOUT as stdout again
+            select STDOUT;
+
+         } else {
+            # print the read line
+            print TARGET_FILE $_;
          }
    
          # if end of the preamble is reached stop loop
@@ -1574,90 +1568,105 @@ sub convert_tex2tmp {
    
    ### read, parse, modify and write the TeX body
    while(<SOURCE_FILE>) {
+      # cut off the suffix of eps, ps, and pstex graphics
       s/((\\includegraphics)(\[[^]]*\])?(\{[^}]+))\.(e?ps|pstex)\}/$1}/g;
+
+      # replace the suffix 'pstex_t' with 'pdf_t'
       s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
+
+      # insert the tmp_suffix in tex filenames
+      # I assume that files with no extension are TeX files as well; correct?
       s#(\\(input|include)\{([^}]*/)?[^}/.]+)((\.tex)?\})#$1$tmp_suffix$4#g;
 
       # print the read and manipulted line
-      print $_;
+      print TARGET_FILE $_;
    }
-
-   ### set STDOUT as stdout again
-   select STDOUT;
 
    ### close files
    close SOURCE_FILE;
    close TARGET_FILE;
 }
 
-### Convert all given EPS images to PDF
-# parameters ($@): list of EPS images with relative path to working directoy
+### Convert the given EPS image to PDF
+# parameters $1: EPS image filename with absolute path
+# return value: none
 
 sub convert_eps2pdf {
-   my @image_list=@_;
+   my $image = $_[0];
+   my $image_path;
+   my $image_base;
+   my $image_name;
+   my $suffix;
+   my $image_target;
 
-   foreach my $image (@image_list) {
-      my $image_path;
-      my $image_base;
-      my $image_name;
-      my $suffix;
-      my $image_target;
+   ($image_base,$image_path,$suffix) = fileparse($image, '\.eps', '\.ps', '\.pstex');
+   $image_name = $image_base . $suffix;
+   $image_target = $image_path . $image_base . '.pdf';
+   
+   #### check if image file really exists
+   #&check_file($image, "Could not convert referenced image.");
 
-      ($image_base,$image_path,$suffix) = fileparse($image, '\.eps', '\.ps', '\.pstex');
-      $image_name = $image_base . $suffix;
-      $image_target = $image_path . $image_base . '.pdf';
-      
-      #### check if image file really exists
-      &check_file($image, "Could not convert referenced image.");
+   ### return if image directory is not writeable
+   if (! -w $image_path) {
+      print "$MYNAME: WARNING - Image directory not writable: $image_path\n";
+      print " Skipping '$image_name', assume you have converted it manually.\n";
+      return;
+   }
 
-      if ( ! -f $image_target or -M $image_target > -M $image ) {
-         print "Converting image $image_name ...\n";
-         system('epstopdf', '-outfile='.$image_target, $image)
-	    and &abort("epstopdf failed on $image_name: $!");
-         if (&param_value('delete_pdf_images') eq $YES) {
-            push(@TMPFILES, $image_target);
-	 }
-      } else {
-         print "$image_base.pdf newer than $image_name, conversion skipped...\n";
+   if ( ! -f $image_target or -M $image_target > -M $image ) {
+      print "Converting image $image_name ...\n";
+      system('epstopdf', '-outfile='.$image_target, $image)
+         and &abort("epstopdf failed on $image_name: $!");
+      if (&param_value('delete_pdf_images') eq $YES) {
+         push(@TMPFILES, $image_target);
       }
+   } else {
+      print "$image_base.pdf newer than $image_name, conversion skipped...\n";
    }
 }
 
-### Convert all given PSTEX_T files to PDF_T
-# parameters ($@): list of PSTEX_T files with relative path to working directoy
+### Convert the given PSTEX_T file to PDF_T
+# parameters $1: PSTEX_T filename with absolute path
+# return value: none
 
 sub convert_pstex2pdf {
-   my @pstex_file_list = @_;
+   my $pstex_file = $_[0];
+   my $pstex_path;
+   my $pstex_base;
+   my $pstex_name;
+   my $suffix;
+   my $pstex_target;
+   my @eps_images;
 
-   foreach my $pstex_file (@pstex_file_list) {
-      my $pstex_path;
-      my $pstex_base;
-      my $pstex_name;
-      my $suffix;
-      my $pstex_target;
-      my @eps_images;
-
-      ($pstex_base,$pstex_path,$suffix) = fileparse($pstex_file, ('\.pstex_t'));
-      $pstex_name = $pstex_base . $suffix;
-      $pstex_target = $pstex_path . $pstex_base . '.pdf_t';
-      
-      #### check if image file really exists
-      &check_file($pstex_file, "Could not convert referenced file.");
-
-      # descend into file
-      print "Converting file $pstex_name ...\n";
-
-      # find included EPS image(s)
-      @eps_images=&identify_files($pstex_file, 'includegraphics', ['pstex']);
-
-      # create .pdf_t file
-      &convert_tex2tmp($pstex_file, $pstex_target, undef); 
+   ($pstex_base,$pstex_path,$suffix) = fileparse($pstex_file, ('\.pstex_t'));
+   $pstex_name = $pstex_base . $suffix;
+   $pstex_target = $pstex_path . $pstex_base . '.pdf_t';
    
-      # put tmp file in the tmp file list
-      push(@TMPFILES, $pstex_target);
+   #### check if image file really exists
+   #&check_file($pstex_file, "Could not convert referenced file.");
 
-      # convert image(s) to pdf
-      &convert_eps2pdf(@eps_images);
+   ### return if directory is not writeable
+   if (! -w $pstex_path) {
+      print "$MYNAME: WARNING - Directory not writable: $pstex_path\n";
+      print " Skipping '$pstex_name', assume you have converted it manually.\n";
+      return;
+   }
+
+   # descend into file
+   print "Converting file $pstex_name ...\n";
+
+   # find included EPS image(s)
+   @eps_images=&identify_files($pstex_file, 'includegraphics', ['pstex']);
+
+   # create .pdf_t file
+   &convert_tex2tmp($pstex_file, $pstex_target, undef); 
+
+   # put tmp file in the tmp file list
+   push(@TMPFILES, $pstex_target);
+
+   # convert image(s) to pdf
+   foreach my $image (@eps_images) {
+      &convert_eps2pdf($image);
    }
 }
 
@@ -1696,13 +1705,17 @@ sub convert_images {
    ### Convert all EPS images to PDF
    if ( @eps_image_list > 0) {
       print "\n$MYNAME: Converting EPS images to PDF\n";
-      &convert_eps2pdf(@eps_image_list);
+      foreach my $image (@eps_image_list) {
+         &convert_eps2pdf($image);
+      }
    }
 
    ### Convert all PSTEX_T files to PDF_T
    if ( @pstex_file_list > 0 ) { 
       print "\n$MYNAME: Converting pstex_t docs to pdf_t docs\n";
-      &convert_pstex2pdf(@pstex_file_list);
+      foreach my $image (@pstex_file_list) {
+         &convert_pstex2pdf($image);
+      }
    }
 
    print "\nFinished converting for ${tex_source}.\n";
@@ -1909,7 +1922,7 @@ sub prepare_logdir {
    # make sure there is a slash at the end of the path
    $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
    
-   if( <$log_dir/*.log> ne "" and &param_value('clean_logs') eq $YES ) { 
+   if( <$log_dir/*.log> and &param_value('clean_logs') eq $YES ) { 
       print "\nRemoving old log files ($log_dir).\n";
       unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/thumbpdf-*.log>);
    } else {
