@@ -56,7 +56,7 @@ use Cwd;
 use Text::Balanced extract_bracketed;
 use strict;
 
-############### INITIALAZATION OF GLOBAL VARAIABLES
+############### INITIALAZATION OF GLOBAL VARIABLES
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -91,7 +91,7 @@ my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
 my $MTP_TMP_BASESUFFIX="-mp";
-my @EPS_SUFFIXES=('eps','ps','ps.gz','eps.gz' );
+my @EPS_SUFFIXES=('eps','ps','pstex','eps.gz','ps.gz','pstex.gz' );
 my $PDF_ORIG_SUFFIX='pdf.orig';
 my $MPOST_SUFFIX='mp';
 my $MULTI_MP_SUFFIX='mmp';
@@ -2303,7 +2303,7 @@ sub adjust_filenames {
          if ($contents =~ s/\.($suffixes_regexp|\d+)\s*$//) {
             $found_suffix = $1; 
          }
-         # identify corresponding file ((taking @graphic_params into account)
+         # identify corresponding file (taking @graphic_params into account)
          $found_file = identify_file($contents, \@suffixes);
          # translate to pdf (taking @graphic_params into account)
          # add in tmp file list and in translated figure list
@@ -2315,16 +2315,27 @@ sub adjust_filenames {
             $contents .=~ $MTP_TMP_BASESUFFIX.'.'.$found_suffix;
          }
       } elsif ($name eq "input" or $name eq "include") {
+         my $test_suffix = undef;
+         my $append_suffix = undef;
+         my $found_file = undef;
          # replace the suffix 'pstex_t' with 'pdf_t'
          # s/(\\input\{[^}]+?\.)pstex_t\n?\}/$1pdf_t}/sg;
-         $contents =~ s/\.pstex_t\s*$/\.pdf_t/;
-
+         if($contents =~ s/\.pstex_t\s*$//) {
+            $append_suffix = ".pdf_t";
+            $test_suffix = "pstex_t";
          # insert the tmp_suffix in tex filenames
          # I assume that files with no extension are TeX files as well; correct?
          # s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#
          # $1$tmp_suffix$4#sg;
-         $contents =~ s#^\s*((.*?/)?[^/.]+?)((\.tex)?)\s*$#$1$tmp_suffix$3#;
+         } else {
+            $contents =~ s/((\.tex)?)\s*$//;
+            $append_suffix = "$tmp_suffix$1";
+            $test_suffix = "tex";
+         }
           # identify corresponding file
+         $found_file = identify_file($contents, [ $test_suffix ]);
+         $contents .= $append_suffix;
+          # translate to pdf (taking @graphic_params into account)
           # generate adjusted temp file for pdf translatation
           # add in tmp file list and in temp doc list
       } elsif ($name eq "multiinclude") {
