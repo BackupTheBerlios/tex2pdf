@@ -44,7 +44,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-$MYRELEASE="2.2.8";
+$MYRELEASE="2.2.8pl";
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -211,17 +211,17 @@ $RC_VARIABLES="PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR DEFAU
 
 ### Removing all temporary files
 
-sub clean_up  {
+sub clean_up {
    print "$MYNAME: Removing temporary files ...\n";
-   if ( "$TMPFILES" ) { system "rm $TMPFILES"; }
-   if ( "$TMPBASE" ) { system "rm ${TMPBASE}.*"; }
+   if ( "$TMPFILES" ) { unlink glob "$TMPFILES"; }
+   if ( "$TMPBASE" ) { unlink glob "${TMPBASE}.*"; }
 }
 
 ###  exit with an error message
 
-sub abort  {
+sub abort {
    print "$MYNAME: $@\n";
-   if ( "$CLEAN_ON_ABORT"  eq "yes" ) { clean_up; }
+   if ( "$CLEAN_ON_ABORT" eq "yes" ) { clean_up; }
    print "Aborting ...\n";
    exit 1;
 }
@@ -233,9 +233,10 @@ sub abort  {
 # $2 default value
 
 sub questionYN {
-   local $response;
+   local $user_input;
    local $default;
-   while true; {
+   $RESPONSE="";
+   while ( $RESPONSE eq "" ) {
       if ( $_[1] eq "yes" ) {
          print "$_[0] [y]";
          $default="yes";
@@ -243,13 +244,18 @@ sub questionYN {
          print "$_[0] [n]";
          $default="no";
       }
-      read response </dev/tty;
-      case $response in;
-         y*|Y*) $RESPONSE="yes"; return ;;;
-         n*|N*) $RESPONSE="no"; return ;;;
-         "") $RESPONSE=$default; return ;;;
- print "Please respond with y or n.\n";
-      esac;
+      $user_input = <STDIN>;
+      chomp($user_input);
+      
+      if( $user_input =~ /^[yY]([Ee][Ss])?/ ) {
+         $RESPONSE="yes";
+      } elsif ( $user_input =~ /^[Nn][Oo]?/ ) {
+         $RESPONSE="no";
+      } elsif ( $user_input eq "" ) {
+         $RESPONSE=$default;
+      } else {
+         print "Please respond with y or n.\n";
+      }
    }
 }
 
@@ -262,18 +268,27 @@ sub questionYN {
 
 sub input_number {
    local $user_input;
-   while true; {
-      print "$_[0] [$_[1]]: ";
-      read user_input </dev/tty;
+   local $question = $_[0];
+   local $default = $_[1];
+   local $min_limit = $_[2];
+   local $max_limit = $_[3];
+   $RESPONSE="";
+
+   while ( $RESPONSE eq "" ) {
+      print "$question [$default]: ";
+      $user_input = <STDIN>;
+      chomp($user_input);
+      
       if ( ! "$user_input" ) {
          $RESPONSE=$_[1];
          return;
       } else {
-         $RESPONSE=`echo $user_input | $SEDCMD -n "s/^\([[:digit:]]\+\)$/\1/p"`;
-         if ( ! "$RESPONSE" ) || ( $RESPONSE < $3 or $RESPONSE > $4 ) {
-            print "Invalid input. Please enter a positve integer from $3 to $4.\n";
-         } else {
-            return;
+         $_ = $user_input;
+         s/^([[:digit:]]+)$/$1/;
+         $RESPONSE = $_;
+         if ( ! "$RESPONSE" ) || ( $RESPONSE < $min_limit or $RESPONSE > $max_limit ) {
+	 $RESPONSE="";
+            print "Invalid input. Please enter a positve integer from $min_limit to $max_limit.\n";
          }
       }
    }
@@ -286,23 +301,24 @@ sub input_number {
 # $RESPONSE chosen value
 
 sub chooseValue {
-   local $DEFAULT_VALUE=$_[1];
    local $QUESTION=$_[0];
+   local $DEFAULT_VALUE=$_[1];
    local $INDEX=1;
    local $DEFAULT_NUMBER=1;
 
-   shift 2;
+   shift @_;
+   shift @_;
 
    print "$QUESTION\n";
-   while ( $INDEX <= $# )
+   while ( $INDEX <= @_ )
    {
-      print "$INDEX) ${!INDEX}\n";
-      if ( "$DEFAULT_VALUE" eq "${!INDEX}" ) { $DEFAULT_NUMBER=$INDEX; }
-      $INDEX=$(($INDEX+1));
+      print "$INDEX) $_[$INDEX]\n";
+      if ( $DEFAULT_VALUE eq $_[$INDEX] ) { $DEFAULT_NUMBER=$INDEX; }
+      $INDEX = $INDEX + 1;
    }
 
-   input_number "Please enter the corresponding number" $DEFAULT_NUMBER 1 $#;
-   $RESPONSE="${!RESPONSE}";
+   &input_number("Please enter the corresponding number", $DEFAULT_NUMBER, 1, @_);
+   $RESPONSE = $_[$RESPONSE];
 }
 
 ### interactively answer a question
