@@ -30,6 +30,8 @@ workarounds for known problems with called applications are already integrated.<
 
 <h2>Primary dependencies</h2>
 <ul>
+   <li><a href="http://www.perl.org/">Perl</a>: As tex2pdf is a Perl script it
+       requires Perl of course. ;-)
    <li><a href="http://tug.org/applications/pdftex">pdftex</a>: generates PDF
    documents from LaTeX. Unfortunately, it cannot handle EPS graphics. This
    missing feature is the main reason why the tex2pdf project has started ...
@@ -37,8 +39,6 @@ workarounds for known problems with called applications are already integrated.<
    EPS images in PDF ones.
    <li><a href="http://www.tug.org/applications/hyperref">hyperref</a>: LaTeX
    package to integrate (colored) links in your PDF doc. It's great!
-   <li><a href="ftp://ftp.gnu.org/pub/gnu/sed">sed</a>: All sed expressions
-   have been replaced by Perl now and it is only needed for the old bash port.
 </ul>
 
 <h2>Other dependencies</h2> Depending on the selected options, tex2pdf supports the 
@@ -57,17 +57,22 @@ following tools:
    not only in the text but also in the image displaying.
    <li><a href="http://www.lyx.org/">LyX</a>: A LaTeX word processor. It is
    only required when you want to process Lyx documents.
+   <li><a href="ftp://ftp.gnu.org/pub/gnu/sed">sed</a>: All sed expressions
+   have been replaced by Perl now and it is only needed for the old bash port.
 </ul>
 
-<h2>Handled graphic formats</h2> Currently tex2pdf cvs version is able to handle automatically the following graphic formats
+<h2>Handled graphic formats</h2> Currently tex2pdf is able to handle automatically the following graphic formats:
 <ul>
-   <li> eps/ps: tex2pdf convert eps or ps files to pdf file using eps2pdf
-   <li> eps.gz/ ps.gz:
-   <li> pstex: tex2pdf convert combined ps/latex files to pdf files
+   <li> eps/ps: tex2pdf converts eps or ps files to pdf file using eps2pdf
+   <li> eps.gz/ps.gz: gzipped eps/ps files are extracted first
+   <li> pstex: tex2pdf converts combined ps/latex files to pdf files
    <li> metapost files can be included using includegraphics or \convertMPtoPDF and tex2pdf takes them into account.
    In fact the metapost files are managed by pdflatex. xfig 3.2 patchlevel 3d or newer exports metapost files
    <li> multimetapost files: when the resulting pdf file is postprocessed by ppower this format allows the incremental
    presentation of graphic information. xfig 3.2 patchlevel 3d or newer exports multimetapost files
+   <li> bitmap graphics (jpg/png/tif): jpg, png and tif files with the same
+        ibase name are recognized and prevent the eps convertation to pdf.
+        Pdftex can handle bitmaps itself and the result is better this way.
 </ul>
 
 
@@ -97,11 +102,11 @@ to the <a href="mailto:tex2pdf-devel@lists.berlios.de">developer mailing list</a
 Anyone is invited to help to improve tex2pdf. Therefore any kind of feedback
 is welcome. Maybe you even would like to hack the code and send us your
 changes. This would help a lot and is highly appreciated. Think about it :-)
-Subscribing to the developer mailing list might be a first step (see above).
+Subscribing to the developer mailing list might be a first step (see below).
 Please, send it to the 
 <a href="mailto:tex2pdf-devel@lists.berlios.de">developer mailing list</a>.
 Thanks in advance.<br><br>
-If you would like to contribute to this project visit <a href="http://developer.berlios.de/projects/tex2pdf/">its site</a> at BerliOS and sign in.<br><br>
+If you would like to contribute to this project visit <a href="http://developer.berlios.de/projects/tex2pdf/">its site</a> at BerliOS.<br><br>
 There are also two mailing lists:
 <ul>
 <li>an <a href="http://lists.berlios.de/mailman/listinfo/tex2pdf-announce">announce list</a>: very low traffic; stuff like new versions, etc.
@@ -118,25 +123,29 @@ There are also two mailing lists:
 <br>
 
 <h2>Forthcoming features</h2>
-New features are scheduled to be implemented in forthcoming versions of tex2pdf. Several latex packages are claiming for tex2pdf support.
-Hopefully, the following latex packages will be supported in next beta release:
+New features are scheduled to be implemented in forthcoming versions of tex2pdf.
+Hopefully, the following features will be supported in the next release:
 <ul>
- <li>bibtopics
- <li>bibunits
+ <li>support for bibtopics package
+ <li>support for bibunits package
+ <li>correct handling of nested LaTeX tags
+ <li>workaround for graphics with a dot in their filename base
+    (e.g. 'fig-2.6.eps')
 </ul>
 <br>
 
 <h2>Credits</h2>
 
-Many people out there have been helping us to keep up tex2pdf project. We would especially like to express our deep gratitude to
-Jean-Pierre Chretien,Fernando Perez, Herbert Voss and anyone else who has helped us.<br><br>
+Many people out there have been helping us to keep up tex2pdf project. Thanks to all of them!<br>
+We would especially like to express our deep gratitude to
+Jean-Pierre Chretien, Fernando Perez and Herbert Voss for their frequent
+contributions!<br><br>
 
 Sooooo, have fun with it !!!! <br>
 <br><hr>
 
 <accessed silent>
-[ <I>Last modified: <modified date type=iso> &nbsp;<modified time> &nbsp;
--- &nbsp;
+[ <I>Last modified: <!--#flastmod file="index.html" -->&nbsp; -- &nbsp;
 Send comments to &nbsp;</I><TT><A HREF="mailto:tex2pdf-devel@lists.berlios.de">tex2pdf developers</a></TT> ]
 
 </body>
