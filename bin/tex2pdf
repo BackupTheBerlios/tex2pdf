@@ -58,6 +58,12 @@ $MYRELEASE="2.2.8pl";
 ### text token for no value
 $NIL="NOVALUE";
 
+### text token for boolean 'no' 
+$NO="no";
+
+### text token for boolean 'yes' 
+$YES="yes";
+
 ### pdftex package options:
 ### see hyperref manual for more:/usr/share/texmf/doc/latex/hyperref/manual.pdf
 
@@ -70,7 +76,7 @@ $PAPERSIZE="a4paper";
 
 # use color for links in the resulting document
 # options: 'yes' or 'no'
-$COLORLINKS="yes";
+$COLORLINKS=$YES;
 
 # possible link colors
 # this list MUST have the syntax "COLOR1 COLOR2 ..."
@@ -98,11 +104,11 @@ $CITECOLOR="red";
 
 # Default title for document info in the resulting PDF 
 # leave blank for default value
-$DEFAULT_TITLE="$NIL";
+$DEFAULT_TITLE=$NIL;
 
 # Default author for document info in the resulting PDF 
 # leave blank for default value
-$DEFAULT_AUTHOR="$NIL";
+$DEFAULT_AUTHOR=$NIL;
 
 # additional parameters for hyperref package
 # format: PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...
@@ -111,7 +117,7 @@ $ADDITIONAL_PARAMETERS="";
 
 # link tabel of contents to pages instead of sections
 # sets linktocpage
-$LINKTOCPAGE="yes";
+$LINKTOCPAGE=$YES;
 
 ### other parameters
 
@@ -119,7 +125,8 @@ $LINKTOCPAGE="yes";
 # source_dir - same directory as the LaTeX file
 # input_dir  - same directory as the input files of the LaTeX file
 # custom     - specified directory PDFCUSTOMDIR
-$PDFOUT="source_dir";
+@POSSIBLE_PDFOUT= qw< source_dir input_dir custom >;
+$PDFOUT = $POSSIBLE_PDFOUT[0];
 
 # custom directory where the generated pdf file is stored
 $PDFCUSTOMDIR=$ENV{'HOME'};
@@ -127,7 +134,7 @@ $PDFCUSTOMDIR=$ENV{'HOME'};
 # usage of bibtex
 # possible values: 'yes' (always run bibtex), 'no' (never run bibtex),
 # 'test' (scan tex file for a bibtex entry and run it if required)
-@POSSIBLE_BIBTEX= qw< yes no test >;
+@POSSIBLE_BIBTEX= ($YES, $NO, "test");
 $BIBTEX="test";
 
 # maximal number of runs for pdflatex
@@ -148,23 +155,23 @@ $LOGDIR="/tmp/tex2pdf-$ENV{'USER'}/";
 # at the same time. So, if you want to be on the safe side set "no" and clean
 # the log directory manually.
 # possible values: 'yes', 'no'
-$CLEANLOGS="no";
+$CLEANLOGS=$NO;
 
 # Use which command to check for required executables
 # possible values: 'yes', 'no'
-$COMMANDCHECK="yes";
+$COMMANDCHECK=$YES;
 
 # use thumbpdf to include thumbnails of all PDF document pages
 # requires ghostscript version 5.50 or higher to generate the thumbnails (PNG)
 # see more informations: /usr/share/texmf/doc/pdftex/thumbpdf/readme.txt
 # possible values: "yes" for thumbnails, "no" - without thumbnails
-$THUMBNAILS="no";
+$THUMBNAILS=$NO;
 
 # execution of the makeindex command for index handling
 # this should fix the problem with a missing document index
 # possible values: "yes" - check for index file and if found call makeindex
 #                  "no"  - never execute it
-$MAKEINDEX="yes";
+$MAKEINDEX=$YES;
 
 ##### expert parameters
 ## the following parameters should NOT be modified by regular users!
@@ -187,7 +194,7 @@ $PDFTEXOPTS="";
 $TMPBASESUFFIX="-pdf";
 
 # remove all tmp files on abort
-$CLEAN_ON_ABORT="no";
+$CLEAN_ON_ABORT=$NO;
 
 # sed command which is used to insert additional TeX commands in the LaTeX
 # preamble
@@ -216,7 +223,7 @@ $RC_FILENAME="$ENV{'HOME'}/.tex2pdfrc";
 
 sub clean_up {
    print "$MYNAME: Removing temporary files ...\n";
-   if ( $TMPFILES ) { unlink glob "$TMPFILES"; }
+   if ( $TMPFILES ) { unlink glob $TMPFILES; }
    if ( $TMPBASE ) { unlink glob "$TMPBASE.*"; }
 }
 
@@ -224,7 +231,7 @@ sub clean_up {
 
 sub abort {
    print "$MYNAME: @_\n";
-   if ( "$CLEAN_ON_ABORT" eq "yes" ) { clean_up; }
+   if ( $CLEAN_ON_ABORT eq $YES ) { clean_up; }
    print "Aborting ...\n";
    exit 1;
 }
@@ -240,20 +247,20 @@ sub questionYN {
    my $default;
    $RESPONSE="";
    while ( $RESPONSE eq "" ) {
-      if ( $_[1] eq "yes" ) {
+      if ( $_[1] eq $YES ) {
          print "$_[0] [y]";
-         $default="yes";
+         $default=$YES;
       } else {
          print "$_[0] [n]";
-         $default="no";
+         $default=$NO;
       }
       $user_input = <STDIN>;
       chomp($user_input);
       
       if( $user_input =~ /^[yY]([Ee][Ss])?/ ) {
-         $RESPONSE="yes";
+         $RESPONSE=$YES;
       } elsif ( $user_input =~ /^[Nn][Oo]?/ ) {
-         $RESPONSE="no";
+         $RESPONSE=$NO;
       } elsif ( $user_input eq "" ) {
          $RESPONSE=$default;
       } else {
@@ -330,8 +337,8 @@ sub input_text {
    my $user_input;
 
    print "Suggested value: $_[1]\n";
-   questionYN("Do you want to keep this value?", "yes");
-   if ( $RESPONSE eq "yes" ) {
+   questionYN("Do you want to keep this value?", $YES);
+   if ( $RESPONSE eq $YES ) {
       $RESPONSE="$_[1]";
    } else {
       print "$_[0] ";
@@ -370,7 +377,7 @@ sub check_file {
 sub check_dir {
    my $directory = $_[0];
    my $message = defined($_[1]) ? $_[1] : "Not a valid path!";
-   my $allow_creation = defined($_[2]) ? $_[2] : "no";
+   my $allow_creation = defined($_[2]) ? $_[2] : $NO;
 
    if ( index($directory, "/") != 0 ) {
       print "\n";
@@ -380,7 +387,7 @@ sub check_dir {
    } elsif ( ! -d $directory ) {
       # dir does not exist
       print "\n";
-      if ( $allow_creation eq "yes" ) {
+      if ( $allow_creation eq $YES ) {
          # creation allowed
          print "$MYNAME: I cannot find '$directory'. Try to create it.\n";
 	 if ( mkdir($directory, 0755) ) {
@@ -416,12 +423,12 @@ sub check_dir {
 sub input_dir {
    my $question = $_[0];
    my $default_dir = $_[1];
-   my $allow_creation = defined($_[2]) ? $_[2] : "no";
+   my $allow_creation = defined($_[2]) ? $_[2] : $NO;
    my $user_input;
    $RESPONSE = "";
 
    if ( defined($default_dir) and index($default_dir, "/") == 0 
-        and ( (! -d $default_dir and $allow_creation eq "yes") 
+        and ( (! -d $default_dir and $allow_creation eq $YES) 
         or (-d $default_dir and -w $default_dir) ) ) {
       $question .= " [$default_dir]: ";
    } else {
@@ -464,12 +471,12 @@ sub setYNValue {
    my $option_letter = $_[2];
 
    if( $argument =~ /^[yY]([Ee][Ss])?/ ) {
-      $$variable = "yes";
+      $$variable = $YES;
    } elsif ( $argument =~ /^[Nn][Oo]?/ ) {
-      $$variable = "no";
+      $$variable = $NO;
    } else {
       print "\n";
-      print "$variable requires 'yes' or 'no'." ;
+      print "$variable requires '$YES' or '$NO'." ;
       &abort("Illegal argument for option -$option_letter: $argument");
    }
 }
@@ -596,8 +603,8 @@ sub usage {
 
 sub help {
    print "\n";
-   print "$MYNAME  Version $MYRELEASE\n";
-   usage;
+   print "$MYNAME Version $MYRELEASE\n";
+   @usage;
    print " -h : print this message\n";
    print " -v : print version information\n";
    print " -o : print configuration parameters\n";
@@ -609,8 +616,8 @@ sub help {
    print " -n BOOL   : generate thumbnails for PDF document\n";
    print " -t TITLE  : specify title for PDF document info\n";
    print " -a AUTHOR : specify author for PDF document info\n";
-   print " -p SELECT : select papersize: $POSSIBLE_PAPER\n";
-   print " -b SELECT : select bibtex handling: $POSSIBLE_BIBTEX\n";
+   print " -p SELECT : select papersize: @POSSIBLE_PAPER\n";
+   print " -b SELECT : select bibtex handling: @POSSIBLE_BIBTEX\n";
    print " -d PATH   : custom directory where the final PDF is stored\n";
    print "\n";
 }
@@ -619,7 +626,7 @@ sub help {
 
 sub print_version   {
    print "\n";
-   print "$MYNAME  Version $MYRELEASE\n";
+   print "$MYNAME Version $MYRELEASE\n";
    print "\n";
 }
 
@@ -627,10 +634,10 @@ sub print_version   {
 # parameters ($@): all arguments that were passed to the script by the shell
 
 sub check_arguments  {
-   if ( $# == 0 ) {
+   if ( @_ == 0 ) {
       print "\n";
       print "$MYNAME: I need at least one argument!\n";
-      usage;
+      @usage;
       exit 1;
    }
 }
@@ -650,7 +657,7 @@ sub configure  {
 
    print "----------------\n";
    print "$MYNAME can set the papersize of the resulting PDF document.\n";
-   chooseValue "What papersize should be used?" $PAPERSIZE $POSSIBLE_PAPER;
+   &chooseValue("What papersize should be used?",$PAPERSIZE,@POSSIBLE_PAPER);
    $PAPERSIZE=$RESPONSE;
    print "\n";
 
@@ -658,38 +665,38 @@ sub configure  {
    print "The table of contents of the resulting PDF document is normally linked\n";
    print "to the corresponding section. However, you can also link it to the\n";
    print "corresponding page instead.\n";
-   questionYN "Should TOC be linked to pages?" $LINKTOCPAGE;
+   &questionYN("Should TOC be linked to pages?",$LINKTOCPAGE);
    $LINKTOCPAGE=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "$MYNAME can use different colors for links inside the PDF document.\n";
-   questionYN "Should colors be used for links?" $COLORLINKS;
+   &questionYN("Should colors be used for links?",$COLORLINKS);
    $COLORLINKS=$RESPONSE;
    print "\n";
 
-   if ( "$COLORLINKS" eq "yes" ) {
+   if ( $COLORLINKS eq $YES ) {
         print "----------------\n";
         print "It is possible to specify the color for page links.\n";
-        chooseValue "What color should be used for page links?" $PAGECOLOR $LINK_COLORS;
+        &chooseValue("What color should be used for page links?",$PAGECOLOR,@LINK_COLORS);
         $PAGECOLOR=$RESPONSE;
         print "\n";
 
         print "----------------\n";
         print "It is possible to specify the color for normal internal links.\n";
-        chooseValue "What color should be used for normal links?" $LINKCOLOR $LINK_COLORS;
+        &chooseValue("What color should be used for normal links?",$LINKCOLOR,@LINK_COLORS);
         $LINKCOLOR=$RESPONSE;
         print "\n";
 
         print "----------------\n";
         print "It is possible to specify the URL color.\n";
-        chooseValue "What color should be used for URLs?" $URLCOLOR $LINK_COLORS;
+        &chooseValue("What color should be used for URLs?",$URLCOLOR,@LINK_COLORS);
         $URLCOLOR=$RESPONSE;
         print "\n";
 
         print "----------------\n";
         print "It is possible to specify the citation color.\n";
-        chooseValue "What color should be used for citation?" $CITECOLOR $LINK_COLORS;
+        &chooseValue("What color should be used for citation?",$CITECOLOR,@LINK_COLORS);
         $CITECOLOR=$RESPONSE;
         print "\n";
    }
@@ -704,47 +711,47 @@ sub configure  {
    print "The default title for the document info of all generated documents.\n";
    print "$NIL will be recognized.\n";
    print "\n";
-   input_text "Default document title?" "$DEFAULT_TITLE";
-   $DEFAULT_TITLE="$RESPONSE";
+   &input_text("Default document title?",$DEFAULT_TITLE);
+   $DEFAULT_TITLE=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "The default author for the document info of all generated documents.\n";
    print "$NIL will be recognized.\n";
    print "\n";
-   input_text "Default document author?" "$DEFAULT_AUTHOR";
-   $DEFAULT_AUTHOR="$RESPONSE";
+   &input_text("Default document author?",$DEFAULT_AUTHOR);
+   $DEFAULT_AUTHOR=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "If you like you can make me pass additional parameters to hyperref.\n";
    print "See the hyperref manual for possible values and details.\n";
    print "These parameters should normally have the format:\n";
-   print "$PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...\n";
+   print "PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...\n";
    print "Leave blank for no additional values.\n";
    print "\n";
-   input_text "Additional parameters ?" "$ADDITIONAL_PARAMETERS";
-   $ADDITIONAL_PARAMETERS="$RESPONSE";
+   &input_text("Additional parameters ?",$ADDITIONAL_PARAMETERS);
+   $ADDITIONAL_PARAMETERS=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "You can now specify in which directory the resulting document should\n";
    print "be written by default:\n";
-   print "- 'source_dir' means the same directory as the LaTeX file.\n";
-   print "- 'input_dir' means the same directory as the input files of your\n";
+   print "- '$POSSIBLE_PDFOUT[0]' means the same directory as the LaTeX file.\n";
+   print "- '$POSSIBLE_PDFOUT[1]' means the same directory as the input files of your\n";
    print "  LaTeX file (e.g. images, included documents, etc.).\n";
    print "  This path should be specified in the source LaTeX document otherwise\n";
-   print "  it is identical with the 'source_dir' option.\n";
-   print "- 'custom' means you want to specify your own directory where the\n";
+   print "  it is identical with the '$POSSIBLE_PDFOUT[0]' option.\n";
+   print "- '$POSSIBLE_PDFOUT[2]' means you want to specify your own directory where the\n";
    print "  generated document should be written.\n";
-   chooseValue "Which output directory?" $PDFOUT source_dir input_dir custom ;
+   &chooseValue("Which output directory?",$PDFOUT,@POSSIBLE_PDFOUT);
    $PDFOUT=$RESPONSE;
    print "\n";
 
-   if ( "$PDFOUT" eq "custom" ) {
+   if ( $PDFOUT eq $POSSIBLE_PDFOUT[2] ) {
       print "----------------\n";
       print "You have choosen to specifiy a custom output directory.\n";
-      input_dir "What custom directory should be used?" "$PDFCUSTOMDIR" "yes";
+      &input_dir("What custom directory should be used?",$PDFCUSTOMDIR,$YES);
       $PDFCUSTOMDIR=$RESPONSE;
       print "\n";
    }
@@ -753,63 +760,63 @@ sub configure  {
    print "The sed executable to use can be specified.\n";
    print "Type 'sed' in order to use the sed in your path.\n";
    print "\n";
-   input_text "What sed executable should be used?" "$SEDEXE";
+   &input_text("What sed executable should be used?",$SEDEXE);
    $SEDEXE=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "The bibtex usage can be specified.\n";
-   print "Possible values are: 'yes' (always run bibtex), 'no' (never run\n";
-   print "bibtex) and 'test' (scan tex file for a bibtex entry and run it\n";
+   print "Possible values are: '$POSSIBLE_BIBTEX[0]' (always run bibtex), '$POSSIBLE_BIBTEX[1]' (never run\n";
+   print "bibtex) and '$POSSIBLE_BIBTEX[3]' (scan tex file for a bibtex entry and run it\n";
    print "if required).\n";
-   chooseValue "How should bibtex be used?" $BIBTEX $POSSIBLE_BIBTEX;
+   &chooseValue("How should bibtex be used?",$BIBTEX,@POSSIBLE_BIBTEX);
    $BIBTEX=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "The maximal number of runs for pdflatex can be specified.\n";
-   input_number "What should be the maximum number of runs for pdflatex?" $MAXRUNNO 1 9;
+   &input_number("What should be the maximum number of runs for pdflatex?",$MAXRUNNO 1 9);
    $MAXRUNNO=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "The minimal number of runs for pdflatex can be specified.\n";
    print "Possible values are: 1 ... $MAXRUNNO.\n";
-   input_number "What should be the minimum number of runs for pdflatex?" $MINRUNNO 1 $MAXRUNNO;
+   &input_number("What should be the minimum number of runs for pdflatex?",$MINRUNNO,1,$MAXRUNNO);
    $MINRUNNO=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "The log directory is used to store information about the generation\n";
    print "process for later review, e.g. for debugging.\n";
-   input_dir "What log directory should be used?" "$LOGDIR" "yes";
+   &input_dir("What log directory should be used?",$LOGDIR,$YES);
    $LOGDIR=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "$MYNAME can clean the log files before execution.\n";
    print "You might experience problems if you run $MYNAME on several documents\n";
-   print "the same time. If you want to be on the safe side, answer 'no'.\n";
-   questionYN "Should the log files be cleaned before execution?" $CLEANLOGS;
+   print "the same time. If you want to be on the safe side, answer '$NO'.\n";
+   &questionYN("Should the log files be cleaned before execution?",$CLEANLOGS);
    $CLEANLOGS=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "$MYNAME can check for the required executables.\n";
-   questionYN "Should $MYNAME check for the required executables?" $COMMANDCHECK;
+   &questionYN("Should $MYNAME check for the required executables?",$COMMANDCHECK);
    $COMMANDCHECK=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "$MYNAME can use thumbpdf to include thumbnails of the document pages.\n";
    print "This requires Ghostscript 5.50 or higher.\n";
-   questionYN "Should PNG thumbnails be created?" $THUMBNAILS;
+   &questionYN("Should PNG thumbnails be created?",$THUMBNAILS);
    $THUMBNAILS=$RESPONSE;
    print "\n";
 
    print "----------------\n";
    print "$MYNAME can force the call of makeindex if pdftex fails to do this.\n";
-   questionYN "Should the call of makeindex be forced?" $MAKEINDEX;
+   &questionYN("Should the call of makeindex be forced?",$MAKEINDEX);
    $MAKEINDEX=$RESPONSE;
    print "\n";
 
@@ -817,22 +824,22 @@ sub configure  {
    print "Additional options for pdflatex can be specified.\n";
    print "Normally, you can leave this blank.\n";
    print "\n";
-   input_text "What additional options for pdflatex should be used? :";
-   $PDFTEXOPTS="$RESPONSE";
+   &input_text("What additional options for pdflatex should be used? :", $PDFTEXOPTS);
+   $PDFTEXOPTS=$RESPONSE;
    print "\n";
 }
 
 ### check if the most important executables are installed on the system
 # parameters: none
 
-sub check_commands  {
+sub check_commands {
    ### check for which command
-   checkCommand which "You can switch off all command checks by setting $COMMANDCHECK=no in the parameter section of $MYNAME.";
+   checkCommand which "You can switch off all command checks by setting $COMMANDCHECK=$NO in the parameter section of $MYNAME.";
 
    ### sed executable
    # GNU sed version 3.02 or higher is recommended
    # Download: ftp://ftp.gnu.org/pub/gnu/sed
-   if ( "$SEDEXE" eq "sed" ) {
+   if ( $SEDEXE eq "sed" ) {
       checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed";
    }
 
@@ -841,13 +848,13 @@ sub check_commands  {
    checkCommand pdflatex "See pdftex homepage for details: http://tug.org/applications/pdftex";
    checkCommand epstopdf "See pdftex homepage for details: http://tug.org/applications/pdftex";
 
-   if ( "$THUMBNAILS" eq "yes" ) {
-      checkCommand thumbpdf "You can switch off thumbpdf support by setting $THUMBNAILS=no in the parameter section of $MYNAME.";
+   if ( $THUMBNAILS eq $YES ) {
+      checkCommand thumbpdf "You can switch off thumbpdf support by setting $THUMBNAILS=$NO in the parameter section of $MYNAME.";
    }
 
    ### bibtex executable
-   if ( "$BIBTEX" ne "no" ) {
-      checkCommand bibtex "You can switch off BibTeX support by setting $BIBTEX=no in the parameter section of $MYNAME.";
+   if ( $BIBTEX ne $NO ) {
+      checkCommand bibtex "You can switch off BibTeX support by setting $BIBTEX=$NO in the parameter section of $MYNAME.";
    }
 }
 
@@ -860,10 +867,10 @@ sub generate_tex_file  {
    local $TEXDOC=$_[1];
 
    ### Check if LyX file can be accessed
-   check_file "$LYXDOC" "Cannot read the specified LyX document!";
+   check_file $LYXDOC "Cannot read the specified LyX document!";
 
    ### Check if LaTeX file exists and is newer than the LyX file
-   if ( -f "$TEXDOC" and "$TEXDOC" -nt "$LYXDOC" ) {
+   if ( -f $TEXDOC and $TEXDOC -nt $LYXDOC ) {
       print "\n";
       print "$MYNAME: LaTeX file is newer than LyX document '$LYXDOC'.\n";
       print "Using existing TeX file: $TEXDOC\n";
@@ -900,7 +907,7 @@ sub extract_files  {
    $FOUND_FILES=`sed -n -e "s/\(^\|[^\]\)%.*$/\1/" \;
      -e "s/^.*[\]\($TAGNAME\)\(\[[^{]*\]\)\?{\(\([^}]*\/\)\?[^}/.]\+\($SUFFIX\)\)}.*$/\3/p" $SOURCE`;
 
-   if ( "$FILES" ) {
+   if ( $FILES ) {
       for $i ($FILES);
       {
          if ( `echo $FOUND_FILES | ${SEDEXE} -n "\| $i\( \|$\)|p"` ) {
@@ -929,7 +936,7 @@ sub getFileList  {
 
       # Get the list of files included by the argument.
       extract_files "$_[0]" "include\|input" "";
-      $IMPORTS="$FOUND_FILES";
+      $IMPORTS=$FOUND_FILES;
 
       # Recurse.
       for $file ($IMPORTS ; do);
@@ -1004,21 +1011,21 @@ sub convert_pstex2pdf  {
 
 sub generate_parameters  {
    local $PARAMS=pdftex;
-   if ( "$PAPERSIZE" ne "$NIL" ) { $PARAMS="$PARAMS,$PAPERSIZE"; }
-   if ( "$LINKTOCPAGE" eq "yes" ) { $PARAMS="$PARAMS,linktocpage"; }
-   if ( "$TITLE" ne "$NIL" ) { $PARAMS="$PARAMS,pdftitle={$TITLE}"; }
-   if ( "$AUTHOR" ne "$NIL" ) { $PARAMS="$PARAMS,pdfauthor={$AUTHOR}"; }
-   if ( "$COLORLINKS" eq "yes" ) {
+   if ( $PAPERSIZE ne $NIL ) { $PARAMS="$PARAMS,$PAPERSIZE"; }
+   if ( $LINKTOCPAGE eq $YES ) { $PARAMS="$PARAMS,linktocpage"; }
+   if ( $TITLE ne $NIL ) { $PARAMS="$PARAMS,pdftitle={$TITLE}"; }
+   if ( $AUTHOR ne $NIL ) { $PARAMS="$PARAMS,pdfauthor={$AUTHOR}"; }
+   if ( $COLORLINKS eq $YES ) {
       $PARAMS="$PARAMS,colorlinks=true";
-      if ( "$LINKCOLOR" ne "$NIL" ) { $PARAMS="$PARAMS,linkcolor={$LINKCOLOR}"; }
-      if ( "$PAGECOLOR" ne "$NIL" ) { $PARAMS="$PARAMS,pagecolor={$PAGECOLOR}"; }
-      if ( "$URLCOLOR" ne "$NIL" ) { $PARAMS="$PARAMS,urlcolor={$URLCOLOR}"; }
-      if ( "$CITECOLOR" ne "$NIL" ) { $PARAMS="$PARAMS,citecolor={$CITECOLOR}"; }
+      if ( $LINKCOLOR ne $NIL ) { $PARAMS="$PARAMS,linkcolor={$LINKCOLOR}"; }
+      if ( $PAGECOLOR ne $NIL ) { $PARAMS="$PARAMS,pagecolor={$PAGECOLOR}"; }
+      if ( $URLCOLOR ne $NIL ) { $PARAMS="$PARAMS,urlcolor={$URLCOLOR}"; }
+      if ( $CITECOLOR ne $NIL ) { $PARAMS="$PARAMS,citecolor={$CITECOLOR}"; }
    } else {
       $PARAMS="$PARAMS,colorlinks=false";
    }
-   if ( "$ADDITIONAL_PARAMETERS" ) { $PARAMS="$PARAMS,$ADDITIONAL_PARAMETERS"; }
-   $HYPERREF_PARAMS="$PARAMS";
+   if ( $ADDITIONAL_PARAMETERS ) { $PARAMS="$PARAMS,$ADDITIONAL_PARAMETERS"; }
+   $HYPERREF_PARAMS=$PARAMS;
 }
 
 ### Converted included images to pdf and change the corresponding
@@ -1038,9 +1045,9 @@ sub prepare_document  {
    ##### Get EPS images from the source file
    print "\n";
    print "Scanning for EPS images (.eps/.ps):\n";
-   extract_files "$TEXSOURCE" includegraphics "\.e\?ps";
-   $EPSIMAGES="$FOUND_FILES";
-   if ( "$EPSIMAGES" ) {
+   extract_files $TEXSOURCE includegraphics "\.e\?ps";
+   $EPSIMAGES=$FOUND_FILES;
+   if ( $EPSIMAGES ) {
       print "$EPSIMAGES\n";
    } else {
       print "None.\n";
@@ -1049,9 +1056,9 @@ sub prepare_document  {
    ##### Get PSTEX_T files from the source file
    print "\n";
    print "Scanning for PSTEX_T files (.pstex_t):\n";
-   extract_files "$TEXSOURCE" input "\.pstex_t";
-   $PSTEXS="$FOUND_FILES";
-   if ( "$PSTEXS" ) {
+   extract_files $TEXSOURCE input "\.pstex_t";
+   $PSTEXS=$FOUND_FILES;
+   if ( $PSTEXS ) {
       print "$PSTEXS\n";
    } else {
       print "None.\n";
@@ -1061,7 +1068,7 @@ sub prepare_document  {
    $TMPFILES="$TMPFILES $TARGETFILE";
 
    ### if thumbnails should be generated thumbdf package must be used
-   if ( "$THUMBNAILS" eq "yes" ) {
+   if ( $THUMBNAILS eq $YES ) {
       $THUMBPDF_INSERT='\\usepackage{thumbpdf}';
    } else {
       $THUMBPDF_INSERT="% no thumbpdf support";
@@ -1088,10 +1095,10 @@ sub prepare_document  {
    $_[0] > $TARGETFILE;
 
    ### Convert all EPS images to pdf
-   if ( "$EPSIMAGES" ) { convert_eps2pdf $EPSIMAGES; }
+   if ( $EPSIMAGES ne "" ) { convert_eps2pdf $EPSIMAGES; }
 
    ### Convert all PSTEX_T files to PDF_T
-   if ( "$PSTEXS" ) { convert_pstex2pdf $PSTEXS; }
+   if ( $PSTEXS ne "" ) { convert_pstex2pdf $PSTEXS; }
 
    print "\n";
    print "Finished: ${TEXSOURCE}.\n";
@@ -1133,16 +1140,16 @@ sub run_pdflatex  {
    }
 }
 
-#### run bibtex if BIBTEX=yes or a bibliography tag is found
+#### run bibtex if BIBTEX=$YES or a bibliography tag is found
 # included tex files are not parsed for a bibliography
 # parmeter $1: filename of the aux file without .aux suffix
 
 sub handle_bibtex  {
    $AUXFILE=$_[0];
    print "\n";
-   if ( "$BIBTEX" eq "yes" ) {
+   if ( $BIBTEX eq $YES ) {
       $BIBLIO=1;
-      print "$MYNAME: BibTeX paramter set to 'yes'; running BibTeX.\n";
+      print "$MYNAME: BibTeX paramter set to '$YES'; running BibTeX.\n";
    } else {
       print "$MYNAME: Checking for BibTeX bibliography in document.\n";
       $BIBLIO=`grep "^[^%]*[\]bibliography{" ${AUXFILE}.tex | wc -l`;
@@ -1164,7 +1171,7 @@ sub handle_bibtex  {
          cat ${BIBTEXLOG}
          print "*************************************************************\n";
          print "\n";
-         print "$MYNAME: You can switch off BibTeX support by setting $BIBTEX=no in the parameter section of $MYNAME.\n";
+         print "$MYNAME: You can switch off BibTeX support by setting $BIBTEX=$NO in the parameter section of $MYNAME.\n";
       } else {
          print "BibTeX finished without errors.\n";
       }
@@ -1220,7 +1227,7 @@ print "$MYNAME: Processing given parameters and arguments.\n";
 check_arguments $@;
 
 ##### command line options and private configuration files handling
-$CONFIGURE_REQ="no";
+$CONFIGURE_REQ=$NO;
 
 ### scan parameters (1st level)
 $OPTIND=1;
@@ -1229,26 +1236,26 @@ while getopts hvorb:c:p:i:t:a:l:n:d: OPTION;
    case "$OPTION" in;
       h) help; exit 0 ;;;
       v) print_version; exit 0 ;;;
-      o) $PRINT_ONLY="yes" ;;;
-      r) $CONFIGURE_REQ="yes";;;
+      o) $PRINT_ONLY=$YES ;;;
+      r) $CONFIGURE_REQ=$YES;;;
 	 b|c|p|i|t|a|l|n|d) ;;;
       *) usage; exit 1 ;;;
    esac;
 }
 
 ### set parameters from rc file
-if ( -f "$RC_FILENAME" ) {
+if ( -f $RC_FILENAME ) {
   read_configuration;
   #### compatibilty with old RC files where SEDEXE could be ""
-  if ( ! "$SEDEXE" ) { $SEDEXE=sed; }
+  if ( $SEDEXE eq "" ) { $SEDEXE=sed; }
 } else {
-  if ( "$PRINT_ONLY" ne "yes" and "$CONFIGURE_REQ" ne "yes" ) {
+  if ( $PRINT_ONLY ne $YES and $CONFIGURE_REQ ne $YES ) {
      &abort "Script is not configured. Please run $MYNAME -r.";
   }
 }
 
 ### configure parameters
-if ( "$CONFIGURE_REQ" eq "yes" ) {
+if ( $CONFIGURE_REQ eq $YES ) {
   configure;
   write_configuration;
   print_configuration;
@@ -1269,8 +1276,8 @@ while getopts b:p:i:t:a:l:c:n:d: OPTION;
     n) setYNValue THUMBNAILS $OPTARG n ;;;
     l) setYNValue CLEANLOGS $OPTARG l ;;;
     d) if check_dir $OPTARG;
-	     $PDFCUSTOMDIR="$OPTARG";
-	     $PDFOUT=custom;
+	     $PDFCUSTOMDIR=$OPTARG;
+	     $PDFOUT=$POSSIBLE_PDFOUT[2];
 	  } else {
 	     &abort "Please, choose a VALID path.";
 	  fi ;;;
@@ -1279,7 +1286,7 @@ while getopts b:p:i:t:a:l:c:n:d: OPTION;
 
 ### print configuration parameters
 
-if ( "$PRINT_ONLY" eq "yes" ) {
+if ( $PRINT_ONLY eq $YES ) {
    print_configuration;
    exit 0;
 }
@@ -1295,7 +1302,7 @@ if ! mkdir -p ${LOGDIR}
    exit 1;
 }
 
-if ( "$LOGFILES" and "`ls ${LOGDIR}`" and "$CLEANLOGS" eq "yes" ) {
+if ( $LOGFILES and "`ls ${LOGDIR}`" and $CLEANLOGS eq $YES ) {
    print "\n";
    print "Removing old log files ($LOGDIR).\n";
    system "rm ${LOGDIR}pdflatex-*.log ${LOGDIR}bibtex-*.log ${LOGDIR}thumbpdf-*.log";
@@ -1305,14 +1312,14 @@ if ( "$LOGFILES" and "`ls ${LOGDIR}`" and "$CLEANLOGS" eq "yes" ) {
 }
 
 ### make sure that TMPBASESUFFIX is not empty
-if ( ! "$TMPBASESUFFIX" ) {
+if ( $TMPBASESUFFIX eq "" ) {
    print "\n";
    print "$MYNAME: CAUTION: Parameter TMPBASESUFFIX is not set.\n";
    &abort "Using these settings would destroy the original files!";
 }
 
 ##### check for required commands
-if ( "$SEDEXE" ne "`basename $SEDEXE`" and ! -x "$SEDEXE" ) {
+if ( $SEDEXE ne "`basename $SEDEXE`" and ! -x $SEDEXE ) {
    print "\n";
    print "$MYNAME: Specified sed executable not found (${SEDEXE})\n";
    print "Using sed executable in your path.\n";
@@ -1320,7 +1327,7 @@ if ( "$SEDEXE" ne "`basename $SEDEXE`" and ! -x "$SEDEXE" ) {
    $SEDEXE=sed;
 }
 
-if ( "$COMMANDCHECK" ne "no" ) {
+if ( $COMMANDCHECK ne $NO ) {
    check_commands;
 }
 
@@ -1334,7 +1341,7 @@ $DOCNAME=`basename $DOCUMENT`;
 $DOCPATH=`echo "$DOCUMENT" | ${SEDEXE} -e "s/^\(.*\)$DOCNAME/\1/"`;
 
 ###### change working directory to document directory
-if ( "$DOCPATH" ) {
+if ( $DOCPATH ne "" ) {
    cd $DOCPATH;
 }
 
@@ -1343,7 +1350,7 @@ $DOCPATH=`pwd`/;
 
 ###### Cut off suffix and do lyx or tex specific stuff
 $DOCBASE=`basename $DOCNAME .lyx`;
-if ( "$DOCBASE" ne "$DOCNAME" ) {
+if ( $DOCBASE ne $DOCNAME ) {
    ### DOCNAME has an extention .lyx => Lyx document
    # generate Latex document if required
    generate_tex_file ${DOCBASE}.lyx ${DOCBASE}.tex;
@@ -1369,17 +1376,17 @@ $THUMBPDFLOG=${LOGDIR}thumbpdf-$$.log;
 ##### Get title and author from main LaTeX document
 print "\n";
 print "$MYNAME: Parsing LaTeX file\n";
-if ( ! "$TITLE" ) {
+if ( $TITLE eq "" ) {
    $TITLE=`${SEDEXE} -n "s/^.*[\]title{\([^{}]*\)}.*$/\1/1p" $PASSEDTEXDOC`;
-   if ( ! "$TITLE" ) {
+   if ( $TITLE eq "" ) {
       print "\n";
       print "$MYNAME: WARNING: Could not identify document's title correctly.\n";
       print "Maybe you have used a LaTeX Tag inside the title which confuses me.\n";
       print "You can either set a title on the command line using option -t or\n";
       print "change the title of the LaTeX file in order to avoid the problem.\n";
-      if ( "$DEFAULT_TITLE" ) {
+      if ( $DEFAULT_TITLE ne "" ) {
          print "Using default title: $DEFAULT_TITLE\n";
-	 $TITLE="$DEFAULT_TITLE";
+	 $TITLE=$DEFAULT_TITLE;
       } else {
          print "Title field will be empty.\n";
       }
@@ -1388,17 +1395,17 @@ if ( ! "$TITLE" ) {
    }
 }
 
-if ( ! "$AUTHOR" ) {
+if ( $AUTHOR eq "" ) {
    $AUTHOR=`${SEDEXE} -n "s/^.*[\]author{\([^{}]*\)}.*$/\1/1p" $PASSEDTEXDOC`;
-   if ( ! "$AUTHOR" ) {
+   if ( $AUTHOR eq "" ) {
       print "\n";
       print "$MYNAME: WARNING: Could not identify document's author correctly.\n";
       print "Maybe you have used a LaTeX Tag inside the author field which confuses me.\n";
       print "You can either set an author on the command line using option -a or\n";
       print "change the author of the LaTeX file in order to avoid the problem.\n";
-      if ( "$DEFAULT_AUTHOR" ) {
+      if ( $DEFAULT_AUTHOR ne "" ) {
          print "Using default title: $DEFAULT_AUTHOR\n";
-	 $AUTHOR="$DEFAULT_AUTHOR";
+	 $AUTHOR=$DEFAULT_AUTHOR;
       } else {
          print "Author field will be empty.\n";
       }
@@ -1420,9 +1427,9 @@ generate_parameters;
 $INPUTPATH=`$SEDEXE -n "s|^[\]def[\]input@path{\+\([^{}]*\)}\+|\1|1p" $PASSEDTEXDOC`;
 
 ## check if INPUTPATH is ok
-if ( "$INPUTPATH" ) {
+if ( $INPUTPATH ne "" ) {
    print "$MYNAME: Found an input path in the latex document: $INPUTPATH\n";
-   if ( -d "$INPUTPATH" and -r "$INPUTPATH" ) {
+   if ( -d $INPUTPATH and -r $INPUTPATH ) {
       print "Change working directory to input path.\n";
       cd $INPUTPATH;
    } else {
@@ -1436,12 +1443,12 @@ if ( "$INPUTPATH" ) {
 # set the directory where the final pdf will be stored
 $PDFOUTDIR=;
 case $PDFOUT in;
-   custom) $PDFOUTDIR=$PDFCUSTOMDIR ;;;
-   input_dir) $PDFOUTDIR=$INPUTPATH ;;;
-   source_dir) $PDFOUTDIR=$DOCPATH ;;;
+   $POSSIBLE_PDFOUT[2]) $PDFOUTDIR=$PDFCUSTOMDIR ;;;
+   $POSSIBLE_PDFOUT[1]) $PDFOUTDIR=$INPUTPATH ;;;
+   $POSSIBLE_PDFOUT[0]) $PDFOUTDIR=$DOCPATH ;;;
 esac;
 
-if ( ! "$PDFOUTDIR" ) { $PDFOUTDIR=$DOCPATH; }
+if ( $PDFOUTDIR eq "" ) { $PDFOUTDIR=$DOCPATH; }
 
 ##### Get the list of imported files from the tex file
 $FILES=;
@@ -1450,7 +1457,7 @@ getFileList $PASSEDTEXDOC;
 # remove main file from list (needs special handling)
 $FILES=`echo "$FILES" | ${SEDEXE} -e "s|^ *$PASSEDTEXDOC||"`;
 
-if ( "$FILES" ) {
+if ( $FILES ne "" ) {
    print "\n";
    print "Found the following included TeX files:\n";
    for $file ($FILES ; do);
@@ -1466,7 +1473,7 @@ if ( "$FILES" ) {
 prepare_document $PASSEDTEXDOC ${TMPBASE}.tex;
 
 # included files
-if ( "$FILES" ) {
+if ( $FILES ne "" ) {
    for $file ($FILES ; do);
       $TMP_FILE=`echo $file | ${SEDEXE} -e "s/\.tex$//"`;
       prepare_document $file ${TMP_FILE}${TMPBASESUFFIX}.tex;
@@ -1490,7 +1497,7 @@ while ( $rerun != 0 and $runno <= $MAXRUNNO )
    }
 
    ### Execute BibTeX after first run if set (and required)
-   if ( $runno == 1 and "$BIBTEX" ne "no" ) {
+   if ( $runno == 1 and $BIBTEX ne $NO ) {
       handle_bibtex ${TMPBASE}
    }
 
@@ -1500,13 +1507,13 @@ while ( $rerun != 0 and $runno <= $MAXRUNNO )
 $rerun=0;
 
 ### if the THUMBNAILS option is switched on then make thumbnails
-if ( "$THUMBNAILS" eq "yes" ) {
+if ( $THUMBNAILS eq $YES ) {
    run_thumbpdf ${TMPBASE}
    $rerun=1;
 }
 
 ### generate index if required
-if ( -f ${TMPBASE}.idx  and "$MAKEINDEX" ne "no" ) {
+if ( -f ${TMPBASE}.idx  and $MAKEINDEX ne $NO ) {
    print "\n";
    print "$MYNAME: Document seems to have an index. Generating ...\n";
    print "\n";
