@@ -1737,14 +1737,6 @@ sub join_tag {
    return $tag_string;
 }
 
-my $file = $ARGV[0];
-my $tagname = $ARGV[1];
-my $data;
-my $error_message="Could not read TeX document to extract $tagname";
-print "File: $file\n";
-print "Tagname: $tagname\n";
-
-
 #### search TeX document for a certain text tag (e.g. author, title)
 # parameter 1: file to parse
 # parameter 2: full TeX tag name
