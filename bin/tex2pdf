@@ -93,7 +93,7 @@ my $CONFIGURED=$FALSE;
 my $RUN_PSforPDF = $NO;
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.19";
+my $MYRELEASE="3.1.20";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -3233,9 +3233,9 @@ sub generate_hyperref_params {
          $value= $matches[0];
          if (! defined($value) ) {
             &report(4, "\nWARNING: Could not identify document's $info correctly.");
-            &report(7, "Maybe you have used a LaTeX tag inside the $info which confuses me.\n",
-               "Adjust the $info of the LaTeX file in order to avoid the problem or\n",
-               "you could set the $info parameter manually.");
+            #&report(7, "Maybe you have used a LaTeX tag inside the $info which confuses me.\n",
+            #   "Adjust the $info of the LaTeX file in order to avoid the problem or\n",
+            #   "you could set the $info parameter manually.");
             $value= &param_value("default_$info");
             &report(7, "Using default-$info: $value");
          }
@@ -3243,6 +3243,8 @@ sub generate_hyperref_params {
       if (! defined($value) or $value eq $NIL ) {
          &report(7, "$info field set to $NIL - no value will be passed.");
       } else {
+         report(9, "Identified $info tag: $value");
+         $value=~ s/\\[a-zA-Z]*|\{|\}//g;
          &report(7, "Document's $info: $value");
          push(@params, "pdf$info={$value}");
       }
