@@ -58,7 +58,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1.7";
+my $MYRELEASE="3.1.8";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -2138,6 +2138,18 @@ sub adjust_filenames_OLD {
    return $_;
 }
 
+### return the the given code commented out
+# functions takes care of trailing code by adding a final newline
+# parameter 1: TeX code as string
+# return value: commented tag as string
+
+sub comment_out {
+   my $string = '% '.$_[0];
+   $string =~ s/\n/\n\% /gs;
+   $string .= "\n";
+   return $string;
+}
+
 ### adjust all filenames in the LaTeX code to the tmp files
 # parameter 1: original LaTeX code from the source file
 # return value: adjusted code
@@ -2147,7 +2159,9 @@ sub adjust_filenames {
    my $tmp_suffix = &param_value('tmp_base_suffix');
    my $mtp_preamble = &param_value('mtp_preamble');
    my $result="";
-   my $handled_tagnames="psfrag|includegraphics|input|include|multiinclude|convertMPtoPDF";
+   my $handled_tagnames="psfrag|begin|end|graphicspath|psfrag|includegraphics|input|include|multiinclude|convertMPtoPDF";
+   my $context_depth=0;
+   my @graphic_params = ();
    
    while(defined($source) and $source ne "") {
       my %tag;
@@ -2163,26 +2177,55 @@ sub adjust_filenames {
       last if(not %tag);
       
       $name = $tag{name};
+      $contents = $tag{contents};
 
-      if($name eq "psfrag") {
+      if ( $name eq "begin" ) {
+         $context_depth++;
+      } elsif ( $name eq "end" ) {
+         my @new_params = ();
+         foreach (@graphic_params) {
+            push (@new_params, $_) if ($_->{context_depth} < $context_depth);
+         }
+         @graphic_params = @new_params;
+         $context_depth--;
+      } elsif ( $name eq "graphicspath" ) {
+         my $dirs = $contents;
+         my @directories = ();
+         $dirs =~ s/(^|[^\\])%.*\n/$1/gm; # remove comments
+         $dirs =~ s/^\s*{?\s*|\s*}?\s*$//g; # remove leading/trailing brackets
+         @directories = split(/\s*}\s*{\s*/m, $dirs ); # split string in dirctory list
+         $tag{directories} = \@directories;
+         $tag{context_depth} = $context_depth;
+         report(10,"tag graphicspath parsed: ".join(", ", @directories)."\n");
+         push @graphic_params, \%tag;
+      } elsif( $name eq "psfrag" ) {
          # Comment out the psfrag statements
          #s/(\\psfrag\{.*\}(\[[^]]*?\])*?\{.*\})/\%$1/g;
-
-         my $tag_string = '% '.join_tag(%tag);
-         $tag_string =~ s/\n/\n\% /gs;
-         $tag_string .= "\n" if (substr($source,0,1) ne "\n");
-         $result .= $tag_string;
-         next;
-      }
-      
-      $contents = $tag{contents};
-      
-      if ($name eq "includegraphics") {
+         my $extra_code;
+         my $source_pos = pos($source);
+         ($extra_code, $source, $prefix) = extract_bracketed($source, "{}",
+           '(\s|%.*\n|\[[^\]]*\])*');
+         if(not defined($extra_code) or $extra_code eq "") {
+            report(3, "Could not parse psfrag code correctly, ignoring it!");
+            pos($source) = $source_pos;
+         } else {
+            $extra_code = $prefix.$extra_code;
+            $tag{context_depth} = $context_depth;
+            $tag{extra_code} = $extra_code; 
+            push @graphic_params, \%tag;
+            $result .= comment_out(join_tag(%tag).$extra_code);
+            report(10, "psfrag code extracted successfully and commented out("
+                  .$contents.")");
+            next;
+         }
+      } elsif ($name eq "includegraphics") {
          # cut off the suffix of eps, ps, *.gz and pstex graphics
          #s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)
          #\n?\}/$1}/sg;
          $contents =~ s/\.(e?ps|pstex|e?ps\.gz)\s*$//;
-
+          # identify corresponding file
+          # translate to pdf (taking @graphic_params) into account
+          # add in tmp file list and in translated figure list
          if ($mtp_preamble ne $NO) {
             # replace the suffix '.#' with '-mp.#'
             #s/(\\includegraphics(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1
@@ -2199,6 +2242,9 @@ sub adjust_filenames {
          # s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#
          # $1$tmp_suffix$4#sg;
          $contents =~ s#^\s*((.*?/)?[^/.]+?)((\.tex)?)\s*$#$1$tmp_suffix$3#;
+          # identify corresponding file
+          # generate adjusted temp file for pdf translatation
+          # add in tmp file list and in temp doc list
       } elsif ($name eq "multiinclude") {
          if ($mtp_preamble eq $NO) {
             # cut off the suffix of mmp graphics
