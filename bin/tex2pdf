@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1a";
+my $MYRELEASE="3.0.21";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1567,7 +1567,7 @@ sub generate_tex_file {
 sub extract_tag_contents {
    my $source=$_[0];
    my $tag_name=$_[1];
-   my $text;
+   my $contents;
    my @results=();
    my $error_message="Could not read TeX document to extract $tag_name";
 
@@ -1575,32 +1575,32 @@ sub extract_tag_contents {
    open(EXTRACT_SOURCE, "<$source") or
       &abort($error_message." ($source).");
 
-   my $continuation="";
+
    while(<EXTRACT_SOURCE>) {
-      $_ = $continuation . $_;
-      if ( s/(^|[^\\])%.*\n/$1/ ) {
-         # ignore commented text and concatenate with next line
-         $continuation = $_;
-      }
-      else {
-         s/(^|[^\\])%.*\n/$1/;
-         # ignore \thanks{}
-         s/\\thanks\{.*?\}//g;
-         # change \and to and
-         s/\\and/ and/g;
-         # add contents of all occurences of this tag in a line to result list
-         while ( /\\($tag_name)(\[[^]]*?\])*?{+([^{}]*)}/ ) {
-            $text=$3; 
-            $text="" if (!defined($text));
-            push(@results, $text);
-            $_ = $';
-         };
-         $continuation = "";
-      }
+      ### ignore comments
+      s/(^|[^\\])%.*/$1/;
+      # ignore \thanks{}
+      s/\\thanks\{.*?\}//g;
+      # change \and to and
+      s/\\and/ and/g;
+
+      $contents .= $_;
    }
-   
+
    close EXTRACT_SOURCE;
-   
+
+   $_ = $contents;
+
+   # add contents of all occurences of this tag in a line to result list
+   while ( /\\($tag_name)(\[[^]]*?\])*?{+([^{}]*?)}/s ) {
+      my $text = $3;
+      $_ = $';
+      # remove newlines
+      $text =~ s/\n//g;
+      $text="" if (!defined($text));
+      push(@results, $text);
+   }
+
    return @results;
 }
 
@@ -1740,6 +1740,103 @@ sub get_file_list {
    }
 }
 
+### do the required modifications in the LaTeX preamble 
+# parameter 1: original preamble from the source file
+#              lines before \begin{document} tag (without this tag)
+# parameter 2: reference to hyperref parameter list
+# return value: adjusted preamble
+
+sub adjust_preamble {
+   my $preamble = $_[0];
+   my $hyperref_params_ref = $_[1];
+   my $extra_code;
+   my $result;
+   
+   $_ = $preamble;
+
+   # protect pdflatex execution mode
+   s/^(\\batchmode)$/% $1/m;
+
+   # insert a4paper in the documentclass when a4wide is used 
+   # fixes problem that hyperref defaults to letter otherwise
+   if ( /^[^%]*\\usepackage(\[widemargins\])?\{(a4|a4wide)\}/m ) {
+      # check if package parameters with [] brackets are present
+      if ( not s/^(\\documentclass\[.*?)\]/$1,a4paper]/m ) {
+         s/^\\documentclass/$&\[a4paper\]/m;
+      }
+   }
+
+   ### collect additional LaTeX code
+   
+   $extra_code = "\n" . '\usepackage{pslatex}' . "\n";
+
+   if ( &param_value('thumbpdf') eq $YES ) {
+      $extra_code .= '\usepackage{thumbpdf}' . "\n";
+   } else {
+      $extra_code .= "% no thumbpdf support\n";
+   }
+ 
+#   if ( &param_value('ppower') eq $YES ) {
+#      $extra_code .= '\usepackage{mpmulti}' . "\n";
+#   } else {
+#      $extra_code .= "% no ppower support\n";
+#   }
+
+   if ( &param_value('authorindex') eq $YES ) {
+      $extra_code .= '\usepackage[pages]{authorindex}' . "\n";
+      $extra_code .= '\let\cite=\aicite' . "\n";
+   } else {
+      $extra_code .= "% no authorindex support\n";
+   }
+
+   $extra_code .= '\makeatletter' . "\n";
+   $extra_code .= '\usepackage[' . join(',', @$hyperref_params_ref)
+                  . ']{hyperref}' . "\n";
+   $extra_code .= '\makeatother' . "\n";
+   
+   ### insert the extra LaTeX code directly after documentclass
+   m/^(\\documentclass)(\[[^]]*\])?(\{.*\})/m;
+   return $` . $& . $extra_code . $';
+}
+
+### adjust all filenames in the LaTeX code to the tmp files
+# parameter 1: original LaTeX code from the source file
+# return value: adjusted code
+
+sub adjust_filenames {
+   my $code = $_[0];
+   my $tmp_suffix = &param_value('tmp_base_suffix');
+   my $result;
+   
+   $_ = $code;
+
+   # cut off the suffix of eps, ps, *.gz and pstex graphics
+   s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)\n?\}/$1}/sg;
+
+   # replace the suffix 'pstex_t' with 'pdf_t'
+   s/(\\input\{[^}]+?\.)pstex_t\n?\}/$1pdf_t}/sg;
+
+   if ( &param_value('mtp_preamble') eq $NO ) {
+      # cut off the suffix of mmp graphics
+      s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)\.mmp\n?\}/$1}/sg;
+   } else {
+      # replace the suffix '.#' with '-mp.#'
+      s/(\\includegraphics(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1$MTP_TMP_BASESUFFIX\.$3}/sg;
+
+      # replace the suffix '.#' with '-mp.#'
+      s/(\\convertMPtoPDF(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1$MTP_TMP_BASESUFFIX\.$3}/sg;
+
+      # cut off optional suffix '.mmp' and append '-mp' in any case
+      s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)(\.mmp)?\n?\}/$1$MTP_TMP_BASESUFFIX}/sg;
+   }
+
+   # insert the tmp_suffix in tex filenames
+   # I assume that files with no extension are TeX files as well; correct?
+   s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#$1$tmp_suffix$4#sg;
+
+   return $_;
+}
+
 ### Convert given tex file to the temp tex file we need for pdftex
 ### major task is to change the reference in the tex files to the
 ### corresponding tmp files
@@ -1752,8 +1849,10 @@ sub convert_tex2tmp {
    my $source = $_[0];
    my $target = $_[1];
    my $hyperref_params_ref = $_[2];
+   my $contents;
+   my $preamble;
+   my $body;
    my $adjust_preamble = defined($hyperref_params_ref) ? $YES : $NO;
-   my $tmp_suffix = &param_value('tmp_base_suffix');
    my $read_err_msg = "Could not read original TeX document to generate temporary document";
    
    ### open source and target file
@@ -1761,109 +1860,34 @@ sub convert_tex2tmp {
    open(SOURCE_FILE, "<$source") or
       &abort($read_err_msg . " ($source).");
 
+   ### read in the LaTeX source file
+   $contents = "";
+   while(<SOURCE_FILE>) {
+      $contents .= $_;
+   }
+
+   close SOURCE_FILE;
+
+   ### prepare the LaTeX code for PDF generation 
+   if ( $adjust_preamble eq $YES ) {
+      $contents =~ m/^ *\\begin\{document\} *$/m;
+      $preamble = $`;
+      $body = $&.$';
+      $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
+      $preamble = &adjust_filenames($preamble);
+   } else {
+      $preamble = "";
+      $body = $contents;
+   }
+   
+   $body = &adjust_filenames($body);
+      
+   ### write the new LaTeX target file
    open(TARGET_FILE, ">$target") or
       &abort("Could not open file to write temporary TeX document ($target).");
+
+   print TARGET_FILE $preamble.$body;
    
-   if ( $adjust_preamble eq $YES ) {
-      ### check if a4wide paper package is used
-      my $a4_regexp = '^[^%]*\\\\usepackage(\[widemargins\])?\{(a4|a4wide)\}';
-      my $a4_extra_paper = (&grep_file($source, $a4_regexp, $TRUE) > 0);
-
-      ### read, parse, modify and write the LaTeX preamble
-      while(<SOURCE_FILE>) {
-   
-         # protect pdflatex execution mode
-         s/^(\\batchmode)$/% $1/;
-   
-         if ( /^(\\documentclass)(\[[^]]*\])?(\{.*\})/ ) {
-            # insert a4paper in the documentclass when a4wide is used 
-            # fixes problem that hyperref defaults to letter otherwise
-            if ($a4_extra_paper) {
-               # check if package parameters with [] brackets are present
-               if ($2) {
-                  s/^(.documentclass\[.*)\]/$1,a4paper]/;
-               } else {
-                  s/^.documentclass/$&\[a4paper\]/;
-               }
-            }
-
-            ### set target file as stdout
-            select TARGET_FILE;
-   
-            # append our extra TeX commands
-            print $_;
-
-            print '\usepackage{pslatex}' . "\n";
-
-            if ( &param_value('thumbpdf') eq $YES ) {
-               print '\usepackage{thumbpdf}' . "\n";
-            } else {
-               print "% no thumbpdf support\n";
-            }
- 
-            if ( &param_value('ppower') eq $YES ) {
-#               print '\usepackage{mpmulti}' . "\n";
-            } else {
-               print "% no ppower support\n";
-            }
-
-            if ( &param_value('authorindex') eq $YES ) {
-               print '\usepackage[pages]{authorindex}' . "\n";
-               print '\let\cite=\aicite' . "\n";
-            } else {
-               print "% no authorindex support\n";
-            }
-
-            print '\makeatletter' . "\n";
-            print '\usepackage['.join(',', @$hyperref_params_ref).']{hyperref}'
-               ."\n";
-            print '\makeatother' . "\n";
-   
-            ### set STDOUT as stdout again
-            select STDOUT;
-
-         } else {
-            # print the read line
-            print TARGET_FILE $_;
-         }
-   
-         # if end of the preamble is reached stop loop
-         if ( /^\\begin\{document\} *?$/ ) { last; }
-      }
-   }
-   
-   ### read, parse, modify and write the TeX body
-   while(<SOURCE_FILE>) {
-      # cut off the suffix of eps, ps, *.gz and pstex graphics
-      s/((\\includegraphics)(\[[^]]*\])?(\{[^}]+))\.(e?ps|pstex|e?ps\.gz)\}/$1}/g;
-
-      # replace the suffix 'pstex_t' with 'pdf_t'
-      s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
-
-      if ( &param_value('mtp_preamble') eq $NO ) {
-         # cut off the suffix of mmp graphics
-         s/(\\multiinclude(\[[^]]*\])?\{[^}]+)\.mmp\}/$1}/g;
-      } else {
-         # replace the suffix '.#' with '-mp.#'
-         s/(\\includegraphics(\[[^]]*\])?\{[^}]+)\.(\d+)\}/$1$MTP_TMP_BASESUFFIX\.$3}/g;
-
-         # replace the suffix '.#' with '-mp.#'
-         s/(\\convertMPtoPDF(\[[^]]*\])?\{[^}]+)\.(\d+)\}/$1$MTP_TMP_BASESUFFIX\.$3}/g;
-
-         # cut off optional suffix '.mmp' and append '-mp' in any case
-         s/(\\multiinclude(\[[^]]*\])?\{[^}]+)(\.mmp)?\}/$1$MTP_TMP_BASESUFFIX}/g;
-      }
-
-      # insert the tmp_suffix in tex filenames
-      # I assume that files with no extension are TeX files as well; correct?
-      s#(\\(input|include)\{([^}]*/)?[^}/.]+)((\.tex)?\})#$1$tmp_suffix$4#g;
-
-      # print the read and manipulted line
-      print TARGET_FILE $_;
-   }
-
-   ### close files
-   close SOURCE_FILE;
    close TARGET_FILE;
 }
 
