@@ -70,7 +70,8 @@ my @REF_DOCS=();
 my $MAIN_PREAMBLE = undef;
 my $CONTEXT_DEPTH=0;
 my @PSFRAG_TAGS=();
-my @PATH_TAGS=();
+my @INPUT_DIRS=();
+my @GRAPHICS_DIRS=();
 
 ### text token for no value
 my $NIL="NOVALUE";
@@ -90,7 +91,7 @@ my $CONFIGURED=$FALSE;
 
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.16";
+my $MYRELEASE="3.1.17";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -196,8 +197,8 @@ my $EXPLANATION=6;
 &add_param('author', 'text', undef, '|a', '=s',
    'set PDF info author for specified document');
 
-&add_param('input_path', 'directory', undef, '', '=s',
-   'set path for referenced material in main document');
+#&add_param('input_path', 'directory', undef, '', '=s',
+#   'set path for referenced material in main document');
 
 ### Full parameters
 # parameter type action is not allowed
@@ -2009,7 +2010,7 @@ sub process_textags {
    my $tmp_suffix = &param_value('tmp_base_suffix');
    my $mtp_preamble = &param_value('mtp_preamble');
    my $result="";
-   my $handled_tagnames="psfrag|begin|end|graphicspath|includegraphics|input|include|multiinclude|convertMPtoPDF";
+   my $handled_tagnames='psfrag|begin|end|graphicspath|def\\\\input@path|includegraphics|input|include|multiinclude|convertMPtoPDF';
    
    report(9, ">>>> process_textags");
    while(defined($source) and $source ne "") {
@@ -2035,19 +2036,19 @@ sub process_textags {
          my @new_params;
          @new_params = grep {$_->{context_depth}<$CONTEXT_DEPTH} @PSFRAG_TAGS;
          @PSFRAG_TAGS = @new_params;
-         @new_params = grep {$_->{context_depth} < $CONTEXT_DEPTH} @PATH_TAGS;
-         @PATH_TAGS = @new_params;
          $CONTEXT_DEPTH--;
-      } elsif ( $name eq "graphicspath" ) {
+      } elsif ( $name eq "graphicspath" or $name =~ /input\@path/ ) {
          my $dirs = $contents;
          my @directories = ();
          $dirs =~ s/(^|[^\\])%.*\n/$1/gm; # remove comments
          $dirs =~ s/^\s*{?\s*|\s*}?\s*$//g; # remove leading/trailing brackets
          @directories = split(/\s*}\s*{\s*/m, $dirs ); # split string in dirctory list
-         $tag{directories} = \@directories;
-         $tag{context_depth} = $CONTEXT_DEPTH;
-         report(7,"tag graphicspath parsed: ".join(", ", @directories)."\n");
-         push @PATH_TAGS, \%tag;
+         if($name eq "graphicspath" ) {
+            @GRAPHICS_DIRS = @directories;
+         } else {
+            @INPUT_DIRS = @directories;
+         }
+         report(7,"tag $name parsed: ".join(", ", @directories)."\n");
       } elsif( $name eq "psfrag" ) {
          # Comment out the psfrag statements
          #s/(\\psfrag\{.*\}(\[[^]]*?\])*?\{.*\})/\%$1/g;
@@ -2075,7 +2076,7 @@ sub process_textags {
          $suffixes_regexp =~ s/\./\\./g;
          my $found_suffix = "";
          my $found_file = undef;
-
+         my @dir_list = @GRAPHICS_DIRS > 0 ? @GRAPHICS_DIRS : @INPUT_DIRS;
          # cut off the suffix of eps, ps, *.gz and pstex graphics
          #s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)
          #\n?\}/$1}/sg;
@@ -2083,7 +2084,8 @@ sub process_textags {
             $found_suffix = $1; 
          }
          # identify corresponding file (taking @PATH_TAGS into account)
-         $found_file = identify_file($contents, \@suffixes);
+         
+         $found_file = identify_file($contents, \@suffixes, \@dir_list);
          # translate graphics to pdf
          if ($found_file and $found_file =~ /\.($suffixes_regexp)$/ ) {
             my $source_suffix = $1;
@@ -2171,7 +2173,7 @@ sub process_textags {
             $test_suffix = "tex";
          }
             
-         $found_file = identify_file($contents, [ $test_suffix ]);
+         $found_file = identify_file($contents, [ $test_suffix ], \@INPUT_DIRS);
          if ($found_file) {
             report(7, "Referenced LaTeX document identified: $found_file");
             if($test_suffix eq "pstex_t") {
@@ -2210,7 +2212,8 @@ sub process_textags {
          # cut off the suffix of mmp graphics
          # s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)\.mmp\n?\}/$1}/sg;
          $contents =~ s/\.$MULTI_MP_SUFFIX\s*$//;
-         $found_file = identify_file($contents, [ $MULTI_MP_SUFFIX ]);
+         $found_file = identify_file($contents, [ $MULTI_MP_SUFFIX ],
+               \@INPUT_DIRS);
          if ($found_file) {
             report(7, "Included metapost document identified: $found_file");
             &convert_mp2pdf($found_file);
@@ -2231,7 +2234,8 @@ sub process_textags {
          # s/(\\convertMPtoPDF(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/
          # $1$MTP_TMP_BASESUFFIX\.$3}/sg;
          $found_suffix = $1 if($contents =~ s/(\.\d+?)\s*$//);
-         $found_file = identify_file($contents, [ $MPOST_SUFFIX ]);
+         $found_file = identify_file($contents, [ $MPOST_SUFFIX ],
+               \@INPUT_DIRS);
          if ($found_file) {
             report(7, "Referenced metapost document identified: $found_file");
             &convert_mp2pdf($found_file);
@@ -3107,71 +3111,13 @@ sub process_doc_argument {
    return $doc_path.$doc_base.'.tex';
 }
 
-#### handle the dir of the input path if the document has one and
-# parameter 1: main tex doc
-# return value: absolute input path
-
-sub process_inputpath {
-   my $texdoc = $_[0];
-   my $doc_base;
-   my $doc_path;
-   my $doc_suffix;
-   my $input_path;
-   my @matches;
-   
-   ### Maybe the user has given us a different inputpath
-   $input_path = &param_value('input_path');
-   if(defined($input_path) and $input_path ne "") {
-      &report(6, "Setting input path to specified directory: $input_path");
-      
-      &report(7, "Change working directory to input path.");
-      chdir $input_path;
-      
-      return $input_path;
-   }
-
-   ##### Getting document name, suffix and path
-   ($doc_base,$doc_path,$doc_suffix) = fileparse($texdoc, ('\.tex'));
-
-   ###### change working directory to input_path if set
-   # When the files' path (images, included documents, etc.) in your document is
-   # relative to another directory than the PASSED document's directory.
-   # This is useful when the calling application (e.g. LyX) generates a
-   # temporary
-   # TeX file and calls the tex2pdf with it instead of the original file.
-   
-   @matches=&extract_tag_contents($texdoc, 'def\\\\input@path');
-   $input_path=$matches[0];
-   
-   ## check if input_path is ok
-   if ($input_path) {
-      $input_path =~ s/{(.*)}/$1/;
-      &report(7, "Found an input path in the latex document: $input_path");
-      if( &check_dir($input_path, 'The retrieved input@path seems not to be valid.', $NO)) {
-         &set_param_value('input_path', $input_path);
-         &report(7, "Change working directory to input path.");
-         chdir $input_path;
-      } else {
-         &abort ('I am lost.');
-      }
-   } else {
-      &report(4, "No input path in the latex document found.");
-      &report(7, "Resources are expected to be relative to document's location: $doc_path");
-         $input_path=$doc_path;
-   }
-   
-   return $input_path;
-}
-
 #### set the working dir to the input path if the document has one and
 #### and determine the path for the result
 # parameter 1: main tex doc
-# parameter 2: absolute input path
 # return value: absolute path were the resulting pdf doc should be stored
 
 sub get_target_name {
    my $texdoc = $_[0];
-   my $input_path=$_[1];
 
    my $doc_base;
    my $doc_path;
@@ -3188,8 +3134,8 @@ sub get_target_name {
    
    if ($destination eq 'custom' ) {
       $pdf_path=&param_value('custom_path');
-   } elsif ($destination eq 'input') {
-      $pdf_path=$input_path;
+   } elsif ($destination eq 'input' and @INPUT_DIRS > 0) {
+      $pdf_path=$INPUT_DIRS[0];
    } else {
       $pdf_path=$doc_path;
    }
@@ -3273,11 +3219,11 @@ sub generate_hyperref_params {
 # parameter 2: parameter list of hyperref parameters
 
 sub prepare_documents {
-   my ($main_tex_doc, $input_path, @hyperref_params) = @_;
+   my ($main_tex_doc, @hyperref_params) = @_;
    @REF_DOCS=();
 
    ## get a name for the tmp tex file
-   my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc, $input_path);
+   my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc);
 
    ##### Generate adjusted temp tex files and convert all their images
    ## main doc
@@ -3412,7 +3358,6 @@ sub generate_pdf_doc {
 
 my $texdoc;
 my $doc_argument;
-my $input_path;
 my $target_name;
 my @hyperref_params;
 my $new_pdf_doc;
@@ -3450,16 +3395,6 @@ $texdoc = &process_doc_argument($doc_argument);
 &report(5, "\nSetting up parameters for hyperref.");
 @hyperref_params = &generate_hyperref_params($texdoc);
 
-## set the working dir to the input path if the document has one and
-
-&report(5, "\nProcessing input path for main tex document.");
-$input_path = &process_inputpath($texdoc);
-
-## determine the name for the result
-
-&report(5, "\nSetting the correct name for the result.");
-$target_name = &get_target_name($texdoc, $input_path);
-
 ## as much as possible is prepared in advance at this point
 ## so hopefully we will succeed in generating the PDF document
 
@@ -3468,7 +3403,12 @@ $target_name = &get_target_name($texdoc, $input_path);
 ##### Generate adjusted temp tex files and convert all their images
 
 &report(5, "\nPreparing all documents and images.");
-$tmp_tex_doc = &prepare_documents($texdoc, $input_path, @hyperref_params);
+$tmp_tex_doc = &prepare_documents($texdoc, @hyperref_params);
+
+## determine the name for the result
+
+&report(5, "\nSetting the correct name for the result.");
+$target_name = &get_target_name($texdoc);
 
 ##### Generate the final PDF document
 
