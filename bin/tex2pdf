@@ -2173,7 +2173,7 @@ sub process_textags {
             ."\n\t".$found_file);
          } else {
             report(3, "Included graphic not found, ignoring it: "
-               .$contents.$found_suffix);
+               .$contents.'.'.$found_suffix);
          }
          
          if ( $found_suffix =~ /^\d+$/) {
@@ -3145,7 +3145,9 @@ sub process_doc_argument {
    
    ###### change working directory to document directory
    if ( $doc_path ne "" ) {
-      chdir $doc_path;
+      chdir $doc_path 
+         or abort("Could not change to the specified directory of the document:
+               \n\t$doc_path");
    }
    
    ###### make DOCPATH an absolute path
