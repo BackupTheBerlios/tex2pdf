@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1.4";
+my $MYRELEASE="3.1.5";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1790,34 +1790,49 @@ sub pdffrag {
 	  $eps_file = $6."\.eps";
 	  $suffix = "\.eps";
        }
-       &report(7, "Psfrag: detecting $eps_file using psfrag substitutions\n");
+       &report(7, "Psfrag: detecting $eps_file\n");
        # Getting the path, base and suffix of every graphic under the psfrag substitution
        ($eps_base,$eps_path,$suffix) = fileparse($eps_file,$suffix);
        $tex_src   =  $eps_path.$eps_base;
-       $tex_target = $eps_path.$eps_base."\.tex";
-       $pdf_target = $eps_path.$eps_base."\.pdf";
-       $frg_target = $eps_path.$eps_base.'-frg.eps';
+       $tex_target = $tex_src."\.tex";
+       $pdf_target = $tex_src."\.pdf";
+       $frg_target = $tex_src.'-frg.eps';
        $tmp_target = $frg_target.'.eps';
-       # Writing the simplified latex files with the psfrag substitution
-       open(TARGET_FILE, ">$tex_target") or
-	  &abort("Could not open file to write temporary TeX document ($tex_target).");
 
-       print TARGET_FILE $preamble.$latex_code.$&.$latex_end;
-       close TARGET_FILE;
+       if ( ! -f $pdf_target or -M $pdf_target > -M $eps_file ) {
+	  &report(7, "Converting image $eps_file to $pdf_target ...\n");
+	  # Writing the simplified latex files with the psfrag substitution
+	  open(TARGET_FILE, ">$tex_target") or
+	     &abort("Could not open file to write temporary TeX document ($tex_target).");
 
-       # Setting up the log files for the latex and dvips runs
-       $dvi_log = $tex_src."-dvi.log";
-       $tex_log = $tex_src."-tex.log";
-       &run_latex($tex_target,$tex_log);
-       &run_dvips($eps_base.'.dvi',$dvi_log,$frg_target,'-Pcmz');
+	  print TARGET_FILE $preamble.$latex_code.$&.$latex_end;
+	  close TARGET_FILE;
 
-       # Adjusting the bounding box size, this is taken from eps2bb
-       &system_command("ps2eps -l -f $frg_target",$TRUE, 8, "ps2eps failed on $frg_target");
-       rename($tmp_target,$frg_target) or &abort("Can't move $tmp_target to $frg_target: $!");
-       # Here we take advantage of the fact that the pdf output file is newer that the original eps file and 
-       # the conversion image eps2pdf process will skip the conversion, leaving the psfrag figure just 
-       # converted to pdf. 
-       &system_command("epstopdf -outfile=$pdf_target $frg_target ",$TRUE, 8, "epstopdf failed on $frg_target");
+	  # Setting up the log files for the latex and dvips runs
+	  $dvi_log = $tex_src."-dvi.log";
+	  $tex_log = $tex_src."-tex.log";
+	  &run_latex($tex_target,$tex_log);
+	  &run_dvips($eps_base.'.dvi',$dvi_log,$frg_target,'-Pcmz');
+
+	  # Adjusting the bounding box size, this is taken from eps2bb
+	  &system_command("ps2eps -l -f $frg_target",$TRUE, 8, "ps2eps failed on $frg_target");
+	  rename($tmp_target,$frg_target) or &abort("Can't move $tmp_target to $frg_target: $!");
+	  # Here we take advantage of the fact that the pdf output file is newer that the original eps file and 
+	  # the conversion image eps2pdf process will skip the conversion, leaving the psfrag figure just 
+	  # converted to pdf. 
+	  &system_command("epstopdf -outfile=$pdf_target $frg_target ",$TRUE, 8, "epstopdf failed on $frg_target");
+	  if (&param_value('delete_pdf_images') eq $YES) {
+             push(@TMPFILES, $pdf_target);
+	  }
+          # Some cleaning up if tex2pdf is not in debug mode
+          push(@TMPFILES, $tex_target); # This could be a little bit excessive !!
+          push(@TMPFILES, $frg_target);
+          push(@TMPFILES, $dvi_log);
+          push(@TMPFILES, $tex_log);
+       } else {
+	  &report(7, "$pdf_target newer than $eps_file, conversion skipped...");
+       }
+
    }
 }
 
@@ -1953,11 +1968,14 @@ sub adjust_filenames {
 # parameter 2: tex tmp file
 # parameter 3: reference to hyperref parameter list or
 #              'undef' if preamble should not be changed
+# parameter 4: main preamble 
+#              'undef' if $_[0] is the main document
 
 sub convert_tex2tmp {
    my $source = $_[0];
    my $target = $_[1];
    my $hyperref_params_ref = $_[2];
+   my $main_preamble = $_[3];
    my $contents;
    my $preamble;
    my $body;
@@ -1981,6 +1999,9 @@ sub convert_tex2tmp {
    if ( $adjust_preamble eq $YES ) {
       $contents =~ m/^ *\\begin\{document\} *$/m;
       $preamble = $`;
+      # Just to make sure that the original latex preamble goes
+      # to the included documents
+      $main_preamble = $preamble;
       $body = $&.$';
       if ($preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
 	 &report(6, "Psfrag substitution detected. Entering pdffrag process");
@@ -1991,6 +2012,10 @@ sub convert_tex2tmp {
    } else {
       $preamble = "";
       $body = $contents;
+      if ($main_preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
+	 &report(6, "Psfrag substitution detected in included document. Entering pdffrag process");
+         &pdffrag($main_preamble,$body);
+      }
    }
    
    $body = &adjust_filenames($body);
@@ -2002,6 +2027,15 @@ sub convert_tex2tmp {
    print TARGET_FILE $preamble.$body;
    
    close TARGET_FILE;
+
+   if ( $adjust_preamble eq $YES ) {
+      # main document
+      return $main_preamble;
+   } else {
+      # included document
+      return undef;
+   }
+
 }
 
 ### Convert the given EPS image to PDF
@@ -2088,7 +2122,7 @@ sub convert_pstex2pdf {
       ['pstex', 'pstex\.gz']);
 
    # create .pdf_t file
-   &convert_tex2tmp($pstex_file, $pstex_target, undef); 
+   &convert_tex2tmp($pstex_file, $pstex_target, undef, undef); 
 
    # put tmp file in the tmp file list
    push(@TMPFILES, $pstex_target);
@@ -3141,6 +3175,7 @@ sub generate_hyperref_params {
 sub prepare_documents {
    my ($main_tex_doc, $input_path, @hyperref_params) = @_;
    @REF_DOCS=();
+   my $main_preamble;
 
    ## get a name for the tmp tex file
    my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc, $input_path);
@@ -3164,7 +3199,7 @@ sub prepare_documents {
    ##### Generate adjusted temp tex files and convert all their images
    ## main doc
    &report(6, "\nGenerating main temporary LaTeX document: $main_tmp_doc");
-   &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params);
+   $main_preamble = &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params, undef);
    &convert_images($main_tex_doc);
    
    ## referenced docs
@@ -3173,7 +3208,7 @@ sub prepare_documents {
    
       ### Insert pdf conversation tags in tex file and write it to tmp_file
       &report(7, "\nGenerating temporary LaTeX document: $tmp_file");
-      &convert_tex2tmp($file, $tmp_file, undef);
+      &convert_tex2tmp($file, $tmp_file, undef, $main_preamble);
       &convert_images($file);
    }
 
