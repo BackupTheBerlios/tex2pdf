@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1.1";
+my $MYRELEASE="3.1.2";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -146,6 +146,12 @@ my $EXPLANATION=6;
    [ [ 'source', 'directory of the LaTeX source document' ] ,
      [ 'input', 'root directory of referenced material' ],
      [ 'custom', 'custom directory as specified' ]
+   ] );
+
+&add_param_type('font_subs',
+   [ [ "pslatex", "(old) pslatex" ],
+     [ "helvetica", "new helvetica for math (mathptmx.sty) and text (helvet.sty)" ],
+     [ "palatino", "new palatino for math (mathpazo.sty) and text (palatino.sty)" ]
    ] );
 
 ### Option parameters: these parameters have no default value and can not
@@ -270,9 +276,9 @@ my $EXPLANATION=6;
    "When ever you specifiy to store the generated PDF document (command line "
    ."or\nconfiguration) in a custom directory I will put it here.");
 
-&add_param('font_substitution', 'text', 'helvetica', '', '=s',
-     "specify the font substitution",
-     'What font substitution should be used?',
+&add_param('font_substitution', 'font_subs', 'pslatex', '', '=s',
+     "specify the package for font substitution",
+     'Which package should be used for font substitution?',
      "You can substitute your CM-Fonts whith one of the following packages:\n" 
      ."pslatex:   the old package\n"
      ."helvetica: the new one for math (mathptmx.sty) and text (helvet.sty)\n"
