@@ -44,7 +44,7 @@
 # Subscribing to the developer mailing list might be a first step (see above).
 #
 # Send feedback to: tex2pdf-devel@lists.berlios.de
-# First try to use cvs commit
+#
 
 ######## Imports
 
@@ -2024,12 +2024,24 @@ sub handle_bibtex {
       $run_bibtex=$TRUE;
       print "BibTeX parameter set to '$YES':\n";
    } else {
-      print "Checking for BibTeX bibliography in document: ";
+      print "Checking for BibTeX bibliography in main document: ";
       if( &grep_file($auxfile.'.tex', '^[^%]*\\\\bibliography{') != 0) {
          $run_bibtex=$TRUE;
 	 print "Bibliography detected.\n";
       } else {
-         print "No bibliography detected.\n";
+         if ( @REF_DOCS > 0 ) {
+            print "Checking for BibTeX bibliography in included documents:\n";
+            foreach my $file (@REF_DOCS) {
+               if( &grep_file($file, '^[^%]*\\\\bibliography{') != 0) {
+                   $run_bibtex=$TRUE;
+                   print "Bibliography detected.\n";
+               } else {
+                 print "No bibliography detected in $file.\n";
+               }
+            }
+         } else {
+           print "No bibliography detected.\n";	
+ 	}
       }
    }
 
