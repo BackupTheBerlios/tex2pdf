@@ -56,7 +56,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.6";
+my $MYRELEASE="3.0.7";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -1658,7 +1658,7 @@ sub convert_eps2pdf {
    my $dummy;
 
    ($image_base,$image_path,$suffix) = fileparse($image, '\.eps', '\.ps', '\.pstex', '\.gz');
-   if ($suffix == "\.gz") {
+   if ($suffix eq "\.gz") {
 	$zipped = 1;
 	($image_base,$dummy,$suffix) = fileparse($image_base, '\.eps', '\.ps', '\.pstex');
    }
