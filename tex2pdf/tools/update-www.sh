@@ -5,7 +5,7 @@ REMOTE_WWW_DIR=/home/groups/tex2pdf/htdocs/
 REMOTE_HOST=shell.berlios.de
 REMOTE_USER=$USER
 
-if [ $@ = 0 ]
+if [ $# = 0 ]
 then
    FILES="changelog.html index.html lyx-howto.htm help.txt"
 else
