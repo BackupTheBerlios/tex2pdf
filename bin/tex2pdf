@@ -1594,9 +1594,12 @@ sub extract_tag_contents {
    # add contents of all occurences of this tag in a line to result list
    while ( /\\($tag_name)(\[[^]]*?\])*?{+([^{}]*?)}/s ) {
       my $text = $3;
+      print "$text\n";
       $_ = $';
       # remove newlines
       $text =~ s/\n//g;
+      # remove latex newlines
+      $text =~ s/\\\\/ /g;
       $text="" if (!defined($text));
       push(@results, $text);
    }
@@ -1767,8 +1770,9 @@ sub adjust_preamble {
    }
 
    ### collect additional LaTeX code
-   
-   $extra_code = "\n" . '\usepackage{pslatex}' . "\n";
+   #   first we load the fonts (instead of pslatex, which is obsolete)
+   $extra_code = "\n" . '\usepackage{mathptmx}' . "\n";
+   $extra_code .= '\usepackage[scaled=0.9]{helvet}' . "\n";
 
    if ( &param_value('thumbpdf') eq $YES ) {
       $extra_code .= '\usepackage{thumbpdf}' . "\n";
