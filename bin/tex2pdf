@@ -1979,8 +1979,12 @@ sub adjust_preamble {
    }
 
    $hyperref_code = "\n" . '\makeatletter' . "\n";
+   # skip hyperref loading if already done 
+   $hyperref_code .= "\n" . '\ifx\undefined\hyperref' . "\n";
    $hyperref_code .= '\usepackage[' . join(',', @$hyperref_params_ref)
-                  . ']{hyperref}' . "\n";
+                   . ']{hyperref}' . "\n";
+   # close the test
+   $hyperref_code .= "\n" . '\else\relax\fi' . "\n";
    $hyperref_code .= '\makeatother' . "\n";
    
    ### insert the extra LaTeX code directly after documentclass
