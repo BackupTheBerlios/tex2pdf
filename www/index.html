@@ -4,34 +4,58 @@
 </head>
 <body>
 <h1> Tex2pdf/Lyx2pdf Homepage </h1>
+The major goal of the tex2pdf script is to help people who do not know a lot
+about LaTeX or PDF generation (like me :-) to obtain a useable PDF document
+without spending a lot of time on this issue.<br>
+Additionally, it might be even a useful tool for someone who knows about all
+these tricks, tools and everything, but wants to have it quick!<br>
+Anyway, I hope people can make use of it.
 <h2>Description</h2>
-tex2pdf is a bash shell script that generates a PDF document from LaTeX or LyX
-document. The current stable release (named lyx2pdf) can only handle LyX
-documents as sources. Tex2pdf (current beta release) can process both: LyX and
-LaTeX documents.
-<br><br>
+tex2pdf (formerly lyx2pdf) is a script that generates a PDF document from a
+LaTeX or LyX document using pdf(la)tex, hyperref and other tools. There is a
+bash shell and Perl implementation available. (The bash port is no longer
+maintained and is considered deprecated.)<br><br>
 When the input file is a LyX document the script produces a LaTeX file with the
 LyX export function first and than processes the exported LaTeX document.<br>
-LaTeX documents are searched for included files (other LaTeX docs, images),
-prepared for pdflatex with sed, included EPS/PS/PSTEX images
-are converted to PDF with epstopdf and finally the script runs pdflatex, bibtex
-and thumbpdf.
+LaTeX documents are searched for referenced files (other LaTeX docs, images),
+prepared for pdflatex, included EPS/PS/PSTEX images are converted to PDF with epstopdf and finally the script runs pdflatex, bibtex, makeindex and thumbpdf.
+The entire behavior can be adjusted to your personal needs and workarounds for
+known problems with called applications are already integrated.<br>
 
 <h2>Dependencies</h2>
 <ul>
-<li><a href="http://www.lyx.org/">LyX</a>
-<li><a href="http://tug.org/applications/pdftex">pdftex</a>
-<li><a href="ftp://ftp.gnu.org/pub/gnu/sed">sed</a>
-<li><a href="http://tug.org/applications/pdftex">epstopdf</a>
-<li><a href="http://www.tug.org/applications/hyperref">hyperref</a>
+   <li><a href="http://tug.org/applications/pdftex">pdftex</a>: generates PDF
+   documents from LaTeX. Unfortunately, it cannot handle EPS graphics. This
+   missing feature is the main reason why the tex2pdf project has started ...
+   <li><a href="http://tug.org/applications/pdftex">epstopdf</a>: translates
+   EPS images in PDF ones.
+   <li><a href="http://www.tug.org/applications/hyperref">hyperref</a>: LaTeX
+   package to integrate (colored) links in your PDF doc. It's great!
+   <li>bibtex: handles a bibliograhy and its references
+   <li>makeindex: makes create an index from your LaTeX document.
+   <li>thumbpdf: creates little images of all your document pages and integrate them.
+   <li><a href="http://www.lyx.org/">LyX</a>: A LaTeX word processor. It is
+   only required when you want to process Lyx documents.
+   <li><a href="ftp://ftp.gnu.org/pub/gnu/sed">sed</a>: All sed expressions
+   have been replaced by Perl now and it is only needed for the old bash port.
 </ul>
 <h2>Download</h2>
 You may download the current release via the
 <a href="http://developer.berlios.de/projects/tex2pdf/">BerliOS Project Info
 Site</a> or go directly to the <a href="http://download.berlios.de/tex2pdf/">
-list with released files</a> there.
+list with released files</a> there.<br>
+We also have a public CVS repository available: You can browse it
+<a href="http://cvs.berlios.de/cgi-bin/cvsweb.cgi/?cvsroot=tex2pdf">here</a>.
+<br>
+More information about our CVS repository can be found on the
+<a href="http://developer.berlios.de/projects/tex2pdf/">developer site</a>
+again.
 <h2>Feedback and Help</h2>
-Feedback of any kind is welcome. Please, send it to the 
+Anyone is invited to help to improve tex2pdf. Therefore any kind of feedback
+is welcome. Maybe you even would like to hack the code and send us your
+changes. This would help a lot and is highly appreciated. Think about it :-)
+Subscribing to the developer mailing list might be a first step (see above).
+Please, send it to the 
 <a href="mailto:tex2pdf-devel@lists.berlios.de">developer mailing list</a>.
 Thanks in advance.<br><br>
 If you would like to contribute to this project visit <a href="http://developer.berlios.de/projects/tex2pdf/">its site</a> at BerliOS and sign in.<br><br>
@@ -42,8 +66,11 @@ There are also two mailing lists:
 </ul>
 <h2>Documentation</h2>
 <ul>
- <li> <a href="changelog.html">Lyx2pdf release history</a>
- <li> <a href="changelog.html#tex2pdf">Tex2pdf release history</a>
+   <li> <a href="changelog.html">Lyx2pdf release history</a>: old script which could only handle LyX documents.
+ <li> <a href="changelog.html#tex2pdf">Tex2pdf release history</a>: old bash port only
+ <li> Tex2pdf release history for the Perl port is not availabe right now.
+ <li> <a href="help.txt">help text</a> for the upcoming Version 3.0 (the Perl port).
+ <li> <a href="lyx-howto.htm">Install/LyX HOWTO</a> 
 </ul>
 <br>
 Sooooo, have fun with it !!!! <br>

@@ -1,0 +1,114 @@
+
+tex2pdf: Script starts (Release 3.0beta7)
+
+tex2pdf: Processing given parameters and arguments.
+
+tex2pdf Version 3.0beta7
+
+Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
+       tex2pdf [OPTIONS] DOCUMENT[.tex]
+       tex2pdf [-h|-v|-o|-r]
+
+--help | -h:
+   print a short help text and exit
+
+--version | -v:
+   print the version of this script and exit
+
+--print_config | -o:
+   print the current configuration and exit
+
+--configure | -r:
+   configure all parameters interactivly, store them and exit
+
+--title | -t VALUE:
+   set PDF info title for specified document
+
+--author | -a VALUE:
+   set PDF info author for specified document
+
+--input_path VALUE:
+   set path for referenced material in main document
+
+--logdir VALUE:
+   set directory for saving log files
+
+--lyxrc_path VALUE:
+   set the configuration directory of LyX
+
+--[no]debug:
+   do not delete temporary files after execution and be as verbose as possible
+
+--[no]delete_pdf_images:
+   delete generated PDF image files after execution
+
+--[no]clean_on_abort:
+   also delete temporary files after abort
+
+--tmp_base_suffix VALUE:
+   specify the extension of the basename for temporary TeX files
+
+--[no]overwrite:
+   ignore existence of files with same basename as temporary TeX files
+
+--[no]clean_logs | -l:
+   delete all log files in log directory before execution
+
+--[no]check_commands | -c:
+   make sure that required shell commands does exist before start
+
+--destination VALUE:
+   specifiy final location of generated PDF document
+
+--custom_path | -d VALUE:
+   specify custom path for 'destination' parameter
+
+--[no]colorlinks:
+   activate colored links in PDF doc (hyperref)
+
+--paper | -p VALUE:
+   specify papersize of the PDF doc (hyperref)
+
+--citecolor VALUE:
+   specify color of citations in PDF doc (hyperref)
+
+--urlcolor VALUE:
+   specify color of URLs in PDF doc (hyperref)
+
+--linkcolor VALUE:
+   specify color of internal links in PDF doc (hyperref)
+
+--pagecolor VALUE:
+   specify color of links to other pages in PDF doc (hyperref)
+
+--[no]link_toc_page:
+   link table of contents to pages instead of sections (hyperref)
+
+--default_title VALUE:
+   set default PDF info title
+
+--default_author VALUE:
+   set default PDF info author
+
+--[no]force_index | -i:
+   force explicit inclusion of (existing) index in PDF doc
+
+--[no]bibtex | -b:
+   set bibtex behavior
+
+--[no]thumbpdf | -n:
+   generate thumbnails for PDF document
+
+--maxrun VALUE:
+   specify maximal number of pdflatex runs if problems are detected
+
+--minrun VALUE:
+   specify minimal number of pdflatex runs if no problems are detected
+
+--pdftex_opts VALUE:
+   specify extra options for shell execution of pdflatex
+
+--hyperref_args VALUE:
+   specify extra arguments for the hyperref package
+
+
