@@ -1780,8 +1780,9 @@ sub extract_tag_contents {
 
 sub identify_file {
    my $given_name = $_[0];
-   my @suffixes = $_[1] ? @{$_[1]} : ();
-   my @directories = $_[2] ? @{$_[2]} : ();
+   my @suffixes = defined($_[1]) ? @{$_[1]} : ();
+   my @directories = defined($_[2]) ? @{$_[2]} : ();
+   my $directories_string = @directories > 0 ? join(@directories, ',') : '';
    my $path = undef;
    my $base = undef;
    my $kpse_result = undef;
@@ -1791,7 +1792,7 @@ sub identify_file {
 
    if(substr($given_name,0,1) eq '/' and @directories == 0 ) {
       report(9, "Absolute path and directories specified (".$given_name.": "
-         .join(@directories, ',').")");
+         .$directories_string.")");
    }
 
    # search all suggested directories
@@ -1815,7 +1816,7 @@ sub identify_file {
          my $possible_file= $given_name.'.'.$suggested_suffix;
          $kpse_result=`kpsewhich $possible_file`;
          if ($kpse_result) {
-            report(10, "kpsewhich output ($possible_file, STANDARD):\n"
+            report(10, "kpsewhich output ($possible_file, standard path):\n"
                .$kpse_result);
             last;
          }
@@ -1825,7 +1826,7 @@ sub identify_file {
    # return if kpsewhich could not find a corresponding file
    if (!$kpse_result) {
       report(9, "No suitable file found for ".$given_name.": "
-         .join(@directories, ','));
+         .$directories_string);
       return undef;
    }
 
