@@ -87,8 +87,8 @@
   <li> minor changes
 </ul>
 <br>
-<li><b>Jan 21th, 2001 -- <a href="ftp://tex2pdf.berlios.de/pub/tex2pdf/old_releases/lyx2pdf-v1.8b3">Release 1.8 beta 3</a></b> <br>
-<b>Jan 21th, 2001 -- <a href="ftp://tex2pdf.berlios.de/pub/tex2pdf/old_releases/lyx2pdf-v1.7.1">Release 1.7.1</a></b> <br>
+<li><b>Jan 21st, 2001 -- <a href="ftp://tex2pdf.berlios.de/pub/tex2pdf/old_releases/lyx2pdf-v1.8b3">Release 1.8 beta 3</a></b> <br>
+<b>Jan 21st, 2001 -- <a href="ftp://tex2pdf.berlios.de/pub/tex2pdf/old_releases/lyx2pdf-v1.7.1">Release 1.7.1</a></b> <br>
 <ul>
   <li> modified LyX export command to work with LyX 1.1.6<br>
     (thanks to Stacy J. Prowell <sprowell@cs.utk.edu> for this hint)
@@ -100,7 +100,7 @@
      (thanks to Holger Daszler for this hint)
 </ul>
 <br>
-<li><b>Mar 09nd, 2001 -- <a href="http://download.berlios.de/tex2pdf/lyx2pdf-1.8.tar.gz">Release 1.8</a></b><br>
+<li><b>Mar 09th, 2001 -- <a href="http://download.berlios.de/tex2pdf/lyx2pdf-1.8.tar.gz">Release 1.8</a></b><br>
 <ul>
   <li> included convert_pstex2pdf tmp files in clean up
   <li> added support for PDF thumbnails<br>
@@ -113,7 +113,7 @@
 <a name "tex2pdf">
 <h1> Tex2pdf Release History </h1>
 <ul>
-<li><b>Mar 11nd, 2001 -- <a href="http://download.berlios.de/tex2pdf/tex2pdf-2.0b2.tar.gz">Release 2.0 beta 2</a></b><br>
+<li><b>Mar 11th, 2001 -- <a href="http://download.berlios.de/tex2pdf/tex2pdf-2.0b2.tar.gz">Release 2.0 beta 2</a></b><br>
 <ul>
   <li> renamed lyx2pdf script to tex2pdf to reflect change of functionality
   <li> accept both: lyx and tex files<br>
@@ -124,7 +124,7 @@
   <li> minor changes 
 </ul>
 <br>
-<li><b>Mar 15nd, 2001 -- <a href="http://download.berlios.de/tex2pdf/tex2pdf-2.0.tar.gz">Release 2.0</a></b><br>
+<li><b>Mar 15th, 2001 -- <a href="http://download.berlios.de/tex2pdf/tex2pdf-2.0.tar.gz">Release 2.0</a></b><br>
 <ul>
   <li> bugfix: if the specified sed executable did not exist tex2pdf failed
   <li> improved title and author handling: ignore text with included TeX tags
@@ -134,6 +134,20 @@
   <li> batchmode command is removed in TeX files to protect pdflatex execution
   <li> introduced directory for log files that is cleaned up before execution
   <li> cleaned up the code and other minor changes
+</ul>
+<br>
+<li><b>Apr 06th, 2001 -- <a href="http://download.berlios.de/tex2pdf/tex2pdf-2.1.tar.gz">Release 2.1</a></b><br>
+<ul>
+  <li> bugfix: included graphics haven't been recognised with [...] parameter<br>
+  (thanks to Ahmet Sekercioglu for the bug report)
+  <li> introduced parameters MINRUNNO, INSERTCOMMAND and CLEANLOGS<br>
+  <li> bugfix: env variable in single quotes (handling of included TeX files)
+  <li> bugfix: TOC was not created as pdflatex has been running only once<br>
+  (thanks to Richard for the bug report)
+  <li>bugfix: commented out \include and \bibliography have been processed<br>
+  (thanks to Ahmet Sekercioglu for the bug report)
+  <li>added optional makeindex support (set MAKEINDEX=test to activate)<br>
+  (thanks to Steffen Macke for his work)
 </ul>
 <br><hr>
 
