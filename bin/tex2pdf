@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0";
+my $MYRELEASE="3.1beta";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -1573,8 +1573,8 @@ sub convert_tex2tmp {
    
    ### read, parse, modify and write the TeX body
    while(<SOURCE_FILE>) {
-      # cut off the suffix of eps, ps, and pstex graphics
-      s/((\\includegraphics)(\[[^]]*\])?(\{[^}]+))\.(e?ps|pstex)\}/$1}/g;
+      # cut off the suffix of eps, ps, *.gz and pstex graphics
+      s/((\\includegraphics)(\[[^]]*\])?(\{[^}]+))\.(e?ps|pstex|eps.gz)\}/$1}/g;
 
       # replace the suffix 'pstex_t' with 'pdf_t'
       s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
@@ -1603,8 +1603,14 @@ sub convert_eps2pdf {
    my $image_name;
    my $suffix;
    my $image_target;
+   my $zipped = 0;
+   my $dummy;
 
-   ($image_base,$image_path,$suffix) = fileparse($image, '\.eps', '\.ps', '\.pstex');
+   ($image_base,$image_path,$suffix) = fileparse($image, '\.eps', '\.ps', '\.pstex', '\.gz');
+   if ($suffix = "\.gz") {
+	$zipped = 1;
+	($image_base,$dummy,$suffix) = fileparse($image_base, '\.eps', '\.ps', '\.pstex');
+   }
    $image_name = $image_base . $suffix;
    $image_target = $image_path . $image_base . '.pdf';
    
@@ -1619,9 +1625,14 @@ sub convert_eps2pdf {
    }
 
    if ( ! -f $image_target or -M $image_target > -M $image ) {
-      print "Converting image $image_name ...\n";
-      system('epstopdf', '-outfile='.$image_target, $image)
-         and &abort("epstopdf failed on $image_name: $!");
+      print "Converting image $image_name to $image_target ...\n";
+        if ($zipped > 0) {
+    	    system("gunzip -c $image | epstopdf -f -outfile=$image_target")
+        	and &abort("epstopdf failed on $image_name: $!");
+	} else {
+    	    system("epstopdf -outfile=$image_target  $image ")
+        	and &abort("epstopdf failed on $image_name: $!");
+	}
       if (&param_value('delete_pdf_images') eq $YES) {
          push(@TMPFILES, $image_target);
       }
@@ -1687,8 +1698,8 @@ sub convert_images {
    print "\nConverting images referenced in $tex_source.\n";
 
    ##### Get EPS images from the source file
-   print "\nScanning for EPS images (.eps/.ps):\n";
-   @eps_image_list=&identify_files($tex_source,'includegraphics',['eps','ps']);
+   print "\nScanning for EPS images (.eps/.ps/eps.gz):\n";
+   @eps_image_list=&identify_files($tex_source,'includegraphics',['eps','ps','gz']);
    if ( @eps_image_list > 0 ) {
       print join("\n", @eps_image_list);
       print "\n";
