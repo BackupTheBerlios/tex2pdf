@@ -31,7 +31,7 @@
 # Matt Bandy, Garrick Chien Welsh, Stacy J. Prowell, Pavel Sedivy,
 # Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke,
 # Rainer Dorsch & friends, Jean-Pierre Chretien, Fernando Perez,
-# Ha Duong Minh, Oscar Lopez
+# Ha Duong Minh, Oscar Lopez, Felix Valado
 #
 # Project Homepage: http://tex2pdf.berlios.de
 # Developer Homepage: http://developer.berlios.de/projects/tex2pdf
@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1.3";
+my $MYRELEASE="3.1.4";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1427,9 +1427,12 @@ sub check_commands {
    ### check for which command
    &checkCommand("which","You can switch off all command checks to fix this.");
 
-   ### pdftex executables
+   ### latex, dvips and pdftex executables
    # Homepage: http://tug.org/applications/pdftex
+   &checkCommand("latex","See latex homepage for details: http://tug.org/");
+   &checkCommand("dvips","See dvips homepage for details: http://www.radicaleye.com/dvips.html");
    &checkCommand("pdflatex","See pdftex homepage for details: http://tug.org/applications/pdftex");
+   &checkCommand("eps2eps","See Ghostscript homepage for details: http://www.aladdin.com/");
    &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
    $exec_epstopdf = `which epstopdf`;
    chomp $exec_epstopdf;
@@ -1761,6 +1764,76 @@ sub get_file_list {
 ### do the required modifications in the LaTeX preamble 
 # parameter 1: original preamble from the source file
 #              lines before \begin{document} tag (without this tag)
+# parameter 2: the body of the document
+# return value: none
+
+sub pdffrag {
+   my $preamble = $_[0];
+   my $body     = $_[1];
+   my $eps_file;
+   my ($tex_target,$tex_src,$pdf_target,$frg_target,$tmp_target);
+   my ($eps_base,$eps_path,$suffix);
+   my $dvi_log;
+   my $tex_log; 
+
+   my $latex_code .= "\n" . '\begin{document}' . "\n" . '\thispagestyle{empty}' . "\n";
+   my $latex_end = "\n".'\end{document}';
+
+   # It is assumed that every psfrag block is between the first psfrag tag
+   # and the last line related with includegraphics
+   # Therefore, we look for every paragraph starting with \psfrag and ending with an includegraphics.The chunk between 
+   # them and themselves is considered the psfrag code that applies to the corresponding eps graphic.
+   while ($body =~ m/^ *\\psfrag(.*?)((\\includegraphics)(\[[^]]*?\])?(\{([^}]+?)))\.(e?ps|pstex|e?ps\.gz)\n?\}(.*?)$/msg){
+       $eps_file = $6."\.".$7;
+       $suffix = "\.".$7;
+
+       # Getting the path, base and suffix of every graphic under the psfrag substitution
+       ($eps_base,$eps_path,$suffix) = fileparse($eps_file,$suffix);
+       $tex_src   =  $eps_path.$eps_base;
+       $tex_target = $eps_path.$eps_base."\.tex";
+       $pdf_target = $eps_path.$eps_base."\.pdf";
+       $frg_target = $eps_path.$eps_base.'-frg.eps';
+       $tmp_target = $eps_path.$eps_base.'-tmp.eps';
+
+       # Writing the simplified latex files with the psfrag substitution
+       open(TARGET_FILE, ">$tex_target") or
+	  &abort("Could not open file to write temporary TeX document ($tex_target).");
+
+       print TARGET_FILE $preamble.$latex_code.$&.$latex_end;
+       close TARGET_FILE;
+
+       # Setting up the log files for the latex and dvips runs
+       $dvi_log = $tex_src."-dvi.log";
+       $tex_log = $tex_src."-tex.log";
+       &run_latex($tex_target,$tex_log);
+       &run_dvips($eps_base.'.dvi',$dvi_log,$frg_target,'-Pcmz -E');
+
+       # Adjusting the bounding box size, this is taken from eps2bb
+       &system_command("eps2eps $frg_target $tmp_target",$TRUE, 8, "eps2eps failed on $tmp_target");
+       my @lines = &grep_file($tmp_target,'BoundingBox');
+       open(INPUT_FILE, "<$frg_target") or
+           &abort("Could not open file ($frg_target).");
+       open(TARGET_FILE, ">$tmp_target") or
+           &abort("Could not open file ($tmp_target).");
+       while(<INPUT_FILE>) {
+         if(/BoundingBox/){
+           $_=$lines[0];
+         }
+         print TARGET_FILE $_;
+       }
+       rename($tmp_target,$frg_target) or &abort("Can't move $tmp_target to $frg_target: $!");
+
+       # Here we take advantage of the fact that the pdf output file is newer that the original eps file and 
+       # the conversion image eps2pdf process will skip the conversion, leaving the psfrag figure just 
+       # converted to pdf. 
+       &system_command("epstopdf -outfile=$pdf_target $frg_target ",$TRUE, 8, "epstopdf failed on $frg_target");
+   }
+}
+
+
+### do the required modifications in the LaTeX preamble 
+# parameter 1: original preamble from the source file
+#              lines before \begin{document} tag (without this tag)
 # parameter 2: reference to hyperref parameter list
 # return value: adjusted preamble
 
@@ -1784,6 +1857,11 @@ sub adjust_preamble {
 
    #### protect pdflatex execution mode
    s/^(\\batchmode)$/% $1/m;
+
+   # Comment out the use of psfrag package
+   s/(\\usepackage(\[[^]]*?\])*?\{psfrag\})/\%$1/m;
+
+#   s/(\\usepackage\{psfrag\})/\%$1/m;
 
    # insert a4paper in the documentclass when a4wide is used 
    # fixes problem that hyperref defaults to letter otherwise
@@ -1849,6 +1927,9 @@ sub adjust_filenames {
    
    $_ = $code;
 
+   # Comment out the psfrag statements
+   s/(\\psfrag(\[[^]]*?\])*?\{.*\}\{.*\})/\%$1/g;
+
    # cut off the suffix of eps, ps, *.gz and pstex graphics
    s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)\n?\}/$1}/sg;
 
@@ -1893,7 +1974,7 @@ sub convert_tex2tmp {
    my $body;
    my $adjust_preamble = defined($hyperref_params_ref) ? $YES : $NO;
    my $read_err_msg = "Could not read original TeX document to generate temporary document";
-   
+
    ### open source and target file
    &check_file($source, $read_err_msg . '.');
    open(SOURCE_FILE, "<$source") or
@@ -1912,6 +1993,9 @@ sub convert_tex2tmp {
       $contents =~ m/^ *\\begin\{document\} *$/m;
       $preamble = $`;
       $body = $&.$';
+      if ($preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
+         &pdffrag($preamble,$body);
+      }
       $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
       $preamble = &adjust_filenames($preamble);
    } else {
@@ -2274,6 +2358,99 @@ sub convert_images {
 
    &report(6, "\nFinished converting for ${tex_source}.");
 }
+
+### run latex
+# parameter 1: LaTeX file without extension
+# parameter 2: log-file where the full output is stored
+# return value: 0 - no errors (no rerun); 1 - errors (rerun required)
+sub run_latex {
+   my $texfile=$_[0];
+   my $logfile=$_[1];
+   my @errors=();
+   my $exit_status=0;
+   my $extra_options;
+
+   if( !defined($extra_options) or $extra_options eq $NIL ) {
+      $extra_options = "";
+   }
+   
+   &report(7, "Running latex. This may take a while.\n");
+   system("latex --interaction nonstopmode $extra_options $texfile > $logfile 2>&1");
+   $exit_status=$?;
+   &report(7, "Latex finished. Errors:");
+
+   ### extract all errors and warnings from the log file
+   @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
+   
+   if ( @errors != 0 or $exit_status != 0 ) {
+      if ( grep(/Emergency stop/, @errors) != 0 ) {
+         &report(2, &file_tail($logfile,10));
+         &report(2, "\nSee $logfile for details.");
+         &abort("Fatal error occured. I am lost.");
+      }
+      if( @errors != 0 ) {
+         &report(8, @errors);
+      } else {
+         &report(8, &file_tail($logfile,10));
+      }
+      &report(7, "\nSee $logfile for details.");
+      return $FALSE;
+   } else {
+      &report(7, "None detected (log file: $logfile).");
+      return $TRUE;
+   }
+}
+
+
+### run dvips
+# parameter 1: dvi file without extension
+# parameter 2: log-file where the full output is stored
+# parameter 3: output file
+# parameter 4: dvips options
+
+# return value: 0 - no errors (no rerun); 1 - errors (rerun required)
+
+sub run_dvips {
+   my $dvifile=$_[0];
+   my $logfile=$_[1];
+   my $doc    =$_[2];
+   my $options=$_[3];
+   my @errors=();
+   my $exit_status=0;
+   my $extra_options;
+
+   if( !defined($extra_options) or $extra_options eq $NIL ) {
+      $extra_options = "";
+   }
+   $extra_options = $extra_options.$options;
+   &report(7, "Running dvips. This may take a while.\n");
+   system("dvips -o $doc $extra_options $dvifile > $logfile 2>&1");
+   $exit_status=$?;
+   &report(7, "dvips finished. Errors:");
+
+   ### extract all errors and warnings from the log file
+   @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
+   
+   if ( @errors != 0 or $exit_status != 0 ) {
+      if ( grep(/Emergency stop/, @errors) != 0 ) {
+         &report(2, &file_tail($logfile,10));
+         &report(2, "\nSee $logfile for details.");
+         &abort("Fatal error occured. I am lost.");
+      }
+      if( @errors != 0 ) {
+         &report(8, @errors);
+      } else {
+         &report(8, &file_tail($logfile,10));
+      }
+      &report(7, "\nSee $logfile for details.");
+      return $FALSE;
+   } else {
+      &report(7, "None detected (log file: $logfile).");
+      return $TRUE;
+   }
+}
+
+
 
 ### run pdflatex
 # parameter 1: LaTeX file without extension
