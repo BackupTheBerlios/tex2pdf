@@ -55,6 +55,8 @@ use Cwd;
 $MYRELEASE="2.2.8pl";
 $MYNAME="tex2pdf.pl";
 @TMPFILES=();
+$NUM_PARAM_MIN=0;
+$NUM_PARAM_MAX=9;  
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -130,6 +132,7 @@ $NIL => 'do not set this value - leave it to hyperref'
 &add_param('print_config', 'action', undef, '|o', '');
 &add_param('configure', 'action', undef, '|r', '');
 &add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s');
+&add_param('lyxrc_path', 'directory', "$ENV{'HOME'}/.lyx/", '', '=s');
 &add_param('clean_logs', 'bool', $YES, '|l', '!');
 &add_param('check_commands', 'bool', $YES, '|c', '!');
 &add_param('regexp_append', 'text', '^\\documentclass(\[[^]]*\])?\{.*\}', '', '=s');
@@ -501,6 +504,25 @@ sub add_param {
 
 ### get the value of an existing parameter
 # parameter 1: a parameter key
+# return value: referenc to the hash of possible values (undef if not valid)
+
+sub type_values_hash {
+   my $key = $_[0];
+   my $values_ref;
+
+   exists(%PARAMETER_TYPES{$key})
+      or &abort "unknown type: $key";
+   $values_ref = %PARAMETER_TYPES{$key};
+
+   if(ref $values_ref ne 'HASH') {
+      $values_ref = undef;
+   }
+
+   return $values_ref;
+}
+
+### get the value of an existing parameter
+# parameter 1: a parameter key
 # return value: parameter value
 
 sub param_value {
@@ -527,6 +549,9 @@ sub param_type {
       or &abort "unknown parameter: $key";
    $def_ref = %PARAMETER_LIST{$key};
    $type = @{$def_ref}[$TYPE];
+
+   exists(%PARAMETER_TYPES{$type})
+      or &abort "parameter has unknown type: $key (type: $type)";
 
    return $type;
 }
@@ -576,26 +601,20 @@ sub handle_option {
 
    if ($type eq 'action') {
       &handle_action_opt($key, $value);
+   } elsif ( $type eq 'bool') {
+      my $bool_value = $value ? $YES : $NO;
+      &set_param_value($key, $bool_value);
+   } elsif ( $type eq 'directory') {
+      if (! &check_dir($value) {
+         print "$key requires an existing writable directory as an absolute path.\n";
+         &abort("Illegal value: $value");
+      }
+      &set_param_value($key, $value);
+   } elsif ( defined(&type_values_hash($type) ) {
+      &set_enum_param($key, $value);
    } else {
       &set_param_value($key, $value);
    }
-# bash code FIXME
-#     case "$OPTION" in;
-#       i) &setYNValue MAKEINDEX $OPTARG i ;;;
-#       t) $TITLE=$OPTARG ;;;
-#       a) $AUTHOR=$OPTARG ;;;
-#       b) &setValue BIBTEX $OPTARG b $POSSIBLE_BIBTEX ;;;
-#       p) &setValue PAPERSIZE $OPTARG p $POSSIBLE_PAPER ;;;
-#       c) &setYNValue COMMANDCHECK $OPTARG r ;;;
-#       n) &setYNValue THUMBNAILS $OPTARG n ;;;
-#       l) &setYNValue CLEANLOGS $OPTARG l ;;;
-#       d) if &check_dir($OPTARG);
-#   	     $PDFCUSTOMDIR=$OPTARG;
-#   	     $PDFOUT=@$POSSIBLE_PDFOUT[2];
-#   	  } else {
-#   	     &abort("Please, choose a VALID path.");
-#   	  fi ;;;
-#     esac;
 }
 
 ### handle all action options 
@@ -634,49 +653,22 @@ sub handle_action_opt {
    exit 0;
 }
 
-### set a variable by a command line option to 'yes' or' no'; abort on error
-# parameter 1: variable
-# parameter 2: given value
-# parameter 3: option letter
-
-sub setYNValue {
-   my $variable = $_[0];
-   my $argument = $_[1];
-   my $option_letter = $_[2];
-
-   if( $argument =~ /^[yY]([Ee][Ss])?/ ) {
-      $$variable = $YES;
-   } elsif ( $argument =~ /^[Nn][Oo]?/ ) {
-      $$variable = $NO;
-   } else {
-      print "\n$variable requires '$YES' or '$NO'." ;
-      &abort("Illegal argument for option -$option_letter: $argument");
-   }
-}
-
 ### set a variable by a command line option to a possible values; abort on error
-# parameter 1: variable
-# parameter 2: given value
-# parameter 3: option letter
-# parameter 4: list of possible values
+# parameter 1: parameter key
+# parameter 2: value
 
-sub setValue {
-   my $variable = $_[0];
-   my $argument = $_[1];
-   my $option_letter = $_[2];
+sub set_enum_value {
+   my ($key, $value) = @_;
+   my $type;
+   my $values_hash_ref;
 
-   shift @_;
-   shift @_;
-   shift @_;
-
-   my @possible_values = @_;
-
-   if ( index("@possible_values", $argument) < 0 ) {
-      print "\n$variable allows: @possible_values.\n";
-      &abort("Illegal argument for option -$option_letter: $argument");
-      exit 1;
+   $type = &param_type($key);
+   $values_hash_ref = &type_values_hash($type);
+   if ( ! exists %{$values_hash_ref}{$value} )) {
+      print "\n$key allows: " . keys %{$values_hash_ref} . ".\n";
+      &abort("Illegal value: $value");
    }
-   $$variable = $argument;
+   &set_param_value($key, $value);
 }
 
 ### configure an existing parameter interactively
@@ -691,14 +683,8 @@ sub config_param {
    my $new_value;
    my $current_value;
 
-   exists(%PARAMETER_TYPES{$key})
-      or &abort "unknown parameter: $key";
-   $type = %PARAMETER_TYPES{$key}; 
-
+   $type = &param_type($key); 
    $current_value = &param_value($key);
-
-   exists(%TYPE_VALUES{$type})
-      or &abort "unknown parameter type: $key";
 
    if ($type eq 'bool') {
       $new_value=&question_ynu($question, $current_value, $NO);
@@ -712,10 +698,9 @@ sub config_param {
       $new_value=&input_number($question, $current_value,
       $NUM_PARAM_MIN, $NUM_PARAM_MAX);  
    } else {
-      my @possible_values; 
       my $values_hash_ref; 
 
-      $values_hash_ref=%TYPE_VALUES{$type}; 
+      $values_hash_ref=&type_values_hash($type); 
       if (! defined($values_hash_ref)) {
          &abort "do not know how to configure this parameter: $key (type: $type)";
       }
@@ -817,14 +802,14 @@ sub help {
    print " -o : print configuration parameters\n";
    print " -r : run configure parameters\n";
    print "\n";
-   print " -i BOOL   : makeindex\n";
-   print " -l BOOL   : clean log files\n";
-   print " -c BOOL   : check for required commands\n";
-   print " -n BOOL   : generate thumbnails for PDF document\n";
+   print " -i        : force call of makeindex\n";
+   print " -l        : clean log files\n";
+   print " -c        : check for required commands\n";
+   print " -n        : generate thumbnails for PDF document\n";
    print " -t TITLE  : specify title for PDF document info\n";
    print " -a AUTHOR : specify author for PDF document info\n";
-   print " -p SELECT : select papersize: @$POSSIBLE_PAPER\n";
-   print " -b SELECT : select bibtex handling: @$POSSIBLE_BIBTEX\n";
+   print " -p PAPER  : select papersize\n";
+   print " -b        : run bibtex\n";
    print " -d PATH   : custom directory where the final PDF is stored\n\n";
 }
 
@@ -899,20 +884,18 @@ sub configure {
    print "\n----------------\n";
    print "You can now specify in which directory the resulting document should\n";
    print "be written by default:\n";
-   print "- '@$POSSIBLE_PDFOUT[0]' means the same directory as the LaTeX file.\n";
-   print "- '@$POSSIBLE_PDFOUT[1]' means the same directory as the input files of your\n";
+   print "- 'source' means the same directory as the LaTeX file.\n";
+   print "- 'input' means the same directory as the input files of your\n";
    print "  LaTeX file (e.g. images, included documents, etc.).\n";
    print "  This path should be specified in the source LaTeX document otherwise\n";
-   print "  it is identical with the '@$POSSIBLE_PDFOUT[0]' option.\n";
-   print "- '@$POSSIBLE_PDFOUT[2]' means you want to specify your own directory where the\n";
+   print "  it is identical with the 'source' option.\n";
+   print "- 'custom' means you want to specify your own directory where the\n";
    print "  generated document should be written.\n";
-   &config_param("Which output directory?",'destination');
+   &config_param("Which should the resulting PDF be put?",'destination');
 
-   if ( &param_value('PDFOUT') eq @$POSSIBLE_PDFOUT[2] ) {
-      print "\n----------------\n";
-      print "You have choosen to specifiy a custom output directory.\n";
-      &config_param("What custom directory should be used?",'custom-path');
-   }
+   print "\n----------------\n";
+   print "The custom output directory for the result when 'custom' is set.\n";
+   &config_param("What custom directory should be used?",'custom-path');
 
    print "\n----------------\n";
    print "The bibtex usage can be specified.\n";
@@ -970,27 +953,20 @@ sub configure {
 
 sub check_commands {
    ### check for which command
-   &checkCommand("which","You can switch off all command checks by setting &param_value('COMMANDCHECK')=$NO in the parameter section of $MYNAME.");
-
-   ### sed executable
-   # GNU sed version 3.02 or higher is recommended
-   # Download: ftp://ftp.gnu.org/pub/gnu/sed
-   if ( &param_value('SEDEXE') eq "sed" ) {
-      &checkCommand("sed","You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed");
-   }
+   &checkCommand("which","You can switch off all command checks to fix this.");
 
    ### pdftex executables
    # Homepage: http://tug.org/applications/pdftex
    &checkCommand("pdflatex","See pdftex homepage for details: http://tug.org/applications/pdftex");
    &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
 
-   if ( &param_value('THUMBNAILS') eq $YES ) {
-      &checkCommand("thumbpdf","You can switch off thumbpdf support by setting &param_value('THUMBNAILS')=$NO in the parameter section of $MYNAME.");
+   if ( &param_value('thumbpdf') eq $YES ) {
+      &checkCommand("thumbpdf","You can switch off thumbpdf support to fix this.");
    }
 
    ### bibtex executable
    if ( &param_value('BIBTEX') ne $NO ) {
-      &checkCommand("bibtex","You can switch off BibTeX support by setting &param_value('BIBTEX')=$NO in the parameter section of $MYNAME.");
+   &checkCommand("which","You can switch off BibTeX support to fix this.");
    }
 }
 
@@ -1017,28 +993,26 @@ sub get_tmp_filename {
 sub generate_tex_file {
    my $lyx_doc = $_[0];
    my $tex_doc = $_[1];
-   my $lyx_dir = "$ENV{'HOME'}/.lyx/";
+   my $lyx_dir = &param_value('lyxrc_path');
 
    ### Check if LyX file can be accessed
    &check_file($lyx_doc,"Cannot read the specified LyX document!");
 
    ### Check if LaTeX file exists and is newer than the LyX file
-   if ( -f $tex_doc and $tex_doc -nt $lyx_doc ) {
-      print "\n";
-      print "$MYNAME: LaTeX file is newer than LyX document '$lyx_doc'.\n";
+   if ( -f $tex_doc and -M $tex_doc < -M $lyx_doc ) {
+      print "\n$MYNAME: LaTeX file is newer than LyX document ($lyx_doc).\n";
       print "Using existing TeX file: $tex_doc\n";
       print "Remove it to force its new generation.\n";
    } else {
       ### export LaTeX file with LyX (needs a display!)
       &checkCommand("lyx","Cannot generate LaTeX document without LyX!");
-      print "\n";
-      print "$MYNAME: Exporting LaTeX file\n";
+      print "\n$MYNAME: Exporting LaTeX file\n";
       
       foreach my $file ($lyx_dir."lyxpipe.out",$lyx_dir."lyxpipe.in",$tex_doc) {
          if ( -f $file ) { rename($file, $file.'~'); }
       }
 
-      system "lyx --export latex $lyx_doc";
+      system('lyx', '--export', 'latex', "$lyx_doc");
 
       ### check if LaTeX file now really exists
       &check_file($tex_doc,"The LaTeX document was not generated by LyX!");
@@ -1058,11 +1032,11 @@ sub extract_tag_text {
 
    &check_file($source, $error_message.'.');
    open(SOURCE_FILE, "<$source") or
-      &abort($error_message."($source).");
+      &abort($error_message." ($source).");
 
    while(<SOURCE_FILE>) {
       s/([^\])%.*$/$1/;
-      if( /\\$tag_name(\[[^{]*\])?{([^{}]*)}/ ) {
+      if( /\\$tag_name(\[[^{]*\])?{+([^{}]*)}/ ) {
          $result=$2; 
 	 last;
       }
@@ -1070,71 +1044,7 @@ sub extract_tag_text {
    
    close SOURCE_FILE;
    
-   if ( ! defined($result)) {
-      print "\n$MYNAME: WARNING: Could not identify document's $tag_name correctly.\n";
-      print "Maybe you have used a LaTeX tag inside the $tag_name which confuses me.\n";
-      print "Adjust the $tag_name of the LaTeX file in order to avoid the problem.\n";
-      print "Additionally, it might be possible to set $tag_name manually when";
-      print "calling $MYNAME.\n";
-   }
-
    return $result;
-}
-
-### generate hyperref parameters from given settings
-# parameter 1: main tex doc
-# return_value: result
-
-sub generate_hyperref_params {
-   my $texdoc = $_[0];
-   my $para;
-   my @params = ('pdftex');
-
-   ##### Set title and author from main LaTeX document or parameters
-   foreach my $info (('title', 'author')) {
-      my $value;
-
-      $value=&param_value("$info");
-      if (! defined($value) ) {
-         $value=&extract_tag_text($texdoc, "$info");
-         if (! defined($value) ) {
-            $value= &param_value("default-$info");
-         }
-      }
-      if (! defined($value) or $value eq $NIL ) {
-            print "$info field set to $NIL - no value will be passed.\n";
-         } else {
-            print "Document's $info: $value\n";
-            push(@params, "pdf$info={$value}");
-         }
-      }
-   }
-   
-   print "\n";
-   
-   $para=&param_value('paper');
-   if ( $para ne $NIL ) { push(@params, $para); }
-   
-   if ( &param_value('linktocpage') eq $YES ) { push(@params, 'linktocpage'); }
-
-   $para=&param_value('colorlinks');
-   if ( $para ne $NIL ) {
-      $para= $para eq $YES ? 'true' : 'false';
-      push(@params, "colorlinks=$para");
-   }
-
-   if ( $para ne 'false' ) {
-      foreach (('linkcolor', 'pagecolor', 'urlcolor', 'citecolor')) {
-         $para=&param_value($_);
-      if ( $para ne $NIL ) { push(@params, "$_={$para}"); }
-   }
-
-   $para=&param_value('hyperref-opts');
-   if(defined($para) and $para ne "" and $para ne $NIL) {
-      push(@params, $para);
-   }
-   
-   return @params;
 }
 
 ##### read and analyse configuration and options and adjust basic variables
@@ -1183,41 +1093,34 @@ sub adjust_configuration {
       exit 1;
    }
    
-   ### make sure that TMPBASESUFFIX is not empty
-   if ( &param_value('TMPBASESUFFIX') eq "" ) {
-      print "\n$MYNAME: CAUTION: Parameter TMPBASESUFFIX is not set.\n";
+   ### make sure that tmp_base_suffix is not empty
+   if ( &param_value('tmp_base_suffix') eq "" ) {
+      print "\n$MYNAME: CAUTION: Parameter tmp_base_suffix is not set.\n";
       &abort "Using these settings would destroy the original files!";
    }
    
    ##### check for required commands
-   if (&param_value('COMMANDCHECK') ne $NO ) {
+   if (&param_value('check_commands') ne $NO ) {
       &check_commands;
    }
 }
 
-#### prepare the script to write some information to specified log files
+#### prepare the logdir for the log files of the various called appplications
 
-sub prepare_logfiles {
+sub prepare_logdir {
    my $log_dir= &param_value('logdir');
 
    ##### Preparing the LOGDIR
-   if ! mkdir -p $log_dir
-      print "\n$MYNAME: Could not create log directory ($log_dir).\n";
-      print "Aborting ...\n";
-      exit 1;
+   if (! &check_dir($log_dir, "Could not create log directory", $YES)) {
+      &abort("Please, set a different path and restart");
    }
    
-   if( `ls $log_dir` ne "" and &param_value('cleanlogs') eq $YES ) { #FIXME
+   if( <$log_dir/*.log> > 0 and &param_value('cleanlogs') eq $YES ) { 
       print "\nRemoving old log files ($log_dir).\n";
-      unlink (glob "${log_dir}pdflatex-*.log", glob "${log_dir}bibtex-*.log", glob "${log_dir}thumbpdf-*.log");
+      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/thumbpdf-*.log>);
    } else {
       print "\nAll log files will be stored in ($log_dir).\n";
    }
-   
-   # setting the log files for the output of pdflatex, bibtex and thumbpdf
-   $PDFLOGBASE="${log_dir}pdflatex-$$-"; #FIXME
-   $BIBTEXLOG="${log_dir}bibtex-$$.log";
-   $THUMBPDFLOG="${log_dir}thumbpdf-$$.log";
 }
 
 ##### analyse document argument
@@ -1226,37 +1129,36 @@ sub prepare_logfiles {
 #### a lyx file will be translated to LaTeX first
 
 sub process_doc_argument {
+   my $argument = $_[0];
+   my $doc_base;
+   my $doc_path;
+   my $arg_suffix;
    
-   ##### Getting document name and path
-   $DOCUMENT="$_[0]";
-   $DOCNAME=`basename $DOCUMENT`;
-   $DOCPATH=`echo "$DOCUMENT" | &param_value('SEDEXE') -e "s/^\(.*\)$DOCNAME/\1/"`;
+   ##### Getting document name, suffix and path
+   ($doc_base,$doc_path,$arg_suffix) = fileparse($argument, ('\.tex', '\.lyx'));
+
+   if (! defined($arg_suffix) or $arg_suffix eq "") {
+      $arg_suffix = '.tex';
+   }
    
    ###### change working directory to document directory
-   if ( $DOCPATH ne "" ) {
-      chdir $DOCPATH;
+   if ( $doc_path ne "" ) {
+      chdir $doc_path;
    }
    
    ###### make DOCPATH an absolute path
-   $DOCPATH = cwd.'/';
+   $doc_path = cwd;
    
    ###### Cut off suffix and do lyx or tex specific stuff
-   $DOCBASE=`basename $DOCNAME .lyx`;
-   if ( $DOCBASE ne $DOCNAME ) {
-      ### DOCNAME has an extention .lyx => Lyx document
-      # generate Latex document if required
-      &generate_tex_file($DOCBASE.'.lyx', $DOCBASE.'.tex');
+   if ( $arg_suffix eq '.lyx' ) {
+      # Lyx document argument: generate Latex document if required
+      &generate_tex_file($doc_base.'.lyx', $doc_base.'.tex');
    } else {
-      ### given file is a LaTeX file
-      # cut off .tex extension if there is one
-      $DOCBASE=`basename $DOCNAME .tex`;
-   
-      ###### check access to given LaTeX document
-      &check_file("$DOCBASE.tex", "Cannot read the specified LaTeX document!");
+      # LaTeX document argument: check access to given LaTeX document
+      &check_file($doc_base.'.tex', "Cannot read the specified LaTeX document!");
    }
    
-   $PASSEDTEXDOC=${DOCPATH}${DOCBASE}.tex;
-   $TMPBASE=${DOCBASE}&param_value('TMPBASESUFFIX')
+   return $doc_path.'/'.$doc_base.'.tex';
 }
 
 #### set theworking dir to the input path if the document has one and
@@ -1267,7 +1169,7 @@ sub process_doc_argument {
 sub get_pdf_path {
    my $texdoc = $_[0];
    my $inputpath;
-   my $doc_path= cwd . '/';
+   my $doc_path= cwd;
    my $destination;
    my $pdf_path;
  
@@ -1276,38 +1178,101 @@ sub get_pdf_path {
    # relative to another directory than the PASSED document's directory.
    # This is useful when the calling application (e.g. LyX) generates a temporary
    # TeX file and calls the tex2pdf with it instead of the original file.
-   $input_path=`&param_value('SEDEXE') -n "s|^[\]def[\]input@path{\+\([^{}]*\)}\+|\1|1p" $texdoc`;
-       #FIXME
+   $input_path=&extract_tag_tex($texdoc, '\\def\\input\@path');
    
    ## check if input_path is ok
-   if ( $input_path ne "" ) {
+   if ( defined ($input_path) and $input_path ne "" ) {
       print "$MYNAME: Found an input path in the latex document: $input_path\n";
-      if ( -d $input_path and -r $input_path ) {
+      if( &check_dir($input_path, 'The retrieved input@path seems not to be valid.', $NO)) {
          print "Change working directory to input path.\n";
          chdir $input_path;
       } else {
-          &abort 'The retrieved input@path seems not to be valid.';
+          &abort ('I am lost.');
       }
    } else {
       print "$MYNAME: No input path in the latex document found.\n";
       print "Resources are expected to be relative to document's location: $doc_path\n";
+         $input_path=$doc_path;
    }
 
    ##### set the directory where the final pdf will be stored
    $destination=&param_value('destination');
    $pdf_path=undef;
-
+   
    if ($destination eq 'custom' ) {
       $pdf_path=&param_value('custom-path');
    } elsif ($destination eq 'input') {
       $pdf_path=$input_path;
    }
 
-   if(! defined($pdf_path) or $pdf_path eq "" ) {
+      if( ! defined($pdf_path) or $pdf_path eq "" or &check_dir($pdf_path,
+         'The specified destination directory for the final PDF documents is not valid.', $NO)) {
+      print "$MYNAME: Using document's instead of destination path: $doc_path\n";
       $pdf_path=$doc_path;
    }
 
    return $pdf_path;
+}
+
+### generate hyperref parameters from given settings
+# parameter 1: main tex doc
+# return_value: result
+
+sub generate_hyperref_params {
+   my $texdoc = $_[0];
+   my $para;
+   my @params = ('pdftex');
+
+   ##### Set title and author from main LaTeX document or parameters
+   foreach my $info (('title', 'author')) {
+      my $value;
+
+      $value=&param_value("$info");
+      if (! defined($value) ) {
+         $value=&extract_tag_text($texdoc, $info);
+         if (! defined($value) ) {
+            print "\n$MYNAME: WARNING: Could not identify document's $info correctly.\n";
+            print "Maybe you have used a LaTeX tag inside the $info which confuses me.\n";
+            print "Adjust the $info of the LaTeX file in order to avoid the problem or\n";
+            print "you could set the $info parameter manually.";
+            $value= &param_value("default-$info");
+	    print "Using default-$info: $value\n";
+         }
+      }
+      if (! defined($value) or $value eq $NIL ) {
+            print "$info field set to $NIL - no value will be passed.\n";
+         } else {
+            print "Document's $info: $value\n";
+            push(@params, "pdf$info={$value}");
+         }
+      }
+   }
+   
+   print "\n";
+   
+   $para=&param_value('paper');
+   if ( $para ne $NIL ) { push(@params, $para); }
+   
+   if ( &param_value('linktocpage') eq $YES ) { push(@params, 'linktocpage'); }
+
+   $para=&param_value('colorlinks');
+   if ( $para ne $NIL ) {
+      $para= $para eq $YES ? 'true' : 'false';
+      push(@params, "colorlinks=$para");
+   }
+
+   if ( $para ne 'false' ) {
+      foreach (('linkcolor', 'pagecolor', 'urlcolor', 'citecolor')) {
+         $para=&param_value($_);
+      if ( $para ne $NIL ) { push(@params, "$_={$para}"); }
+   }
+
+   $para=&param_value('hyperref_opts');
+   if(defined($para) and $para ne "" and $para ne $NIL) {
+      push(@params, $para);
+   }
+   
+   return @params;
 }
 
 #### search for filenames in given TeX Tag in entire document
@@ -1707,9 +1672,12 @@ sub generate_pdf_doc {
    my $index_file;
    my $runno=1;
    my $rerun=$TRUE;
-   my $pdflog_base = $PDFLOGBASE; #FIXME
-   my $bibtex_log = $BIBTEXLOG;   #FIXME
-   my $thumbpdf_log = $THUMBPDFLOG;   #FIXME
+   
+   # setting the log files for the output of pdflatex, bibtex and thumbpdf
+   my $log_dir= &param_value('logdir');
+   my $pdflog_base = "$log_dir/pdflatex-$$-";
+   my $bibtex_log = "$log_dir/bibtex-$$.log";
+   my $thumbpdf_log = "$log_dir/thumbpdf-$$.log";
 
    ### cut of .tex extension - pdflatex does not like it
    $tex_doc =~ s/\.tex$//;
@@ -1785,8 +1753,8 @@ print "\n$MYNAME: Doing some tests.\n";
 
 #### prepare the script to write some information to specified log files
 
-print "\n$MYNAME: Preparing log files.\n";
-&prepare_logfiles;
+print "\n$MYNAME: Preparing directory for log files.\n";
+&prepare_logdir;
 
 #### process the one and only argument (besides the options) which specifies
 #### which LaTeX document the user wants to translate to PDF
