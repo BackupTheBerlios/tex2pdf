@@ -2,7 +2,7 @@
 
 #      tex2pdf - script for translating latex docs to pdf
 #
-#      Copyright (C) 2000,2001 by Steffen Evers
+#      Copyright (C) 2000,2001 by Steffen Evers and others
 #
 #      This program is free software; you can redistribute it and/or modify
 #      it under the terms of the GNU General Public License version 2 as 
@@ -53,9 +53,10 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="2.4alpha3";
+my $MYRELEASE="2.4alpha4";
 my $MYNAME="tex2pdf.pl";
 my @TMPFILES=();
+my @TMP_TEX_FILES=(); 
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=9;  
 my @REF_DOCS;
@@ -131,6 +132,7 @@ $NIL => 'do not set this value - leave it to hyperref'
 &add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s');
 &add_param('lyxrc_path', 'directory', "$ENV{'HOME'}/.lyx/", '', '=s');
 &add_param('clean_on_abort', 'bool', $NO, '', '!');
+&add_param('overwrite', 'bool', $NO, '', '!');
 &add_param('clean_logs', 'bool', $YES, '|l', '!');
 &add_param('check_commands', 'bool', $YES, '|c', '!');
 &add_param('destination', 'destination', 'source', '', '=s');
@@ -187,13 +189,83 @@ sub array_index {
    return -1;
 }
 
+### print the last N lines of a text file to stdout
+# parameter 1: file to read
+# parameter 2: N - number of lines to print (undef/0: all lines)
+# return value: none
+
+sub file_tail {
+   my $file_name = $_[0];
+   my $no_of_lines = defined($_[1]) ? $_[1] : 0;
+   my @cache=();
+
+   &check_file($file_name);
+   open(SOURCE_FILE, "<$file_name")
+      or &abort("Could not read file $file_name: $!");
+
+   if($no_of_lines == 0) {
+      # print entire file
+      while(<SOURCE_FILE>) {
+         print $_;
+      }
+      return;
+   }
+   
+   # fill up cache
+   while(@cache < $no_of_lines and <SOURCE_FILE>) {
+      push(@cache, $_);
+   }
+   
+   # always cache the last N lines up to the end of the file
+   while(<SOURCE_FILE>) {
+     shift(@cache);
+     push(@cache, $_);
+   }
+   
+   close SOURCE_FILE;
+
+   print @cache;
+}
+
+### return all lines of FILE which match match regexp EXPR 
+# parameter 1: FILE - file to read
+# parameter 2: EXPR - regular expression to match
+# return value: array of matching lines
+
+sub grep_file {
+   my $file_name = $_[0];
+   my $regexp = $_[1];
+   my @result=();
+
+   ### extract all errors and warnings from the log file
+   &check_file($file_name);
+   open(SOURCE_FILE, "<$file_name")
+      or &abort("Could not read file $file_name: $!");
+
+   while(<SOURCE_FILE>) {
+      push(@result, $_) if(m#$regexp#);
+   }
+
+   close SOURCE_FILE;
+   return @result;
+}
+   
 ### Removing all temporary files
 
 sub clean_up {
    print "$MYNAME: Removing temporary files ...\n";
    foreach (@TMPFILES) {
-      unlink($_) or 
-         warn "$MYNAME: Could not remove '$_':\n--> $!";
+      unlink($_) if(-f $_); 
+   }
+
+   foreach (@TMP_TEX_FILES) {
+      # make sure that we have a good tex file name in order
+      # to avoid unintended removals
+      if( $_ ne "" and -f $_.'.tex' ) {
+         unlink glob($_.".???"); 
+      } else {
+         print "$MYNAME: Bad file in temp tex files list: $_\n";
+      }
    }
 }
 
@@ -220,7 +292,7 @@ sub checkCommand {
 
    if ( $_ ne $command ) {
       print "\n";
-      system("which", $command);
+      system('which', $command);
       print "\n$MYNAME: Required command '$command' seems not to be in your path.\n";
       if ( defined($message) ) {
          print "$message\n";
@@ -612,7 +684,7 @@ sub handle_option {
 
    if ($type eq 'action') {
       &handle_action_opt($key, $value);
-   } elsif ( $type eq 'bool') {
+   } elsif ( $type eq 'bool' or $type eq 'three') {
       my $bool_value = $value ? $YES : $NO;
       &set_param_value($key, $bool_value);
    } elsif ( $type eq 'directory') {
@@ -989,19 +1061,58 @@ sub check_commands {
 
 #### generate the tmp file name from the original tex filename
 #### and make sure that they are not the same
-# parameter 1: orignal filename (with or without a path, but with .tex)
+# parameter 1: orignal filename (with or without a path or .tex)
+# return value: tmp name
 
-sub get_tmp_filename {
+sub reserve_tmp_texname {
    my $original_name = $_[0];
-   my $tmp_name = $original_name;
    my $tmp_base_suffix = &param_value('tmp_base_suffix');
+   my $overwrite = &param_value('overwrite');
+   my $path;
+   my $original_base;
+   my $suffix;
+   my $pathed_tmp_base;
+   my @existing_files;
 
-   $tmp_name =~ s/(\.tex)$/$tmp_base_suffix$1/;
-      
-   if ($original_name eq $tmp_name) {
-      &abort("Original and temporary filenames are identical ($original_name).");
+   # separate path, base and suffix
+   ($original_base,$path,$suffix) = fileparse($original_name, '\.tex');
+   
+   # make sure that tmp_base_suffix is set correctly
+   if($tmp_base_suffix eq "") {
+      &abort("Temporary filename base suffix is empty.");
    }
-   return $tmp_name;
+
+   # abort if no absolute path is given 
+   if( index($path, "/") != 0 ) {
+      &abort("Internal error: Illegal argument for reserve_tmp_texname:".
+         "Given file has no absolute path: $original_name");
+   }
+
+   $pathed_tmp_base = $path.$original_base.$tmp_base_suffix;
+
+   # make sure no file with this base exists in this directory
+   @existing_files = glob "$pathed_tmp_base.*";
+   if (@existing_files != 0) {
+      print "$MYNAME: Problems detected while reserving temporay file name!\n";
+      print "In this directory are already files with this basename.\n";
+      print "A list of the conflicting, existing files:\n";
+      print join("\n", @existing_files);
+      print "\n\n";
+      if ($overwrite eq $YES) {
+         print "As you have activated the parameter 'overwrite' I will "
+	       ."continue.\n";
+	 print "However, in order to protect the existing files I will not\n";
+	 print "delete any files with this basename at the final clean-up.\n";
+      } else {
+         print "You could activate the parameter 'overwrite' or remove the\n";
+         print "listed files in order to avoid these problems\n"; 
+         &abort("No temporary name found for $original_name.");
+      }
+   } else {
+      push(@TMP_TEX_FILES, $pathed_tmp_base); 
+   }
+
+   return $pathed_tmp_base.$suffix;
 }
 
 ### generate LaTeX file from LyX document with LyX itself
@@ -1090,6 +1201,7 @@ sub extract_files {
    
    foreach (@matched_tags) {
       if( m#^([^{}]*/)?[^{}/.]+($suffix)$# ) {
+         # insert path of source if no absolute path is given
          s#^([^/])#$source_path$1#;
          if( &array_index($_, @found_files) < 0 ) {
 	    push(@found_files, $_);
@@ -1196,9 +1308,6 @@ sub convert_tex2tmp {
       print $_;
    }
 
-   #### put target in the tmp file list
-   push(@TMPFILES, $target);
-
    ### set STDOUT as stdout again
    select STDOUT;
 
@@ -1229,7 +1338,7 @@ sub convert_eps2pdf {
 
       if ( ! -f $image_target or -M $image_target > -M $image ) {
          print "Converting image $image_name ...\n";
-         system("epstopdf", '-outfile='.$image_target, $image)
+         system('epstopdf', '-outfile='.$image_target, $image)
 	    and &abort("epstopdf failed on $image_name: $!");
          push(@TMPFILES, $image_target);
       } else {
@@ -1267,6 +1376,9 @@ sub convert_pstex2pdf {
 
       # create .pdf_t file
       &convert_tex2tmp($pstex_file, $pstex_target, undef); 
+   
+      # put tmp file in the tmp file list
+      push(@TMPFILES, $pstex_target);
 
       # convert image(s) to pdf
       &convert_eps2pdf(@eps_images);
@@ -1326,7 +1438,7 @@ sub convert_images {
 sub run_pdflatex {
    my $texfile=$_[0];
    my $logfile=$_[1];
-   my $errors=0;
+   my @errors=();
    my $exit_status=0;
    my $extra_options=&param_value('pdftex_opts');
 
@@ -1338,17 +1450,24 @@ sub run_pdflatex {
    system("pdflatex --interaction nonstopmode $extra_options $texfile > $logfile");
    $exit_status=$?;
    print "Pdflatex finished. Errors:\n";
-   $errors=`grep "! Emergency stop\|Error:\|LaTeX Warning:" $logfile | wc -l`;
-   if ( $errors != 0 or $exit_status != 0 ) {
-      if ( `grep '! Emergency stop' $logfile` ne "" ) {
-         system('cat', $logfile);
-	 print "\n";
+
+   ### extract all errors and warnings from the log file
+   @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
+
+   ### make sure thumbpdf package does not spoil rerun detection
+   ### as it will be processed very last
+   if(grep(/Package thumbpdf/, @errors) == @errors) { @errors=(); }
+   
+   if ( @errors != 0 or $exit_status != 0 ) {
+      if ( grep(/Emergency stop/, @errors) != 0 ) {
+         &file_tail($logfile,10);
+         print "\n$MYNAME: See $logfile for details.\n";
 	 &abort("Fatal error occured. I am lost.");
       }
-      if ( $errors != 0 ) {
-         system('grep','Error:\|LaTeX Warning:',$logfile);
+      if( @errors != 0 ) {
+         print @errors;
       } else {
-         system('tail',$logfile);
+         &file_tail($logfile, 10);
       }
       print "\n$MYNAME: See $logfile for details.\n";
       return $FALSE;
@@ -1363,34 +1482,42 @@ sub run_pdflatex {
 # parameter 1: filename of the aux file without .aux suffix
 # parameter 2: log-file where the full out put is stored
 
-sub handle_bibtex  {
+sub handle_bibtex {
    my $auxfile=$_[0];
    my $logfile=$_[1];
    my $run_bibtex=$FALSE;
    my $bibtex_param=&param_value('bibtex');
    
-   print "\n";
    if ( $bibtex_param eq $YES ) {
       $run_bibtex=$TRUE;
-      print "$MYNAME: BibTeX paramter set to '$YES'; running BibTeX.\n";
+      print "BibTeX paramter set to '$YES':\n";
    } else {
-      print "$MYNAME: Checking for BibTeX bibliography in document.\n";
-      if(`grep "^[^%]*[\\]bibliography{" $auxfile.tex` ne "") {
+      print "Checking for BibTeX bibliography in document: ";
+      if( &grep_file($auxfile.'.tex', '^[^%]*\\\\bibliography{') != 0) {
          $run_bibtex=$TRUE;
-	 print "Bibliography detected; running BibTeX.\n";
+	 print "Bibliography detected.\n";
       } else {
          print "No bibliography detected.\n";
       }
    }
+
    if ( $run_bibtex ) {
+      my @errors=();
+      my $exit_status=0;
+
+      print "Bibtex is running. Please wait.\n\n";
       system "bibtex $auxfile > $logfile";
-      if (! $? or `grep "error message" $logfile` ne "" ) {
-         print "\n****************** BibTeX errors reported *******************\n";
-         system('cat', $logfile);
-         print "*************************************************************\n";
-         print "\n$MYNAME: You can switch off BibTeX support by setting the bibtex parameter to $NO.\n";
+      $exit_status=$?;
+      print "Bibtex finished. Errors:\n";
+
+      ### extract all errors and warnings from the log file
+      @errors=&grep_file($logfile, 'error message');
+
+      if ( @errors != 0 or $exit_status != 0 ) {
+         &file_tail($logfile);
+         print "\nYou can switch off BibTeX support by setting the bibtex parameter accordingly.\n";
       } else {
-         print "BibTeX finished without errors.\n";
+         print "None detected (log file: $logfile).\n";
       }
    }
 }
@@ -1406,7 +1533,7 @@ sub run_thumbpdf {
    my $exit_status=0;
    #local $TEXFILE=$_[0];
 
-   print "\n$MYNAME: Creating thumbnails with 'thumbpdf'\n\n";
+   print "\nCreating thumbnails with 'thumbpdf'\n\n";
    system('thumbpdf', $texfile);
    $exit_status=$?;
    if ( $exit_status != 0 ) {
@@ -1419,9 +1546,11 @@ sub run_thumbpdf {
       print "\n$MYNAME: See $logfile for details.\n";
    }
 
+   ### store possible tmp files
    push (@TMPFILES, glob 'thumb???.png');
-   if ( -f "thumbpdf.pdf" ) { push (@TMPFILES, 'thumbpdf.pdf'); }
-   if ( -f "thumbdta.tex" ) { push(@TMPFILES, 'thumbdta.tex'); }
+   push (@TMPFILES, 'thumbpdf.pdf');
+   push(@TMPFILES, 'thumbdta.tex'); 
+   push(@TMPFILES, $texfile.'.tpt');
 }
 
 ##### read and analyse configuration and options and adjust basic variables
@@ -1456,7 +1585,10 @@ sub adjust_configuration {
    foreach (keys %PARAMETER_LIST) {
       $opt_specs{&option_specifier($_)} = \&handle_option;
    }
-   GetOptions(%opt_specs);
+   if(! GetOptions(%opt_specs)) {
+      print "\n";
+      &abort("An error occured while processing command line options");
+   }
 
    if( ! $configured ) {
       &abort("Script is not configured. Please run $MYNAME -r.");
@@ -1694,7 +1826,7 @@ sub generate_hyperref_params {
 
 sub prepare_documents {
    my ($main_tex_doc, @hyperref_params) = @_;
-   my $main_tmp_doc = &get_tmp_filename($main_tex_doc);
+   my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc);
    @REF_DOCS=();
 
    ##### Get the list of imported files from the tex file
@@ -1721,7 +1853,7 @@ sub prepare_documents {
    
    ## referenced docs
    foreach my $file (@REF_DOCS) {
-      my $tmp_file = &get_tmp_filename($file);
+      my $tmp_file = &reserve_tmp_texname($file);
    
       ### Insert pdf conversation tags in tex file and write it to tmp_file
       print "\n$MYNAME: Generating temporary LaTeX document: $tmp_file\n";
@@ -1750,21 +1882,15 @@ sub generate_pdf_doc {
    my $log_dir= &param_value('logdir');
    
    # setting the log files for the output of pdflatex, bibtex and thumbpdf
-   my $pdflog_base = "$log_dir/pdflatex-$$-";
-   my $bibtex_log = "$log_dir/bibtex-$$.log";
-   my $thumbpdf_log = "$log_dir/thumbpdf-$$.log";
+   my $pdflog_base = $log_dir."pdflatex-$$-";
+   my $bibtex_log = $log_dir."bibtex-$$.log";
+   my $thumbpdf_log = $log_dir."thumbpdf-$$.log";
 
    ##### Getting document name, suffix and path
    ($base,$path,$suffix) = fileparse($source, ('\.tex'));
    $doc = $path.$base;
    $pdf_doc = $doc.'.pdf';
 
-   #### store the generated files in the tmp file list
-   push(@TMPFILES, $doc.'.aux');
-   push(@TMPFILES, $doc.'.log');
-   push(@TMPFILES, $doc.'.out');
-   push(@TMPFILES, $doc.'.toc');
-   
    ### run pdflatex until no more errors are reported (max MAXRUNNO)
    while ( $rerun and $runno <= $max_run_no )
    {
@@ -1780,6 +1906,7 @@ sub generate_pdf_doc {
    
       ### Execute BibTeX after first run if set (and required)
       if ( $runno == 1 and &param_value('bibtex') ne $NO ) {
+         print "\n****************** BibTeX handling ***********************\n";
          &handle_bibtex($doc, $bibtex_log);
       }
    
@@ -1788,16 +1915,18 @@ sub generate_pdf_doc {
    
    $rerun = $FALSE;
    
-   ### if the THUMBNAILS option is switched on then make thumbnails
-   if ( &param_value('thumbpdf') eq $YES ) {
-      &run_thumbpdf($doc, $thumbpdf_log);
+   ### generate index file exists
+   if ( -f $doc.'.idx' and &param_value('force_index') ne $NO ) {
+         print "\n****************** Extra index generation ***************\n";
+      print "Document seems to have an index. Generating ...\n\n";
+      system ('makeindex', $doc.'.idx');
       $rerun=$TRUE;
    }
    
-   ### generate index file exists
-   if ( -f $doc.'.idx' and &param_value('forceindex') ne $NO ) {
-      print "\n$MYNAME: Document seems to have an index. Generating ...\n\n";
-      system ('makeindex', $doc.'.idx');
+   ### if the thumbpdf option is switched on then make thumbnails
+   if ( &param_value('thumbpdf') eq $YES ) {
+         print "\n****************** Thumbnail generation *****************\n";
+      &run_thumbpdf($doc, $thumbpdf_log);
       $rerun=$TRUE;
    }
    
