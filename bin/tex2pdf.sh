@@ -44,7 +44,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.2"
+MYRELEASE="2.2.3"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -1039,7 +1039,7 @@ run_pdflatex() {
    local TEXFILE=$1
    local errors=0
    local PDFLOGFILE=$2
-   local exiti_status=0
+   local exit_status=0
    echo "Pdflatex is running. Please wait."
    echo
    pdflatex --interaction nonstopmode ${PDFTEXOPTS} ${TEXFILE} > $PDFLOGFILE
@@ -1118,20 +1118,32 @@ handle_bibtex() {
 
 run_thumbpdf() {
    local TEXFILE=$1
+   local exit_status=0
    echo
    echo "$MYNAME: Creating thumbnails with 'thumbpdf'"
    echo
    thumbpdf ${TEXFILE}
-   mv thumbpdf.log $THUMBPDFLOG
+   exit_status=$?
+   if [ $exit_status -ne 0 ]
+   then
+      echo
+      echo "$MYNAME: thumbpdf exit with status $exit_status."
+      echo "I will continue, but maybe there will not be thumbs in the PDF doc."
+   fi
+
+   echo
+   echo "Cleaning up (thumbpdf) ..."
+   echo
+   [ -f "$THUMBPDFLOG" ] && mv thumbpdf.log $THUMBPDFLOG
 
    echo
    echo "$MYNAME: See $THUMBPDFLOG for details."
    echo
    echo "Cleaning up (thumbpdf) ..."
    echo
-   rm thumb???.png
-   rm thumbpdf.pdf
-   TMPFILES="$TMPFILES thumbdta.tex"
+   rm -f thumb???.png
+   rm -f thumbpdf.pdf
+   [ -f "thumbdta.tex" ] && TMPFILES="$TMPFILES thumbdta.tex"
 }
 
 ################## Lift off !!!! (main part) ##################
