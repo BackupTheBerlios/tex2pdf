@@ -142,7 +142,7 @@
 #     (thanks to Steffen Macke for this great patch)
 #
 
-MYRELEASE="2.1.2"
+MYRELEASE="2.1.3"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -306,6 +306,14 @@ questionYN() {
    done
 }
 
+### interactively answer a question
+# $1 question
+
+question() {
+   echo -n "$1 "
+   read RESPONSE </dev/tty
+}
+
 ##### Make sure that specified file exists and is readable; abort if missing
 # parameter $1: file to check
 # parameter $2: remark if check fails on specified file
@@ -376,6 +384,9 @@ help () {
    echo "$MYNAME  Version $MYRELEASE"
    usage
    echo "     -i : force makeindex"
+   echo "     -l : clean log files"
+   echo "     -t : create thumbnails"
+   echo "     -r : check for required commands"
    echo
    echo "     -h : print this message"
    echo "     -v : print version information"
@@ -414,9 +425,118 @@ configure() {
    echo The command-line options override these settings.
    echo
 
+   echo "$MYNAME can set the papersize of the resulting PDF document."
+   echo "Possible values are: a4paper, letterpaper, legalpaper, executivepaper."
+   question "What papersize should be used?"
+   PAPERSIZE=$RESPONSE
+   echo
+
+   echo "$MYNAME can use color for URLs in the document."
+   if [ "$COLORLINKS" == "true" ]
+   then
+        questionYN "Should color be used for the URLs?" yes
+   else
+        questionYN "Should color be used for the URLs?" no
+   fi
+   if [ "$RESPONSE" == "yes" ]
+   then
+        COLORLINKS=true
+   else
+        COLORLINKS=false
+   fi
+   echo
+
+   if [ "$COLORLINKS" == "true" ]
+   then
+        echo "It is possible to specify the URL color."
+        echo "Some possible values are: red, green, cyan, blue, magenta, black."
+        question "What URL color should be used?"
+        URLCOLOR=$RESPONSE
+        echo
+
+        echo "It is possible to specify the citation color."
+        echo "Some possible values are: red, green, cyan, blue, magenta, black."
+        question "What citation color should be used?"
+        CITECOLOR=$RESPONSE
+        echo
+   fi
+
+   echo "The title of the resulting document can be specified."
+   echo "Leave blank in order to used LaTeX document title."
+   question "Resulting document title?"
+   TITLE=$RESPONSE
+   echo
+
+   echo "The author information of the resulting document can be specified."
+   echo "Leave blank in order to used LaTeX document author."
+   question "Resulting document author?"
+   AUTHOR=$RESPONSE
+   echo
+
+   echo "The output directory can be specified."
+   echo "Leave blank in order to use the same directory as the input file."
+   question "What output directory should be used?"
+   PDFOUTDIR=$RESPONSE
+   echo
+
+   echo "The sed executable to use can be specified."
+   echo "Leave blank in order to use the sed in the path."
+   question "What sed executable should be used?"
+   SEDEXE=$RESPONSE
+   echo
+
+   echo "The bibtex usage can be specified."
+   echo "Possible values are: 'yes' (always run bibtex), 'no' (never run"
+   echo "bibtex) and 'test' (scan tex file for a bibtex entry and run it"
+   echo "if required)."
+   question "How should bibtex be used?"
+   BIBTEX=$RESPONSE
+   echo
+
+   echo "The maximal number of runs for pdflatex can be specified."
+   question "What should be the maximum number of runs for pdflatex?"
+   MAXRUNNO=$RESPONSE
+   echo
+
+   echo "The minimal number of runs for pdflatex can be specified."
+   echo "Possible values are: 1 ... $MAXRUNNO."
+   question "What should be the minimum number of runs for pdflatex?"
+   MINRUNNO=$RESPONSE
+   echo
+
+   echo "The log file directory can be specified."
+   echo "A possible choice is '/tmp/tex2pdf-$USER'."
+   question "What should be the log file directory?"
+   LOGDIR=$RESPONSE
+   echo
+
+   echo "$MYNAME can clean the log files before execution."
+   echo "You might experience problems if you run $MYNAME on several documents"
+   echo "the same time. If you want to be on the safe side, answer 'no'."
+   questionYN "Should the log files be cleaned before execution?" $CLEANLOGS
+   CLEANLOGS=$RESPONSE
+   echo
+
+   echo "$MYNAME can check for the required executables."
+   questionYN "Should $MYNAME check for the required executables?" $COMMANDCHECK
+   COMMANDCHECK=$RESPONSE
+   echo
+
+   echo "$MYNAME can use thumbpdf to include thumbnails of the document pages."
+   echo "This requires Ghostscript 5.50 or higher."
+   questionYN "Should PNG thumbnails be created?" $THUMB
+   THUMB=$RESPONSE
+   echo
+
    echo "$MYNAME can force the call of makeindex if pdftex fails to do this."
    questionYN "Should the call of makeindex be forced?" $MAKEINDEX
    MAKEINDEX=$RESPONSE
+   echo
+
+   echo "Additional options for pdflatex can be specified."
+   echo "You can leave this blank."
+   question "What additional options for pdflatex should be used."
+   PDFTEXOPTS="$RESPONSE"
    echo
 }
 
@@ -844,10 +964,9 @@ then
    ### scan parameters (1st level)
 
    OPTIND=1
-   while getopts hvipc OPTION
+   while getopts hvpc OPTION
    do
       case "$OPTION" in
-         i) MAKEINDEX=yes ;;
          h) help; exit 0 ;;
          v) print_version; exit 0 ;;
          p) PRINT_ONLY=yes ;;
@@ -876,6 +995,15 @@ then
 
    ### scan parameters (2nd level)
    ### second level scan should be put here !!!
+   while getopts itlr OPTION
+   do
+     case "$OPTION" in
+       i) MAKEINDEX=yes ;;
+       t) THUMB=yes ;;
+       r) COMMANDCHECK=yes ;;
+       l) CLEANLOGS=yes ;;
+     esac
+   done
 
    ### print configuration parameters
 
