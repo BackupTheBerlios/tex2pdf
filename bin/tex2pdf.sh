@@ -128,7 +128,7 @@
 #     (thanks to Ahmet Sekercioglu for this bug report)
 #
 
-MYVERSION="2.0.1"
+MYVERSION="2.0.2"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -472,7 +472,7 @@ prepare_document() {
    echo
    echo $MYNAME: Generating temporary LaTeX document
 
-   ${SEDEXE} -e "s/\([\]includegraphics\(\[[^{]*\]\)\?{[^}]\+\.\)\(e\)*ps}/\2pdf}/g" \
+   ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^{]*\]\)\?\({[^}]\+\.\)\(e\)*ps}/\1\2\3pdf}/g" \
    -e "s/\([\]input{[^}]\+\.\)pstex_t}/\1pdf_t}/g" \
    -e 's/\([\]include{[^}]\+\)}/\1${TMPBASESUFFIX}}/g' \
    -e "1,/^[\]begin{document}$/s/^[\]batchmode$//" \
