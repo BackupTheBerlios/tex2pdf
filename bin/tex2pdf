@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.14";
+my $MYRELEASE="3.0.15";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1294,7 +1294,7 @@ sub read_configuration {
 
    while (<RCFILE>) {
       chomp;
-      if( /^([^#=]+)=([[:print:]]*)$/ ) {
+      if( /^([^#=]+)=(.*)$/ ) {
          if( exists $CONFIGURATION{$1} ) {
             $CONFIGURATION{$1} = $2;
          } elsif ( $1 eq $RCVERSION_STRING ) {
