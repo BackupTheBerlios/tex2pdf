@@ -1369,16 +1369,27 @@ sub extract_tag_contents {
    open(EXTRACT_SOURCE, "<$source") or
       &abort($error_message." ($source).");
 
+   my $continuation="";
    while(<EXTRACT_SOURCE>) {
-      # ignore commented text
-      s/(^|[^\\])%.*$/$1/;
-
-      # add contents of all occurences of this tag in a line to result list
-      while ( /\\($tag_name)(\[[^{]*\])?{+([^{}]*)}/ ) {
-         $text=$3; 
-         $text="" if (!defined($text));
-         push(@results, $text);
-         $_ = $';
+      $_ = $continuation . $_;
+      if ( s/(^|[^\\])%.*\n/$1/ ) {
+         # ignore commented text and concatenate with next line
+         $continuation = $_;
+      }
+      else {
+         s/(^|[^\\])%.*\n/$1/;
+         # ignore \thanks{}
+         s/\\thanks\{.*?\}//g;
+         # change \and to and
+         s/\\and/ and/g;
+         # add contents of all occurences of this tag in a line to result list
+         while ( /\\($tag_name)(\[[^{]*\])?{+([^{}]*)}/ ) {
+            $text=$3; 
+            $text="" if (!defined($text));
+            push(@results, $text);
+            $_ = $';
+         };
+         $continuation = "";
       }
    }
    
