@@ -44,7 +44,14 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
+######## Imports
+
+use File::Basename;
+
+####### Release version
+
 $MYRELEASE="2.2.8pl";
+$MYNAME="tex2pdf.pl";
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -202,9 +209,9 @@ $CLEAN_ON_ABORT=$NO;
 # preamble
 # try the following commands if you have strange errors or junk on the
 # first PDF document page
-# INSERTCOMMAND="/^[\]begin{document}$/i"
-# INSERTCOMMAND="/^[\]makeatletter$/i"
-$INSERTCOMMAND='/^[\]documentclass\(\[[^]]*\]\)\?{.*}/a';
+# INSERT_REGEXP="/^[\]begin{document}$/i"
+# INSERT_REGEXP="/^[\]makeatletter$/i"
+$INSERT_REGEXP='/^[\]documentclass\(\[[^]]*\]\)\?{.*}/a';
 
 ### file to store private parameters
 # If you only want to change your private parameters change them there
@@ -217,32 +224,30 @@ $RC_FILENAME="$ENV{'HOME'}/.tex2pdfrc";
 @RC_VARIABLES= qw< PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR
    DEFAULT_TITLE DEFAULT_AUTHOR LINKTOCPAGE ADDITIONAL_PARAMETERS PDFOUT
    PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS
-   COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERTCOMMAND >;
+   COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERT_REGEXP >;
 
 ##### Functions ###########################################
 
-### Check if a string is an element of a list
-# parameter 1: text
-# parameter 2: list
-# return value: TRUE/FALSE 
+### Index of the first occurence of a string in an array
+# parameter 1: list
+# parameter 2: text
+# return value: index or -1 if not element of the array 
 
-sub contains {
-   my $text = $_[0];
-   shift @_;
-   my @list = @_;
+sub array_index {
+   my (@list, $text) = @_;
 
-   foreach (@list) {
-      if ( $_ eq $text ) { return $TRUE; }
+   foreach (0..$#list)) {
+      if ( @list[$_] eq $text ) { return $_; }
    }
    
-   return $FALSE;
+   return -1;
 }
 
 ### Removing all temporary files
 
 sub clean_up {
    print "$MYNAME: Removing temporary files ...\n";
-   if ( $TMPFILES ne "" ) { unlink glob $TMPFILES; }
+   if ( @TMPFILES > 0 ) { unlink @TMPFILES; }
    if ( $TMPBASE ne "" ) { unlink glob "$TMPBASE.*"; }
 }
 
@@ -935,7 +940,7 @@ sub extract_files {
       s/([^\])%.*$/$1/;
       while( /\\$tag_name(\[[^{]*\])?{(([^}]*\/)?[^}/.]+($suffix))}/ ) {
          $matched_file = $2; 
-         if( ! &contains($matched_file, @FOUND_FILES) ) {
+         if( &array_index(@FOUND_FILES, $matched_file) < 0 ) {
 	    push(@FOUND_FILES, $matched_file);
 	 }
       }
@@ -949,52 +954,129 @@ sub extract_files {
 # One input parameter for this ($1): a tex file.
 # Be sure to set FILES to the empty string prior to calling this.
 
-sub getFileList {
+sub get_file_list {
    local $source = $_[0];
    local @imports = ();
 
    # This is the cycle avoidance logic.
-   if ( ! @contains($source, @FILES) ) {
+   if ( @array_index(@REF_DOCS, $source) < 0 ) {
       # Make sure the file can be accessed
       &check_file($source, "Included TeX file seems not to be available. Path problem?");
 
       # Save the argument in the list of files.
-      push(@FILES, $source);
+      push(@REF_DOCS, $source);
 
       # Get the list of files included by the argument.
-      &extract_files($source, "include|input", "");
+      &extract_files($source, 'include|input', '(\.tex)?');
       @imports=@FOUND_FILES;
 
       # Recurse.
       foreach my $file (@imports) {
-         &getFileList("$file.tex");
+         if( ! $file =~ /\.tex$/ ) { $file .= '.tex'; }
+         &get_file_list($file);
       }
    }
+}
+
+### Convert given tex file to the temp tex file we need for pdftex
+### major task is to change the reference in the tex files to the
+### corresponding tmp files
+# parameter 1: tex source file
+# parameter 2: tex tmp file
+# parameter 3: adjust the LaTeX preamble (default: $NO)
+
+sub convert_tex2tmp {
+   my $source = $_[0];
+   my $target = $_[1];
+   my $adjust_preamble = ($_[2] == $YES) ? $YES : $NO;
+   my $read_err_msg = "Could not read original TeX document to generate temporary document";
+   
+   ### open source and target file
+   &check_file($source, $read_err_msg . '.');
+   open(SOURCE_FILE, "<$source") or
+      &abort($read_err_msg . " ($source).");
+
+   open(TARGET_FILE, ">$target") or
+      &abort("Could not open file to write temporary TeX document ($target).");
+   
+   ### set target file as stdout
+   select TARGET_FILE;
+   
+   if ( $adjust_preamble eq $YES ) {
+      ### read, parse, modify and write the LaTeX preamble
+      while(<SOURCE_FILE>) {
+   
+         # protect pdflatex execution mode
+         s/^(\\batchmode)$/% $1/
+   
+         # print the read line
+         print $_;
+   
+         # append our extra TeX commands after the matching line
+         if ( /$INSERT_REGEXP/ ) {
+            print '\usepackage{pslatex}' . "\n";
+            
+   	 if ( $THUMBNAILS eq $YES ) {
+               print '\usepackage{thumbpdf}' . "\n";
+   	 } else {
+   	    print "% no thumbpdf support\n";
+   	 }
+   	 
+            print '\makeatletter' . "\n";
+            print '\usepackage['. join(',', @HYPERREF_PARAMS) . ']{hyperref}' . "\n";
+            print '\makeatother' . "\n";
+         }
+   
+         # if end of the preamble is reached stop loop
+         if ( /^\\begin\{document\}$/ ) { last; }
+      }
+   }
+   
+   ### read, parse, modify and write the TeX body
+   while(<SOURCE_FILE>) {
+      s/(\\includegraphics)(\[[^]]*\])?(\{[^}]+)\.(e?ps|pstex)\}/$1$2$3}/g
+      s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g
+      s/(\\(input|include)\{[^}]+)(\.tex)?\}/$1$TMPBASESUFFIX$3}/g
+
+      # print the read and manipulted line
+      print $_;
+   }
+
+   ### set STDOUT as stdout again
+   select STDOUT;
+
+   ### close files
+   close SOURCE_FILE;
+   close TARGET_FILE;
 }
 
 ### Convert all given EPS images to PDF
 # parameters ($@): list of EPS images with relative path to working directoy
 
-sub convert_eps2pdf  {
-   $IMAGES="$@";
-   print "\n";
-   print "$MYNAME: Converting EPS images to pdf\n";
-   for $image ($IMAGES);
-   {
-      $IMAGENAME=`basename $image`;
-      $IMAGEPATH=`echo "$image" | ${SEDEXE} -n "s/^\(.*\)$IMAGENAME$/\1/p"`;
-      $IMAGEBASE=`basename $IMAGENAME .eps`;
-      $IMAGEBASE=`basename $IMAGEBASE .ps`;
+sub convert_eps2pdf {
+   my @image_list=@_;
 
+   foreach my $image (@image_list) {
+      my $image_path;
+      my $image_base;
+      my $image_name;
+      my $suffix;
+      my $image_target;
+
+      ($image_base,$image_path,$suffix) = fileparse($image, ('\.eps', '\.ps', '\pstex'));
+      $image_name = $image_base . $suffix;
+      $image_target = $image_path . $image_base . '.pdf';
+      
       #### check if image file really exists
-      check_file ${IMAGEPATH}${IMAGENAME} "Could not convert included image.";
+      &check_file($image, "Could not convert referenced image.");
 
-      if ( "${IMAGEPATH}${IMAGEBASE}.pdf" -ot "${IMAGEPATH}${IMAGENAME}" ) {
-         print "Converting image ${IMAGENAME} ...\n";
-         epstopdf -$outfile=${IMAGEPATH}${IMAGEBASE}.pdf ${IMAGEPATH}${IMAGENAME}
-         $TMPFILES="$TMPFILES ${IMAGEPATH}${IMAGEBASE}.pdf";
+      if ( ! -f $image_target or -M $image_target > -M $image ) {
+         print "Converting image $image_name ...\n";
+         system("epstopdf", '-outfile='.$image_target, $image)
+	    or &abort "epstopdf failed on $image_name: $!";
+         push(@TMPFILES, $image_target);
       } else {
-         print "${IMAGEBASE}.pdf newer than ${IMAGENAME}, conversion skipped...\n";
+         print "$image_base.pdf newer than $image_name, conversion skipped...\n";
       }
    }
 }
@@ -1002,34 +1084,38 @@ sub convert_eps2pdf  {
 ### Convert all given PSTEX_T files to PDF_T
 # parameters ($@): list of PSTEX_T files with relative path to working directoy
 
-sub convert_pstex2pdf  {
-   $PSTEXS="$@";
-   print "\n";
-   print "$MYNAME: Converting PSTEX_T images to PDF\n";
-   for $pstexfile ($PSTEXS);
-   {
-      $PSTEXNAME=`basename $pstexfile`;
-      $PSTEXPATH=`echo "$pstexfile" | ${SEDEXE} -n "s/^\(.*\)$PSTEXNAME$/\1/p\"`;
-      $PSTEXBASE=`basename $PSTEXNAME .pstex_t`;
+sub convert_pstex2pdf {
+   my @pstex_file_list = @_;
 
+   foreach my $pstex_file (@pstex_file_list) {
+      my $pstex_path;
+      my $pstex_base;
+      my $pstex_name;
+      my $suffix;
+      my $pstex_target;
+      my @eps_images;
+
+      ($pstex_base,$pstex_path,$suffix) = fileparse($pstex_file, ('\.pstex_t'));
+      $pstex_name = $pstex_base . $suffix;
+      $pstex_target = $pstex_path . $pstex_base . '.pdf_t';
+      
       #### check if image file really exists
-      check_file ${PSTEXPATH}${PSTEXNAME} "Could not convert included image.";
+      &check_file($pstex_file, "Could not convert referenced file.");
 
       # descend into file
-      print "Converting file ${PSTEXNAME} ...\n";
+      print "Converting file $pstex_name ...\n";
+
+      # find included EPS image(s)
+      &extract_files($pstex_file, 'includegraphics', '\.pstex');
+      @eps_images=@FOUND_FILES;
 
       # create .pdf_t file
-      $SEDEXE -e "s/\(^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{.*\.\)pstex\(.*$\)/\2pdf\3/g" ${PSTEXPATH}${PSTEXNAME} > "${PSTEXPATH}${PSTEXBASE}.pdf_t";
+      convert_tex2tmp($pstex_file, $pstex_target, $NO); 
 
-      # find included EPS image
-      $EPSIMAGE=`${SEDEXE} -n "s/^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{\([^}]\+\)}.*$/\2/pg" ${PSTEXPATH}${PSTEXNAME}`;
-      $EPSBASE=`basename $EPSIMAGE .pstex`;
+      # convert image(s) to pdf
+      &convert_eps2pdf(@eps_images);
 
-      # convert image to pdf
-      epstopdf -$outfile=${PSTEXPATH}${EPSBASE}.pdf ${PSTEXPATH}${EPSIMAGE}
-      $PDFIMAGES="$PDFIMAGES ${PSTEXPATH}${PSTEXBASE}.pdf";
-
-      $TMPFILES="$TMPFILES ${PSTEXPATH}${PSTEXBASE}.pdf_t ${PSTEXPATH}${PSTEXBASE}.pdf";
+      push(@TMPFILES, $pstex_target);
    }
 }
 
@@ -1037,98 +1123,67 @@ sub convert_pstex2pdf  {
 # HYPERREF_PARAMS: result
 
 sub generate_parameters {
-   my $params=pdftex;
-   if ( $PAPERSIZE ne $NIL ) { $params="$params,$PAPERSIZE"; }
-   if ( $LINKTOCPAGE eq $YES ) { $params="$params,linktocpage"; }
-   if ( $TITLE ne $NIL ) { $params="$params,pdftitle={$TITLE}"; }
-   if ( $AUTHOR ne $NIL ) { $params="$params,pdfauthor={$AUTHOR}"; }
+   my @params = ('pdftex');
+   if ( $PAPERSIZE ne $NIL ) { push(@params, $PAPERSIZE); }
+   if ( $LINKTOCPAGE eq $YES ) { push(@params, "linktocpage"); }
+   if ( $TITLE ne $NIL ) { push(@params, "pdftitle={$TITLE}"); }
+   if ( $AUTHOR ne $NIL ) { push(@params, "pdfauthor={$AUTHOR}"); }
    if ( $COLORLINKS eq $YES ) {
-      $params="$params,colorlinks=true";
-      if ( $LINKCOLOR ne $NIL ) { $params="$params,linkcolor={$LINKCOLOR}"; }
-      if ( $PAGECOLOR ne $NIL ) { $params="$params,pagecolor={$PAGECOLOR}"; }
-      if ( $URLCOLOR ne $NIL ) { $params="$params,urlcolor={$URLCOLOR}"; }
-      if ( $CITECOLOR ne $NIL ) { $params="$params,citecolor={$CITECOLOR}"; }
+      push(@params, "colorlinks=true");
+      if ( $LINKCOLOR ne $NIL ) { push(@params, "linkcolor={$LINKCOLOR}"); }
+      if ( $PAGECOLOR ne $NIL ) { push(@params, "pagecolor={$PAGECOLOR}"); }
+      if ( $URLCOLOR ne $NIL ) { push(@params, "urlcolor={$URLCOLOR}"); }
+      if ( $CITECOLOR ne $NIL ) { push(@params, "citecolor={$CITECOLOR}"); }
    } else {
-      $params="$params,colorlinks=false";
+      push(@params, "colorlinks=false");
    }
-   if ( $ADDITIONAL_PARAMETERS ne "" ) { $params="$params,$ADDITIONAL_PARAMETERS"; }
-   $HYPERREF_PARAMS=$params;
+   if ( $ADDITIONAL_PARAMETERS ne "" ) { push(@params, "$ADDITIONAL_PARAMETERS"); }
+   @HYPERREF_PARAMS = @params;
 }
 
-### Converted included images to pdf and change the corresponding
-### reference in the tmp-tex files
+### Converted included images to pdf
 # parameter ($1): tex source file
-# parameter ($2): tex target file
 
-sub prepare_document  {
+sub convert_images {
+   my $tex_source="$_[0]";
+   my @pstex_file_list;
+   my @eps_image_list;
 
-   ### set required variables
-   local $TEXSOURCE="$_[0]";
-   local $TARGETFILE="$_[1]";
-
-   print "\n";
-   print "Preparing document: $TEXSOURCE.\n";
+   print "\nConverting images referenced in $tex_source.\n";
 
    ##### Get EPS images from the source file
-   print "\n";
-   print "Scanning for EPS images (.eps/.ps):\n";
-   extract_files $TEXSOURCE includegraphics "\.e\?ps";
-   $EPSIMAGES=$FOUND_FILES;
-   if ( $EPSIMAGES ne "" ) {
-      print "$EPSIMAGES\n";
+   print "\nScanning for EPS images (.eps/.ps):\n";
+   &extract_files($tex_source, 'includegraphics', '\.e\?ps');
+   @eps_image_list=@FOUND_FILES;
+   if ( @eps_image_list > 0 ) {
+      print "@eps_image_list\n";
    } else {
       print "None.\n";
    }
 
    ##### Get PSTEX_T files from the source file
-   print "\n";
-   print "Scanning for PSTEX_T files (.pstex_t):\n";
-   extract_files $TEXSOURCE input "\.pstex_t";
-   $PSTEXS=$FOUND_FILES;
-   if ( $PSTEXS ne "" ) {
-      print "$PSTEXS\n";
+   print "\nScanning for PSTEX_T files (.pstex_t):\n";
+   &extract_files($tex_source, 'input', '\.pstex_t');
+   @pstex_file_list = @FOUND_FILES;
+   if ( @pstex_file_list > 0 ) {
+      print "@pstex_file_list\n";
    } else {
       print "None.\n";
    }
 
-   ### Save the filename so we can delete it later.
-   $TMPFILES="$TMPFILES $TARGETFILE";
-
-   ### if thumbnails should be generated thumbdf package must be used
-   if ( $THUMBNAILS eq $YES ) {
-      $THUMBPDF_INSERT='\\usepackage{thumbpdf}';
-   } else {
-      $THUMBPDF_INSERT="% no thumbpdf support";
+   ### Convert all EPS images to PDF
+   if ( @eps_image_list > 0) {
+      print "\n$MYNAME: Converting EPS images to pdf\n";
+      &convert_eps2pdf(@eps_image_list);
    }
 
-   ### Insert pdf conversation tags in tex file and write it to TARGETFILE
-   print "\n";
-   print "$MYNAME: Generating temporary LaTeX document\n";
-
-   ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^]]*\]\)\?\({[^}]\+\.\)\(e\)*ps}/\1\2\3pdf}/g" \;
-   -e "s/\([\]input{[^}]\+\.\)pstex_t}/\1pdf_t}/g" \;
-   -e "s/\([\]include{[^}]\+\)}/\1${TMPBASESUFFIX}}/g" \;
-   -e "1,/^[\]begin{document}$/s/^[\]batchmode$//" \;
-   -e "$INSERTCOMMAND"' \;
-   \\usepackage{pslatex}' \;
-   -e "$INSERTCOMMAND"' \;
-   '"$THUMBPDF_INSERT" \;
-   -e "$INSERTCOMMAND"' \;
-   \\makeatletter' \;
-   -e "$INSERTCOMMAND"' \;
-   \\usepackage['"$HYPERREF_PARAMS]{hyperref}"  \;
-   -e "$INSERTCOMMAND"' \;
-   \\makeatother' \;
-   $_[0] > $TARGETFILE;
-
-   ### Convert all EPS images to pdf
-   if ( $EPSIMAGES ne "" ) { convert_eps2pdf $EPSIMAGES; }
-
    ### Convert all PSTEX_T files to PDF_T
-   if ( $PSTEXS ne "" ) { convert_pstex2pdf $PSTEXS; }
+   if ( @pstex_file_list > 0 ) { 
+      print "\n$MYNAME: Converting pstex_t docs to pdf_t docs\n";
+      &convert_pstex2pdf(@pstex_file_list);
+   }
 
-   print "\n";
-   print "Finished: ${TEXSOURCE}.\n";
+   print "\nFinished converting for ${tex_source}.\n";
 }
 
 ### run pdflatex
@@ -1136,13 +1191,12 @@ sub prepare_document  {
 # parameter $2: log-file where the full out put is stored
 # return value: 0 - no errors (no rerun); 1 - errors (rerun required)
 
-sub run_pdflatex  {
+sub run_pdflatex {
    local $TEXFILE=$_[0];
    local $errors=0;
    local $PDFLOGFILE=$_[1];
    local $exit_status=0;
-   print "Pdflatex is running. Please wait.\n";
-   print "\n";
+   print "Pdflatex is running. Please wait.\n\n";
    pdflatex --interaction nonstopmode ${PDFTEXOPTS} ${TEXFILE} > $PDFLOGFILE;
    $exit_status=$?;
    print "Pdflatex finished. Errors:\n";
@@ -1158,8 +1212,7 @@ sub run_pdflatex  {
       } else {
          tail $PDFLOGFILE;
       }
-      print "\n";
-      print "$MYNAME: See $PDFLOGFILE for details.\n";
+      print "\n$MYNAME: See $PDFLOGFILE for details.\n";
       return 1;
    } else {
       print "None detected (log file: $PDFLOGFILE).\n";
@@ -1197,8 +1250,7 @@ sub handle_bibtex  {
          print "****************** BibTeX errors reported *******************\n";
          cat ${BIBTEXLOG}
          print "*************************************************************\n";
-         print "\n";
-         print "$MYNAME: You can switch off BibTeX support by setting $BIBTEX=$NO in the parameter section of $MYNAME.\n";
+         print "\n$MYNAME: You can switch off BibTeX support by setting $BIBTEX=$NO in the parameter section of $MYNAME.\n";
       } else {
          print "BibTeX finished without errors.\n";
       }
@@ -1212,45 +1264,35 @@ sub handle_bibtex  {
 sub run_thumbpdf  {
    local $TEXFILE=$_[0];
    local $exit_status=0;
-   print "\n";
-   print "$MYNAME: Creating thumbnails with 'thumbpdf'\n";
-   print "\n";
+   print "\n$MYNAME: Creating thumbnails with 'thumbpdf'\n\n";
    thumbpdf ${TEXFILE}
    $exit_status=$?;
    if ( $exit_status != 0 ) {
-      print "\n";
-      print "$MYNAME: thumbpdf exit with status $exit_status.\n";
+      print "\n$MYNAME: thumbpdf exit with status $exit_status.\n";
       print "I will continue, but maybe there will not be thumbs in the PDF doc.\n";
    }
 
    if ( -f thumbpdf.log ) {
-   then ;
       mv thumbpdf.log $THUMBPDFLOG;
-      print "\n";
-      print "$MYNAME: See $THUMBPDFLOG for details.\n";
+      print "\n$MYNAME: See $THUMBPDFLOG for details.\n";
    }
 
-   print "\n";
-   print "Cleaning up (thumbpdf) ...\n";
-   print "\n";
+   print "\nCleaning up (thumbpdf) ...\n\n";
    system "rm -f thumb???.png";
    system "rm -f thumbpdf.pdf";
-   if ( -f "thumbdta.tex" ) { $TMPFILES="$TMPFILES thumbdta.tex"; }
+   if ( -f "thumbdta.tex" ) { push(@TMPFILES, "thumbdta.tex"); }
 }
 
 ################## Lift off !!!! (main part) ##################
-$MYNAME=`basename $0`;
 $TMPBASE=;
-$TMPFILES=;
+@TMPFILES=();
 $TITLE=;
 $AUTHOR=;
 
-print "\n";
-print "$MYNAME: Script starts (Release $MYRELEASE)\n";
+print "\n$MYNAME: Script starts (Release $MYRELEASE)\n";
 
 ##### Check arguments
-print "\n";
-print "$MYNAME: Processing given parameters and arguments.\n";
+print "\n$MYNAME: Processing given parameters and arguments.\n";
 check_arguments $@;
 
 ##### command line options and private configuration files handling
@@ -1351,7 +1393,7 @@ if ( $SEDEXE ne "`basename $SEDEXE`" and ! -x $SEDEXE ) {
    print "$MYNAME: Specified sed executable not found (${SEDEXE})\n";
    print "Using sed executable in your path.\n";
    print "Maybe it does not work. GNU sed v3.02 or higher is recommended.\n";
-   $SEDEXE=sed;
+   $SEDEXE='sed';
 }
 
 if ( $COMMANDCHECK ne $NO ) {
@@ -1373,21 +1415,21 @@ if ( $DOCPATH ne "" ) {
 }
 
 ###### make DOCPATH an absolute path
-$DOCPATH=`pwd`/;
+$DOCPATH = `pwd`.'/';
 
 ###### Cut off suffix and do lyx or tex specific stuff
 $DOCBASE=`basename $DOCNAME .lyx`;
 if ( $DOCBASE ne $DOCNAME ) {
    ### DOCNAME has an extention .lyx => Lyx document
    # generate Latex document if required
-   generate_tex_file ${DOCBASE}.lyx ${DOCBASE}.tex;
+   &generate_tex_file($DOCBASE.'.lyx', $DOCBASE.'.tex');
 } else {
    ### given file is a LaTeX file
    # cut off .tex extension if there is one
    $DOCBASE=`basename $DOCNAME .tex`;
 
    ###### check access to given LaTeX document
-   check_file ${DOCBASE}.tex "Cannot read the specified LaTeX document!";
+   &check_file("$DOCBASE.tex", "Cannot read the specified LaTeX document!");
 }
 
 $PASSEDTEXDOC=${DOCPATH}${DOCBASE}.tex;
@@ -1444,7 +1486,7 @@ if ( $AUTHOR eq "" ) {
 print "\n";
 
 # translate hyperref settings to the actual package parameters 
-generate_parameters;
+&generate_parameters;
 
 ###### change working directory to INPUTPATH if set
 # When the files' path (images, included documents, etc.) in your document is
@@ -1478,33 +1520,36 @@ esac;
 if ( $PDFOUTDIR eq "" ) { $PDFOUTDIR=$DOCPATH; }
 
 ##### Get the list of imported files from the tex file
-$FILES=;
-getFileList $PASSEDTEXDOC;
+@REF_DOCS=();
+&get_file_list($PASSEDTEXDOC);
 
-# remove main file from list (needs special handling)
-$FILES=`echo "$FILES" | ${SEDEXE} -e "s|^ *$PASSEDTEXDOC||"`;
+# remove main file from list (first element; needs special handling)
+shift @REF_DOCS;
 
-if ( $FILES ne "" ) {
-   print "\n";
-   print "Found the following included TeX files:\n";
-   for $file ($FILES ; do);
+if ( @REF_DOCS > 0 ) {
+   print "\nFound the following referenced TeX files:\n";
+   foreach my $file (@REF_DOCS) {
       print ">>>>> $file\n";
    }
 } else {
-   print "\n";
-   print "Found no included TeX files.\n";
+   print "\nFound no included TeX files.\n";
 }
 
 ##### Generate adjusted tex files and convert all their images
-# main file
-prepare_document $PASSEDTEXDOC ${TMPBASE}.tex;
+# main doc
+print "\n$MYNAME: Generating main temporary LaTeX document: $TMPBASE.tex'\n";
+&convert_tex2tmp($PASSEDTEXDOC, $TMPBASE . '.tex', $YES);
+&convert_images($PASSEDTEXDOC);
 
-# included files
-if ( $FILES ne "" ) {
-   for $file ($FILES ; do);
-      $TMP_FILE=`echo $file | ${SEDEXE} -e "s/\.tex$//"`;
-      prepare_document $file ${TMP_FILE}${TMPBASESUFFIX}.tex;
-   }
+# referenced docs
+foreach my $file (@REF_DOCS) {
+   my $tmp_file = $file;
+   $tmp_file =~ s/(\.tex)$/$TMPBASESUFFIX$1/;
+
+   ### Insert pdf conversation tags in tex file and write it to tmp_file
+   print "\n$MYNAME: Generating temporary LaTeX document: $tmp_file\n";
+   &convert_tex2tmp($file, $tmp_file);
+   &convert_images($file);
 }
 
 ##### Generate the final PDF document
