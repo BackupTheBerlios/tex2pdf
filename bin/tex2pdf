@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1.2";
+my $MYRELEASE="3.1.3";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -2278,12 +2278,13 @@ sub convert_images {
 ### run pdflatex
 # parameter 1: LaTeX file without extension
 # parameter 2: log-file where the full out put is stored
-# return value: 0 - no errors (no rerun); 1 - errors (rerun required)
+# return value: FALSE - no rerun (no errors); TRUE - rerun required (errors)
 
 sub run_pdflatex {
    my $texfile=$_[0];
    my $logfile=$_[1];
    my @errors=();
+   my $rerun = $FALSE;
    my $exit_status=0;
    my $extra_options=&param_value('pdftex_opts');
 
@@ -2299,27 +2300,36 @@ sub run_pdflatex {
    ### extract all errors and warnings from the log file
    @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
 
-   ### make sure thumbpdf package does not spoil rerun detection
-   ### as it will be processed very last
-   if(grep(/Package thumbpdf/, @errors) == @errors) { @errors=(); }
-   
-   if ( @errors != 0 or $exit_status != 0 ) {
+   if ( @errors != 0) {
+     
+      ### Abort if an emergency stop occured
       if ( grep(/Emergency stop/, @errors) != 0 ) {
-         &report(2, &file_tail($logfile,10));
+         &report(2, &file_tail($logfile,15));
          &report(2, "\nSee $logfile for details.");
          &abort("Fatal error occured. I am lost.");
       }
-      if( @errors != 0 ) {
-         &report(8, @errors);
-      } else {
-         &report(8, &file_tail($logfile,10));
-      }
+      
+      ### report detected errors
+      &report(8, @errors);
       &report(7, "\nSee $logfile for details.");
-      return $FALSE;
+      
+      ### ignore errors and warnings which do not require a rerun
+      my @rerun_errors = grep {
+         ! /(Package.*?Warning|LaTeX Warning.*?float specifier changed|LaTeX Warning.*?overfull|Package thumbpdf)/
+         } @errors;
+      $rerun = (@rerun_errors != 0); 
    } else {
-      &report(7, "None detected (log file: $logfile).");
-      return $TRUE;
+      if($exit_status != 0) {
+         &report(8, &file_tail($logfile, 15));
+         &report(7, "\nSee $logfile for details.");
+         $rerun = $TRUE;
+      } else {
+         &report(7, "None detected (log file: $logfile).");
+         $rerun = $FALSE;
+      }
    }
+
+   return $rerun;
 }
 
 #### run bibtex if BIBTEX=$YES or a bibliography tag is found
@@ -3040,7 +3050,7 @@ sub generate_pdf_doc {
    while ( $rerun and $runno <= $max_run_no )
    {
       &report(6, "\n************ Pdflatex run no. $runno *************");
-      if ( &run_pdflatex($doc, $pdflog_base.$runno.'.log') == $TRUE 
+      if ( &run_pdflatex($doc, $pdflog_base.$runno.'.log') == $FALSE
          and ( $min_run_no <= $runno )) {
          # no errors detected and min. no. of runs are done
          $rerun=$FALSE;
