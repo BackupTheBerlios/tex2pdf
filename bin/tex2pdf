@@ -82,7 +82,7 @@ $TRUE=1;
 ### file to store private parameters
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdfrc
-$RC_FILENAME="$ENV{'HOME'}/.tex2pdfrc";
+$RC_FILENAME="$ENV{'HOME'}/.tex2pdfplrc";
 
 
 ########################## NEW PERL CONFIGURATON
@@ -94,7 +94,7 @@ $RC_FILENAME="$ENV{'HOME'}/.tex2pdfrc";
 ## Array index for the various information in each parameter specifcation
 ## referenced by %PARAMETER_LIST
 $TYPE=0;
-$ALIAS=1;
+$OPT_ALIAS=1;
 $OPT_SPEC=2;
 $DEF_VALUE=3;
 $DESCRIPTION=4;
@@ -133,6 +133,7 @@ $NIL => 'do not set this value - leave it to hyperref'
 &add_param('configure', 'action', undef, '|r', '');
 &add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s');
 &add_param('lyxrc_path', 'directory', "$ENV{'HOME'}/.lyx/", '', '=s');
+&add_param('clean_on_abort', 'bool', $NO, '', '!');
 &add_param('clean_logs', 'bool', $YES, '|l', '!');
 &add_param('check_commands', 'bool', $YES, '|c', '!');
 &add_param('regexp_append', 'text', '^\\documentclass(\[[^]]*\])?\{.*\}', '', '=s');
@@ -178,8 +179,8 @@ $NIL => 'do not set this value - leave it to hyperref'
 sub array_index {
    my (@list, $text) = @_;
 
-   foreach (0..$#list)) {
-      if ( @list[$_] eq $text ) { return $_; }
+   foreach (0..$#list) {
+      if ( $list[$_] eq $text ) { return $_; }
    }
    
    return -1;
@@ -197,7 +198,7 @@ sub clean_up {
 
 sub abort {
    print "$MYNAME: @_\n";
-   if ( &param_value('CLEAN_ON_ABORT') eq $YES ) { &clean_up; }
+   if ( &param_value('clean_on_abort') eq $YES ) { &clean_up; }
    print "Aborting ...\n";
    exit 1;
 }
@@ -239,8 +240,14 @@ sub question_ynu {
    my $user_input;
    my $question = $_[0];
    my $default = defined($_[1]) ? $_[1] : $NIL;
-   my $undef_allowed = defined($_[2]) and $_[2] eq $YES;
+   my $undef_allowed = $_[2];
    my $response = undef;
+
+   if (defined($undef_allowed) and $undef_allowed eq $YES) {
+      $undef_allowed = $TRUE;
+   } else {
+      $undef_allowed = $FALSE;
+   }
 
    if( $default =~ /^y(es)?/i ) {
       $question .= ' [y]: ';
@@ -323,7 +330,7 @@ sub choose_value {
    print "$question\n";
    foreach (@possible_values)
    {
-      print '$list_index) ' . ${$values_hash_ref}{$_} . "\n";
+      print "$list_index) " . ${$values_hash_ref}{$_} . "\n";
       if ( $default eq $_ ) { $default_no=$list_index; }
       $list_index = $list_index + 1;
    }
@@ -493,9 +500,9 @@ sub add_param {
  
    my ($key, $type, $def_value, $opt_alias, $opt_spec, $description, $explanation, $question) = @_;
  
-   $CONFIGURATION{$key} = $value;
+   $CONFIGURATION{$key} = $def_value;
 
-   $PARAMETER_LIST{$key} = [ $type, $alias, $opt_spec, $def_value, $description, $explanation, $question ];
+   $PARAMETER_LIST{$key} = [ $type, $opt_alias, $opt_spec, $def_value, $description, $explanation, $question ];
    
    if (! exists $PARAMETER_TYPES{$type}) {
       $PARAMETER_TYPES{$type} = undef;
@@ -510,9 +517,11 @@ sub type_values_hash {
    my $key = $_[0];
    my $values_ref;
 
-   exists(%PARAMETER_TYPES{$key})
-      or &abort "unknown type: $key";
-   $values_ref = %PARAMETER_TYPES{$key};
+   if(! exists($PARAMETER_TYPES{$key})) {
+      &abort("unknown type: $key");
+   }
+
+   $values_ref = $PARAMETER_TYPES{$key};
 
    if(ref $values_ref ne 'HASH') {
       $values_ref = undef;
@@ -529,9 +538,9 @@ sub param_value {
    my $key = $_[0];
    my $current_value;
 
-   exists(%CONFIGURATION{$key})
-      or &abort "unknown parameter: $key";
-   $current_value = %CONFIGURATION{$key};
+   exists($CONFIGURATION{$key})
+      or &abort("unknown parameter: $key");
+   $current_value = $CONFIGURATION{$key};
 
    return $current_value;
 }
@@ -545,13 +554,13 @@ sub param_type {
    my $def_ref;
    my $type;
 
-   exists(%PARAMETER_LIST{$key})
-      or &abort "unknown parameter: $key";
-   $def_ref = %PARAMETER_LIST{$key};
+   exists($PARAMETER_LIST{$key})
+      or &abort("unknown parameter: $key");
+   $def_ref = $PARAMETER_LIST{$key};
    $type = @{$def_ref}[$TYPE];
 
-   exists(%PARAMETER_TYPES{$type})
-      or &abort "parameter has unknown type: $key (type: $type)";
+   exists($PARAMETER_TYPES{$type})
+      or &abort("parameter has unknown type: $key (type: $type)");
 
    return $type;
 }
@@ -565,9 +574,9 @@ sub set_param_value {
    my $key = $_[0];
    my $new_value = $_[1];
 
-   exists(%CONFIGURATION{$key})
-      or &abort "unknown parameter: $key";
-   %CONFIGURATION{$key}=$new_value;
+   exists($CONFIGURATION{$key})
+      or &abort("unknown parameter: $key");
+   $CONFIGURATION{$key}=$new_value;
 }
 
 ### get option specifier for getopts
@@ -579,10 +588,10 @@ sub option_specifier {
    my $spec;
    my $def_ref;
  
-   exists(%PARAMETER_LIST{$key})
-      or &abort "unknown parameter: $key";
-   $def_ref = %PARAMETER_LIST{$key};
-   $spec = $key . @{$def_ref}[$OPT_ALIAS] . @{$def_ref}[$OPT_SPEC];
+   exists($PARAMETER_LIST{$key})
+      or &abort("unknown parameter: $key");
+   $def_ref = $PARAMETER_LIST{$key};
+   $spec = $key . ${$def_ref}[$OPT_ALIAS] . ${$def_ref}[$OPT_SPEC];
  
    return $spec;
 }
@@ -605,12 +614,12 @@ sub handle_option {
       my $bool_value = $value ? $YES : $NO;
       &set_param_value($key, $bool_value);
    } elsif ( $type eq 'directory') {
-      if (! &check_dir($value) {
+      if (! &check_dir($value)) {
          print "$key requires an existing writable directory as an absolute path.\n";
          &abort("Illegal value: $value");
       }
       &set_param_value($key, $value);
-   } elsif ( defined(&type_values_hash($type) ) {
+   } elsif (defined(&type_values_hash($type))){
       &set_enum_param($key, $value);
    } else {
       &set_param_value($key, $value);
@@ -634,15 +643,15 @@ sub handle_action_opt {
       
    } elsif ($key eq 'configure') {
       if ( -f $RC_FILENAME ) {
-         &read_configuration $RC_FILENAME;
+         &read_configuration($RC_FILENAME);
       }
       &configure;
-      &write_configuration $RC_FILENAME;
+      &write_configuration($RC_FILENAME);
       &print_configuration;
       
    } elsif ($key eq 'print_config') {
       if ( -f $RC_FILENAME ) {
-         &read_configuration $RC_FILENAME;
+         &read_configuration($RC_FILENAME);
       }
       &print_configuration;
 
@@ -664,8 +673,8 @@ sub set_enum_value {
 
    $type = &param_type($key);
    $values_hash_ref = &type_values_hash($type);
-   if ( ! exists %{$values_hash_ref}{$value} )) {
-      print "\n$key allows: " . keys %{$values_hash_ref} . ".\n";
+   if ( ! exists ${$values_hash_ref}{$value} ) {
+      print "\n$key allows: " . (keys %{$values_hash_ref}) . ".\n";
       &abort("Illegal value: $value");
    }
    &set_param_value($key, $value);
@@ -702,7 +711,7 @@ sub config_param {
 
       $values_hash_ref=&type_values_hash($type); 
       if (! defined($values_hash_ref)) {
-         &abort "do not know how to configure this parameter: $key (type: $type)";
+         &abort("do not know how to configure this parameter: $key (type: $type)");
       }
 
       $new_value=&choose_value($question,$current_value,$values_hash_ref);
@@ -767,10 +776,9 @@ sub read_configuration {
       &abort("Could not open configuration file for reading ($file_name)");
 
    while (<RCFILE>) {
-         chomp;
-         if( /^([^#=]+)=([[:print:]]*)$/ and exists $CONFIGURATION{$1} ) {
-            $CONFIGURATION{$1} = $2; 
-         }
+      chomp;
+      if( /^([^#=]+)=([[:print:]]*)$/ and exists $CONFIGURATION{$1} ) {
+         $CONFIGURATION{$1} = $2; 
       }
    }
    close RCFILE;
@@ -834,7 +842,7 @@ sub configure {
    print "The table of contents of the resulting PDF document is normally linked\n";
    print "to the corresponding section. However, you can also link it to the\n";
    print "corresponding page instead.\n";
-   &config_param("Should TOC be linked to pages?",'linktocpage');
+   &config_param("Should TOC be linked to pages?",'link_toc_page');
 
    print "\n----------------\n";
    print "$MYNAME can use different colors for links inside the PDF document.\n";
@@ -879,7 +887,7 @@ sub configure {
    print "These parameters should normally have the format:\n";
    print "PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...\n";
    print "Leave blank for no additional values.\n\n";
-   &config_param("Additional parameters ?",'hyperref-opts');
+   &config_param("Additional parameters ?",'hyperref_opts');
 
    print "\n----------------\n";
    print "You can now specify in which directory the resulting document should\n";
@@ -895,7 +903,7 @@ sub configure {
 
    print "\n----------------\n";
    print "The custom output directory for the result when 'custom' is set.\n";
-   &config_param("What custom directory should be used?",'custom-path');
+   &config_param("What custom directory should be used?",'custom_path');
 
    print "\n----------------\n";
    print "The bibtex usage can be specified.\n";
@@ -911,10 +919,11 @@ sub configure {
    &config_param("What should be the maximum number of runs for pdflatex?",'maxrun');
 
    print "\n----------------\n";
+   $maxrunno = &param_value('maxrun');
    print "The minimal number of runs for pdflatex can be specified.\n";
-   print "Possible values are: 1 ... &param_value('MAXRUNNO').\n";
+   print "Possible values are: 1 ... $maxrunno.\n";
    $NUM_PARAM_MIN=1;
-   $NUM_PARAM_MAX=$MAXRUNNO;
+   $NUM_PARAM_MAX= $maxrunno;
    &config_param("What should be the minimum number of runs for pdflatex?",'minrun');
 
    print "\n----------------\n";
@@ -926,7 +935,7 @@ sub configure {
    print "$MYNAME can clean the log files before execution.\n";
    print "You might experience problems if you run $MYNAME on several documents\n";
    print "the same time. If you want to be on the safe side, answer '$NO'.\n";
-   &config_param("Should the log files be cleaned before execution?",'cleanlogs');
+   &config_param("Should the log files be cleaned before execution?",'clean_logs');
 
    print "\n----------------\n";
    print "$MYNAME can check for the required executables.\n";
@@ -939,12 +948,12 @@ sub configure {
 
    print "\n----------------\n";
    print "$MYNAME can force the call of makeindex if pdftex fails to do this.\n";
-   &config_param("Should the call of makeindex be forced?",'forceindex');
+   &config_param("Should the call of makeindex be forced?",'force_index');
 
    print "\n----------------\n";
    print "Additional options for pdflatex can be specified.\n";
    print "Normally, you can leave this blank.\n\n";
-   &config_param("What additional options for pdflatex should be used?", 'pdftex-opts');
+   &config_param("What additional options for pdflatex should be used?", 'pdftex_opts');
    print "\n";
 }
 
@@ -1036,7 +1045,7 @@ sub extract_tag_text {
       &abort($error_message." ($source).");
 
    while(<SOURCE_FILE>) {
-      s/([^\])%.*$/$1/;
+      s/([^\\])%.*$/$1/;
       if( /\\$tag_name(\[[^{]*\])?{+([^{}]*)}/ ) {
          $result=$2; 
 	 last;
@@ -1068,13 +1077,13 @@ sub extract_files {
 
    while(<SOURCE_FILE>) {
       chomp;
-      s/([^\])%.*$/$1/;
-      while( /\\$tag_name(\[[^{]*\])?{(([^}]*\/)?[^}/.]+($suffix))}/ ) {
+      s/([^\\])%.*$/$1/;
+      while( m#\\$tag_name(\[[^{]*\])?\{(([^}]*/)?[^}/.]+($suffix))\}# ) {
          $matched_file = $2; 
          if( &array_index(@found_files, $matched_file) < 0 ) {
 	    push(@found_files, $matched_file);
 	 }
-      }
+      } 
    }
    
    close SOURCE_FILE;
@@ -1092,7 +1101,7 @@ sub get_file_list {
    local @imports = ();
 
    # This is the cycle avoidance logic.
-   if ( @array_index(@REF_DOCS, $source) < 0 ) {
+   if ( &array_index(@REF_DOCS, $source) < 0 ) {
       # Make sure the file can be accessed
       &check_file($source, "Included TeX file seems not to be available. Path problem?");
 
@@ -1143,7 +1152,7 @@ sub convert_tex2tmp {
       while(<SOURCE_FILE>) {
    
          # protect pdflatex execution mode
-         s/^(\\batchmode)$/% $1/
+         s/^(\\batchmode)$/% $1/;
    
          # print the read line
          print $_;
@@ -1170,9 +1179,9 @@ sub convert_tex2tmp {
    
    ### read, parse, modify and write the TeX body
    while(<SOURCE_FILE>) {
-      s/(\\includegraphics)(\[[^]]*\])?(\{[^}]+)\.(e?ps|pstex)\}/$1$2$3}/g
-      s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g
-      s/(\\(input|include)\{[^}]+)(\.tex)?\}/$1$tmp_base_suffix$3}/g
+      s/(\\includegraphics)(\[[^]]*\])?(\{[^}]+)\.(e?ps|pstex)\}/$1$2$3}/g;
+      s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
+      s/(\\(input|include)\{[^}]+)(\.tex)?\}/$1$tmp_base_suffix$3}/g;
 
       # print the read and manipulted line
       print $_;
@@ -1209,7 +1218,7 @@ sub convert_eps2pdf {
       if ( ! -f $image_target or -M $image_target > -M $image ) {
          print "Converting image $image_name ...\n";
          system("epstopdf", '-outfile='.$image_target, $image)
-	    or &abort "epstopdf failed on $image_name: $!";
+	    or &abort("epstopdf failed on $image_name: $!");
          push(@TMPFILES, $image_target);
       } else {
          print "$image_base.pdf newer than $image_name, conversion skipped...\n";
@@ -1318,7 +1327,7 @@ sub run_pdflatex {
       if ( `grep '! Emergency stop' $logfile` ne "" ) {
          system('cat', $logfile);
 	 print "\n";
-	 &abort "Fatal error occured. I am lost.";
+	 &abort("Fatal error occured. I am lost.");
       }
       if ( $errors != 0 ) {
          system('grep','Error:\|LaTeX Warning:',$logfile);
@@ -1389,7 +1398,7 @@ sub run_thumbpdf {
       print "I will continue, but maybe there will not be thumbs in the PDF doc.\n";
    }
 
-   if ( -f thumbpdf.log ) {
+   if ( -f 'thumbpdf.log' ) {
       rename('thumbpdf.log', $logfile);
       print "\n$MYNAME: See $logfile for details.\n";
    }
@@ -1423,18 +1432,18 @@ sub adjust_configuration {
    
    ### set parameters from rc file
    if ( -f $RC_FILENAME ) {
-      &read_configuration $RC_FILENAME;
+      &read_configuration($RC_FILENAME);
       $configured=$TRUE;
    }
    
    ### scan parameters 
    foreach (keys %PARAMETER_LIST) {
-      %opt_specs{&option_specifier($_)} = \&handle_option;
+      $opt_specs{&option_specifier($_)} = \&handle_option;
    }
    GetOptions(%opt_specs);
 
    if( ! $configured ) {
-      &abort "Script is not configured. Please run $MYNAME -r.";
+      &abort("Script is not configured. Please run $MYNAME -r.");
    }
    
    #### do some test in order to secure as good as possible that we will
@@ -1443,7 +1452,7 @@ sub adjust_configuration {
    ### make sure that tmp_base_suffix is not empty
    if ( &param_value('tmp_base_suffix') eq "" ) {
       print "\n$MYNAME: CAUTION: Parameter tmp_base_suffix is not set.\n";
-      &abort "Using these settings would destroy the original files!";
+      &abort("Using these settings would destroy the original files!");
    }
    
    ##### check for required commands
@@ -1458,7 +1467,7 @@ sub adjust_configuration {
       exit 1;
    }
    
-   return @ARGV[0];
+   return $ARGV[0];
 }
 
 #### prepare the logdir for the log files of the various called appplications
@@ -1564,7 +1573,7 @@ sub handle_inputpath {
 
 sub get_target_name {
    my $texdoc = $_[0];
-   my $inputpath=$_[1];
+   my $input_path=$_[1];
 
    my $doc_base;
    my $doc_path;
@@ -1622,11 +1631,10 @@ sub generate_hyperref_params {
          }
       }
       if (! defined($value) or $value eq $NIL ) {
-            print "$info field set to $NIL - no value will be passed.\n";
-         } else {
-            print "Document's $info: $value\n";
-            push(@params, "pdf$info={$value}");
-         }
+         print "$info field set to $NIL - no value will be passed.\n";
+      } else {
+         print "Document's $info: $value\n";
+         push(@params, "pdf$info={$value}");
       }
    }
    
@@ -1634,8 +1642,9 @@ sub generate_hyperref_params {
    
    $para=&param_value('paper');
    if ( $para ne $NIL ) { push(@params, $para); }
-   
-   if ( &param_value('linktocpage') eq $YES ) { push(@params, 'linktocpage'); }
+
+   $para=&param_value('link_toc_page'); 
+   if ( $para eq $YES ) { push(@params, 'linktocpage'); }
 
    $para=&param_value('colorlinks');
    if ( $para ne $NIL ) {
@@ -1646,7 +1655,8 @@ sub generate_hyperref_params {
    if ( $para ne 'false' ) {
       foreach (('linkcolor', 'pagecolor', 'urlcolor', 'citecolor')) {
          $para=&param_value($_);
-      if ( $para ne $NIL ) { push(@params, "$_={$para}"); }
+         if ( $para ne $NIL ) { push(@params, "$_={$para}"); }
+      }
    }
 
    $para=&param_value('hyperref_opts');
@@ -1767,17 +1777,14 @@ sub generate_pdf_doc {
 
    if ( ! -f $path.$base.'.pdf' ) {
       print "\n";
-      &abort "The new PDF file could not be generated: ".$path.$base.'.pdf';
+      &abort("The new PDF file could not be generated: ".$path.$base.'.pdf');
    }
 
    return $path.$base.'.pdf';
 }
    
 ################## Lift off !!!! (main part) ##################
-$TMPBASE=;
 @TMPFILES=();
-$TITLE=;
-$AUTHOR=;
 
 my $hyperref_params;
 my $texdoc;
