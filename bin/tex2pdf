@@ -48,13 +48,14 @@
 ######## Imports
 
 use File::Basename;
+use File::Copy;
 use Getopt::Long;
 use Cwd;
 use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0beta1";
+my $MYRELEASE="3.0beta2";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -145,6 +146,9 @@ $DEF_VALUE=3;
 
 &add_param('author', 'text', undef, '|a', '=s',
    'set PDF info author for specified document');
+
+&add_param('input_path', 'directory', undef, '', '=s',
+   'set path for referenced material in main document');
 
 ### Full parameters
 &add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s',
@@ -1183,33 +1187,42 @@ sub check_commands {
 #### generate the tmp file name from the original tex filename
 #### and make sure that they are not the same
 # parameter 1: orignal filename (with or without a path or .tex)
+# parameter 2: path for the tmp file (default: doc path)
 # return value: tmp name
 
 sub reserve_tmp_texname {
    my $original_name = $_[0];
+   my $tmp_path = $_[1];
    my $tmp_base_suffix = &param_value('tmp_base_suffix');
    my $overwrite = &param_value('overwrite');
-   my $path;
+   my $original_path;
    my $original_base;
    my $suffix;
    my $pathed_tmp_base;
    my @existing_files;
 
    # separate path, base and suffix
-   ($original_base,$path,$suffix) = fileparse($original_name, '\.tex');
+   ($original_base,$original_path,$suffix) = fileparse($original_name, '\.tex');
    
+   # set the path of the tmp file
+   if(!defined($tmp_path) or $tmp_path eq "") {
+      $tmp_path=$original_path;
+   } else {
+      $tmp_path .= '/' if( $tmp_path ne "" and ! $tmp_path =~ m#/$# );
+   }
+   
+   # abort if no absolute path is given 
+   if( index($tmp_path, "/") != 0 ) {
+      &abort("Internal error: Illegal argument for reserve_tmp_texname:".
+         "Given file has no absolute path: $original_name");
+   } 
+
    # make sure that tmp_base_suffix is set correctly
    if($tmp_base_suffix eq "") {
       &abort("Temporary filename base suffix is empty.");
    }
 
-   # abort if no absolute path is given 
-   if( index($path, "/") != 0 ) {
-      &abort("Internal error: Illegal argument for reserve_tmp_texname:".
-         "Given file has no absolute path: $original_name");
-   }
-
-   $pathed_tmp_base = $path.$original_base.$tmp_base_suffix;
+   $pathed_tmp_base = $tmp_path.$original_base.$tmp_base_suffix;
 
    # make sure no file with this base exists in this directory
    @existing_files = glob "$pathed_tmp_base.*";
@@ -1305,25 +1318,29 @@ sub extract_tag_contents {
 # parameter 1: file to parse
 # parameter 2: full TeX tag name
 # parameter 3: regular expression for the filname suffix (including '.')
+# parameter 4: different path for referenced material (default: docpath)
 # return value: list of found files
 
 sub extract_files {
    my $source=$_[0];
    my $tag_name=$_[1];
    my $suffix=$_[2];
+   my $path_prefix=$_[3];
    my @matched_tags;
-   my $source_path;
    my @found_files=();
 
-   $source_path= dirname $source;
-   if ($source_path ne "") { $source_path .= '/'; }
+   if(!defined($path_prefix) or $path_prefix eq "") {
+      $path_prefix = dirname $source;
+   }
+
+   $path_prefix .= '/' if( $path_prefix ne "" and ! $path_prefix =~ m#/$# );
 
    @matched_tags = &extract_tag_contents($source, $tag_name);
    
    foreach (@matched_tags) {
       if( m#^([^{}]*/)?[^{}/.]+($suffix)$# ) {
          # insert path of source if no absolute path is given
-         s#^([^/])#$source_path$1#;
+         s#^([^/])#$path_prefix$1#;
          if( &array_index($_, @found_files) < 0 ) {
 	    push(@found_files, $_);
 	 }
@@ -1337,11 +1354,12 @@ sub extract_files {
 # This function recurses, and is maybe smart enough to detect cycles.
 # Be sure to set FILES to the empty string prior to calling this.
 # parameter 1: tex file to start with
+# parameter 2: path for referenced material (default: doc path)
 
 sub get_file_list {
    my $source = $_[0];
+   my $input_path = $_[1];
    my @imports = ();
-   
 
    # This is the cycle avoidance logic.
    if ( &array_index($source, @REF_DOCS) < 0 ) {
@@ -1352,7 +1370,7 @@ sub get_file_list {
       push(@REF_DOCS, $source);
 
       # Get the list of files included by the argument.
-      @imports=&extract_files($source, 'include|input', '(\.tex)?');
+      @imports=&extract_files($source, 'include|input', '(\.tex)?',$input_path);
 
       # Recurse.
       foreach my $file (@imports) {
@@ -1508,9 +1526,11 @@ sub convert_pstex2pdf {
 
 ### Converted included images to pdf
 # parameter ($1): tex source file
+# parameter ($1): input path for referenced images (default: doc path)
 
 sub convert_images {
-   my $tex_source="$_[0]";
+   my $tex_source=$_[0];
+   my $input_path=$_[1];
    my @pstex_file_list;
    my @eps_image_list;
 
@@ -1518,7 +1538,8 @@ sub convert_images {
 
    ##### Get EPS images from the source file
    print "\nScanning for EPS images (.eps/.ps):\n";
-   @eps_image_list=&extract_files($tex_source, 'includegraphics', '\.e?ps');
+   @eps_image_list=&extract_files($tex_source, 'includegraphics', '\.e?ps',
+      $input_path);
    if ( @eps_image_list > 0 ) {
       print join("\n", @eps_image_list);
       print "\n";
@@ -1663,7 +1684,7 @@ sub run_thumbpdf {
    }
 
    if ( -f 'thumbpdf.log' ) {
-      rename('thumbpdf.log', $logfile);
+      move('thumbpdf.log', $logfile);
       print "\n$MYNAME: See $logfile for details.\n";
    }
 
@@ -1811,13 +1832,25 @@ sub process_inputpath {
    my $input_path;
    my @matches;
    
+   ### Maybe the user has given us a different inputpath
+   $input_path = &param_value('input_path');
+   if(defined($input_path) and $input_path ne "") {
+      print "Setting input path to specified directory: $input_path\n";
+      
+      print "Change working directory to input path.\n";
+      chdir $input_path;
+      
+      return $input_path;
+   }
+
    ##### Getting document name, suffix and path
    ($doc_base,$doc_path,$doc_suffix) = fileparse($texdoc, ('\.tex'));
 
    ###### change working directory to input_path if set
    # When the files' path (images, included documents, etc.) in your document is
    # relative to another directory than the PASSED document's directory.
-   # This is useful when the calling application (e.g. LyX) generates a temporary
+   # This is useful when the calling application (e.g. LyX) generates a
+   # temporary
    # TeX file and calls the tex2pdf with it instead of the original file.
    
    @matches=&extract_tag_contents($texdoc, 'def\\\\input@path');
@@ -1827,17 +1860,18 @@ sub process_inputpath {
    if ( defined ($input_path) and $input_path ne "" ) {
       print "$MYNAME: Found an input path in the latex document: $input_path\n";
       if( &check_dir($input_path, 'The retrieved input@path seems not to be valid.', $NO)) {
+         &set_param_value('input_path', $input_path);
          print "Change working directory to input path.\n";
          chdir $input_path;
       } else {
-          &abort ('I am lost.');
+         &abort ('I am lost.');
       }
    } else {
       print "$MYNAME: No input path in the latex document found.\n";
       print "Resources are expected to be relative to document's location: $doc_path\n";
          $input_path=$doc_path;
    }
-
+   
    return $input_path;
 }
 
@@ -1954,11 +1988,15 @@ sub generate_hyperref_params {
 
 sub prepare_documents {
    my ($main_tex_doc, @hyperref_params) = @_;
-   my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc);
+   my $main_tmp_doc;
+   my $input_path = &param_value('input_path');
    @REF_DOCS=();
 
-   ##### Get the list of imported files from the tex file
-   &get_file_list($main_tex_doc);
+   ## get a name for the tmp tex file
+   my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc, $input_path);
+
+   ## Get the list of imported files from the tex file
+   &get_file_list($main_tex_doc, $input_path);
    
    ## remove main file from list (first element; needs special handling)
    shift @REF_DOCS;
@@ -1977,7 +2015,7 @@ sub prepare_documents {
    ## main doc
    print "\n$MYNAME: Generating main temporary LaTeX document: $main_tmp_doc\n";
    &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params);
-   &convert_images($main_tex_doc);
+   &convert_images($main_tex_doc, $input_path);
    
    ## referenced docs
    foreach my $file (@REF_DOCS) {
@@ -2017,7 +2055,7 @@ sub generate_pdf_doc {
    ##### Getting document name, suffix and path
    ($base,$path,$suffix) = fileparse($source, ('\.tex'));
    $doc = $path.$base;
-   $pdf_doc = $doc.'.pdf';
+   $pdf_doc = $base.'.pdf';
 
    ### run pdflatex until no more errors are reported (max MAXRUNNO)
    while ( $rerun and $runno <= $max_run_no )
@@ -2116,7 +2154,7 @@ print "\n$MYNAME: Setting up parameters for hyperref.\n";
 
 ## set the working dir to the input path if the document has one and
 
-print "\n$MYNAME: Processing a possible input path in the tex document.\n";
+print "\n$MYNAME: Processing input path for main tex document.\n";
 $input_path = &process_inputpath($texdoc);
 
 ## determine the name for the result
@@ -2140,7 +2178,7 @@ print "\n$MYNAME: Processing the actual generation of the PDF document.\n";
 $new_pdf_doc = &generate_pdf_doc($tmp_tex_doc);
 
 ##### Finalize
-rename($new_pdf_doc, $target_name);
+move($new_pdf_doc, $target_name) or warn "Could not move PDF file to final destination: $!";
 print "\n";
 &clean_up;
 print "\nThe new pdf file is: $target_name\n\n";
