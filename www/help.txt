@@ -1,9 +1,9 @@
 
-tex2pdf: Script starts (Release 3.0)
+tex2pdf: Script starts (Release 3.0.5)
 
 tex2pdf: Processing given parameters and arguments.
 
-tex2pdf Version 3.0
+tex2pdf Version 3.0.5
 
 Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
        tex2pdf [OPTIONS] DOCUMENT[.tex]
@@ -102,6 +102,12 @@ Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
 
 --[no]thumbpdf | -n:
    generate thumbnails for PDF document
+
+--[no]ppower | -w:
+   postprocess PDF document with ppower
+
+--[no]mtp_preamble | -r:
+   add the file preamble.cfg at the current dir to metapost files
 
 --maxrun VALUE:
    specify maximal number of pdflatex runs if problems are detected
