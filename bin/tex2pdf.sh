@@ -120,8 +120,11 @@
 #  * introduced directory for log files that is cleaned up before execution
 #  * cleaned up the code and other minor changes
 #
+# Mar 14th, 2001 -- Version 2.0
+#  * Version 2.0 beta 3 becomes Release 2.0
+#
 
-MYVERSION="2.0 beta 3"
+MYVERSION="2.0"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -436,9 +439,6 @@ prepare_document() {
    echo
    echo "Preparing document: $TEXSOURCE."
    
-   ### Save the filename so we can delete it later.
-   TMPFILES="$TMPFILES $TARGETFILE"
-
    ##### Get EPS images from the source file
    echo
    echo "Scanning for EPS images (.eps/.ps):"
@@ -460,6 +460,9 @@ prepare_document() {
    else
       echo "None."
    fi
+
+   ### Save the filename so we can delete it later.
+   TMPFILES="$TMPFILES $TARGETFILE"
 
    ### Insert pdf conversation tags in tex file and write it to TARGETFILE
    echo
