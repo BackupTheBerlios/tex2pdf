@@ -93,7 +93,7 @@ my $CONFIGURED=$FALSE;
 my $RUN_PSforPDF = $NO;
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.18";
+my $MYRELEASE="3.1.19";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -1795,6 +1795,7 @@ sub identify_file {
    }
 
    # search all suggested directories
+   DIR_LOOP:
    foreach my $suggested_dir (@directories) {
       # try out all suffixes
       foreach my $suggested_suffix (@suffixes) {
@@ -1803,19 +1804,21 @@ sub identify_file {
          if ($kpse_result) {
             report(10, "kpsewhich output ($possible_file, $suggested_dir):\n"
                .$kpse_result);
-            last;
+            last DIR_LOOP;
          }
       }
    } 
-   
-   # try out all suffixes in standard directories
-   foreach my $suggested_suffix (@suffixes) {
-      my $possible_file= $given_name.'.'.$suggested_suffix;
-      $kpse_result=`kpsewhich $possible_file`;
-      if ($kpse_result) {
-         report(10, "kpsewhich output ($possible_file, STANDARD):\n"
-            .$kpse_result);
-         last;
+
+   if(!$kpse_result) {
+      # try out all suffixes in standard directories
+      foreach my $suggested_suffix (@suffixes) {
+         my $possible_file= $given_name.'.'.$suggested_suffix;
+         $kpse_result=`kpsewhich $possible_file`;
+         if ($kpse_result) {
+            report(10, "kpsewhich output ($possible_file, STANDARD):\n"
+               .$kpse_result);
+            last;
+         }
       }
    }
    
@@ -1826,8 +1829,8 @@ sub identify_file {
       return undef;
    }
 
-   # expand '.' in kpsewhich output to the current path
-   $kpse_result =~ s#^\./#$working_dir#;
+   # insert current path if no absolute path
+   $kpse_result =~ s#^(\./)?([^/])#$working_dir$2#;
    
    # remove trailing newline
    chomp($kpse_result);
@@ -2066,9 +2069,12 @@ sub process_textags {
       } elsif ( $name eq "graphicspath" or $name =~ /input\@path/ ) {
          my $dirs = $contents;
          my @directories = ();
-         $dirs =~ s/(^|[^\\])%.*\n/$1/gm; # remove comments
-         $dirs =~ s/^\s*{?\s*|\s*}?\s*$//g; # remove leading/trailing brackets
-         @directories = split(/\s*}\s*{\s*/m, $dirs ); # split string in dirctory list
+         # remove comments
+         $dirs =~ s/(^|[^\\])%.*\n/$1/gm;
+         # remove leading/trailing brackets
+         $dirs =~ s/^\s*{?\s*|\s*}?\s*$//g;
+         # split string in directory list
+         @directories = split(/\s*}\s*{\s*/m, $dirs ); 
          if($name eq "graphicspath" ) {
             @GRAPHICS_DIRS = @directories;
          } else {
