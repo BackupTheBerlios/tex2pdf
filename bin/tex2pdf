@@ -87,7 +87,7 @@ my $CONFIGURED=$FALSE;
 
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.12";
+my $MYRELEASE="3.1.13";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -3132,6 +3132,7 @@ sub process_inputpath {
    
    @matches=&extract_tag_contents($texdoc, 'def\\\\input@path');
    $input_path=$matches[0];
+   $input_path =~ s/{(.*)}/$1/;
    
    ## check if input_path is ok
    if ($input_path) {
