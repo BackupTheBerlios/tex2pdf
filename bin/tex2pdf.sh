@@ -19,18 +19,37 @@
 #      Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 # Credits:
-# Thanks to Matej Cepl and Herbert Voss for helping me with latex stuff!
+# Thanks to Matej Cepl and Herbert Voss for helping me with the latex stuff!
 #
 # Version History:
 #
 # Aug 13th, 2000 -- Version 1.2
 #   initial version
 #
+# Aug 14th, 2000 -- Version 1.3
+#  * added command to rename ~/.lyx/lyxpipe.out and ~/.lyx/lyxpipe.in 
+#    (thanks to Herbert Voss for this hint)
+#  * converted the sed command to be suitable for a single line
+#  * added check for number of command line arguments
+#
 
 ##### You will need pdftex and epstopdf for the translation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
 ##### Have fun!!!
 
+
+##### Check arguments
+MYNAME=`basename $0`
+echo
+##### Check arguments
+if [ $# -ne 1 ]
+   echo
+   echo $MYNAME: Wrong number of arguments.
+   echo
+   echo Usage: $MYNAME DOCUMENT.lyx
+   echo
+   exit 1
+fi
 
 echo $MYNAME: Setting environment variables
 LYXDOC=$1
@@ -42,6 +61,8 @@ TEXDOC=${LYXPATH}${DOCUMENTBASE}.tex
 #VERSION=`rlog ${LYXPATH}$DOCUMENTBASE.lyx,v | ${SEDEXE} -n "s/^head: \([[:digit:].]*\)$/\1/1p"`
 #TRANSTIME=`date`
 
+mv $HOME/.lyx/lyxpipe.out $HOME/.lyx/lyxpipe.out~
+mv $HOME/.lyx/lyxpipe.in $HOME/.lyx/lyxpipe.in~
 mv $TEXDOC $TEXDOC~
 [ -f $TEXDOC ] && mv $TEXDOC $TEXDOC~
 lyx --export tex $1
@@ -60,9 +81,7 @@ echo "Identified images (.eps/.ps):" $IMAGES
 ### some possible colors:red, green, cyan, blue, magenta, black
 ### some possible paper sizes: a4paper, letterpaper, legalpaper, executivepaper
 ### some possible colors: red, green, cyan, blue, magenta, black
-sed -e "s/\(\\includegraphics{[^}]\+\.\)\(e\)*ps}/\1pdf}/g" -e '/^\\makeatother$/{i \\usepackage{pslatex}
-i \\usepackage[pdftex,pdftitle={'"$TITLE}, pdfauthor={$AUTHOR},linktocpage,a4paper,colorlinks=true,urlcolor=blue,citecolor=magenta]{hyperref}
-p;d}" $TEXDOC > ${LYXPATH}${DOCUMENTBASE}-pdf.tex
+sed -e "s/\(\\includegraphics{[^}]\+\.\)\(e\)*ps}/\1pdf}/g" -e '/^\\makeatother$/i \\usepackage{pslatex}' -e '/^\\makeatother$/i \\usepackage[pdftex,pdftitle={'"$TITLE}, pdfauthor={$AUTHOR},linktocpage,a4paper,colorlinks=true,urlcolor=blue,citecolor=magenta]{hyperref}" $TEXDOC > ${LYXPATH}${DOCUMENTBASE}-pdf.tex
 $TEXDOC > ${LYXPATH}${DOCUMENTBASE}-pdf.tex
 
 echo
