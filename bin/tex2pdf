@@ -977,8 +977,9 @@ sub check_commands {
 sub get_tmp_filename {
    my $original_name = $_[0];
    my $tmp_name = $original_name;
+   my $tmp_base_suffix = &param_value('tmp_base_suffix');
 
-   $tmp_name =~ s/(\.tex)$/&param_value('TMPBASESUFFIX')$1/;
+   $tmp_name =~ s/(\.tex)$/$tmp_base_suffix$1/;
       
    if ($original_name eq $tmp_name) {
       &abort("Original and temporary filenames are identical ($original_name).");
@@ -1114,12 +1115,15 @@ sub get_file_list {
 ### corresponding tmp files
 # parameter 1: tex source file
 # parameter 2: tex tmp file
-# parameter 3: adjust the LaTeX preamble (default: $NO)
+# parameter 3: reference to hyperref parameter list or
+#              'undef' if preamble should not be changed
 
 sub convert_tex2tmp {
    my $source = $_[0];
    my $target = $_[1];
-   my $adjust_preamble = ($_[2] == $YES) ? $YES : $NO;
+   my $hyperref_params_ref = $_[2];
+   my $adjust_preamble = defined($hyperref_params_ref) ? $YES : $NO;
+   my $tmp_base_suffix = &param_value('tmp_base_suffix');
    my $read_err_msg = "Could not read original TeX document to generate temporary document";
    
    ### open source and target file
@@ -1144,17 +1148,17 @@ sub convert_tex2tmp {
          print $_;
    
          # append our extra TeX commands after the matching line
-         if ( /&param_value('INSERT_REGEXP')/ ) {
+         if ( /&param_value('regexp_append')/ ) {
             print '\usepackage{pslatex}' . "\n";
             
-   	 if ( &param_value('THUMBNAILS') eq $YES ) {
+   	 if ( &param_value('thumbpdf') eq $YES ) {
                print '\usepackage{thumbpdf}' . "\n";
    	 } else {
    	    print "% no thumbpdf support\n";
    	 }
    	 
             print '\makeatletter' . "\n";
-            print '\usepackage['. join(',', @HYPERREF_PARAMS) . ']{hyperref}' . "\n";
+            print '\usepackage['. join(',', @$hyperref_params_ref) . ']{hyperref}' . "\n";
             print '\makeatother' . "\n";
          }
    
@@ -1167,7 +1171,7 @@ sub convert_tex2tmp {
    while(<SOURCE_FILE>) {
       s/(\\includegraphics)(\[[^]]*\])?(\{[^}]+)\.(e?ps|pstex)\}/$1$2$3}/g
       s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g
-      s/(\\(input|include)\{[^}]+)(\.tex)?\}/$1&param_value('TMPBASESUFFIX')$3}/g
+      s/(\\(input|include)\{[^}]+)(\.tex)?\}/$1$tmp_base_suffix$3}/g
 
       # print the read and manipulted line
       print $_;
@@ -1397,9 +1401,11 @@ sub run_thumbpdf {
 ##### read and analyse configuration and options and adjust basic variables
 ##### accordingly
 #### The following sources are considered (last value overrides previous)
-# general configuration (global variables in the script)
-# private configuration (in user's RC file)
-# command line options
+##   1. general configuration (global variables in the script)
+##   2. private configuration (in user's RC file)
+##   3. command line options
+# parameters: none 
+# return value: given document argument
 
 sub adjust_configuration {
    my $configured=$FALSE;
@@ -1433,13 +1439,6 @@ sub adjust_configuration {
    #### do some test in order to secure as good as possible that we will
    #### succeed before to much work was done and maybe some data as damaged
 
-   ### Check number of arguments
-   if ( @ARGV != 1 ) {
-      print "\n$MYNAME: Wrong number of arguments. I need exactly one file.\n";
-      &usage;
-      exit 1;
-   }
-   
    ### make sure that tmp_base_suffix is not empty
    if ( &param_value('tmp_base_suffix') eq "" ) {
       print "\n$MYNAME: CAUTION: Parameter tmp_base_suffix is not set.\n";
@@ -1450,6 +1449,15 @@ sub adjust_configuration {
    if (&param_value('check_commands') ne $NO ) {
       &check_commands;
    }
+
+   ### Check number of arguments
+   if ( @ARGV != 1 ) {
+      print "\n$MYNAME: Wrong number of arguments. I need exactly one file.\n";
+      &usage;
+      exit 1;
+   }
+   
+   return @ARGV[0];
 }
 
 #### prepare the logdir for the log files of the various called appplications
@@ -1508,18 +1516,20 @@ sub process_doc_argument {
    return $doc_path.'/'.$doc_base.'.tex';
 }
 
-#### set theworking dir to the input path if the document has one and
-#### and determine the path for the result
+#### hanlde the dir of the input path if the document has one and
 # parameter 1: main tex doc
-# return value: absolute path were the resulting pdf doc should be stored
+# return value: absolute input path
 
-sub get_pdf_path {
+sub handle_inputpath {
    my $texdoc = $_[0];
-   my $inputpath;
-   my $doc_path= cwd;
-   my $destination;
-   my $pdf_path;
- 
+   my $doc_base;
+   my $doc_path;
+   my $doc_suffix;
+   my $input_path;
+   
+   ##### Getting document name, suffix and path
+   ($doc_base,$doc_path,$doc_suffix) = fileparse($texdoc, ('\.tex'));
+
    ###### change working directory to input_path if set
    # When the files' path (images, included documents, etc.) in your document is
    # relative to another directory than the PASSED document's directory.
@@ -1542,6 +1552,28 @@ sub get_pdf_path {
          $input_path=$doc_path;
    }
 
+   return $input_path;
+}
+
+#### set the working dir to the input path if the document has one and
+#### and determine the path for the result
+# parameter 1: main tex doc
+# parameter 2: absolute input path
+# return value: absolute path were the resulting pdf doc should be stored
+
+sub get_target_name {
+   my $texdoc = $_[0];
+   my $inputpath=$_[1];
+
+   my $doc_base;
+   my $doc_path;
+   my $doc_suffix;
+   my $destination;
+   my $pdf_path;
+   
+   ##### Getting document name, suffix and path
+   ($doc_base,$doc_path,$doc_suffix) = fileparse($texdoc, ('\.tex'));
+ 
    ##### set the directory where the final pdf will be stored
    $destination=&param_value('destination');
    $pdf_path=undef;
@@ -1550,15 +1582,17 @@ sub get_pdf_path {
       $pdf_path=&param_value('custom-path');
    } elsif ($destination eq 'input') {
       $pdf_path=$input_path;
+   } else {
+      $pdf_path=$doc_path;
    }
 
-      if( ! defined($pdf_path) or $pdf_path eq "" or &check_dir($pdf_path,
-         'The specified destination directory for the final PDF documents is not valid.', $NO)) {
+   if( ! defined($pdf_path) or $pdf_path eq "" or &check_dir($pdf_path,
+      'The specified destination directory for the final PDF documents is not valid.', $NO)) {
       print "$MYNAME: Using document's instead of destination path: $doc_path\n";
       $pdf_path=$doc_path;
    }
 
-   return $pdf_path;
+   return $pdf_path.'/'.$doc_base.'.pdf';
 }
 
 ### generate hyperref parameters from given settings
@@ -1625,9 +1659,10 @@ sub generate_hyperref_params {
 #### Prepare the main document and all referenced ones for the generation
 #### of the PDF document (including referenced images)
 # parameter 1: top level tex document
+# parameter 2: parameter list of hyperref parameters
 
 sub prepare_documents {
-   my $main_tex_doc=$_[0];
+   my ($main_tex_doc, @hyperref_params) = @_;
    my $main_tmp_doc = &get_tmp_filename($main_tex_doc);
    @REF_DOCS=();
 
@@ -1644,13 +1679,13 @@ sub prepare_documents {
          print ">>>>> $file\n";
       }
    } else {
-      print "\nFound no included TeX files.\n";
+      print "\nFound no referenced TeX files.\n";
    }
    
    ##### Generate adjusted temp tex files and convert all their images
    ## main doc
    print "\n$MYNAME: Generating main temporary LaTeX document: $main_tmp_doc\n";
-   &convert_tex2tmp($main_tex_doc, $main_tmp_doc, $YES);
+   &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params);
    &convert_images($main_tex_doc);
    
    ## referenced docs
@@ -1659,46 +1694,50 @@ sub prepare_documents {
    
       ### Insert pdf conversation tags in tex file and write it to tmp_file
       print "\n$MYNAME: Generating temporary LaTeX document: $tmp_file\n";
-      &convert_tex2tmp($file, $tmp_file);
+      &convert_tex2tmp($file, $tmp_file, undef);
       &convert_images($file);
    }
 }
 
 ##### Generate the final PDF document
-# parameter 1: filename of the LaTeX document (with extension)
+# parameter 1: filename of the source LaTeX document (with extension)
 
 sub generate_pdf_doc {
-   my $tex_doc = $_[0];
-   my $index_file;
+   my $source = $_[0];
    my $runno=1;
    my $rerun=$TRUE;
+   my $base;
+   my $path;
+   my $suffix;
+
+   my $max_run_no= &param_value('maxrun');
+   my $min_run_no= &param_value('minrun');
+   my $log_dir= &param_value('logdir');
    
    # setting the log files for the output of pdflatex, bibtex and thumbpdf
-   my $log_dir= &param_value('logdir');
    my $pdflog_base = "$log_dir/pdflatex-$$-";
    my $bibtex_log = "$log_dir/bibtex-$$.log";
    my $thumbpdf_log = "$log_dir/thumbpdf-$$.log";
 
-   ### cut of .tex extension - pdflatex does not like it
-   $tex_doc =~ s/\.tex$//;
-   $index_file = $tex_doc.'.idx';
+   ##### Getting document name, suffix and path
+   ($base,$path,$suffix) = fileparse($source, ('\.tex'));
    
    ### run pdflatex until no more errors are reported (max MAXRUNNO)
-   while ( $rerun == $TRUE and $runno <= &param_value('maxrun') )
+   while ( $rerun == $TRUE and $runno <= $max_run_no )
    {
       print "\n************ Pdflatex run no. $runno *************\n";
-      if ( &run_pdflatex($tex_doc, $pdflog_base.$runno.'.log') == $TRUE 
-         and ( &param_value('minrun') <= $runno )) {
-         # no errors detected and MINRUNNO is processed
+      if ( &run_pdflatex($path.$base, $pdflog_base.$runno.'.log') == $TRUE 
+         and ( $min_run_no <= $runno )) {
+         # no errors detected and min. no. of runs are done
          $rerun=$FALSE;
       } else {
-         # errors appeared or MINRUNNO has not been reached
+         # errors appeared or max run no. has not been reached
          $rerun=$TRUE;
       }
    
       ### Execute BibTeX after first run if set (and required)
       if ( $runno == 1 and &param_value('bibtex') ne $NO ) {
-         &handle_bibtex($tex_doc, $bibtex_log);
+         &handle_bibtex($path.$base, $bibtex_log);
       }
    
       $runno += 1;
@@ -1708,22 +1747,29 @@ sub generate_pdf_doc {
    
    ### if the THUMBNAILS option is switched on then make thumbnails
    if ( &param_value('thumbpdf') eq $YES ) {
-      &run_thumbpdf($tex_doc, $thumbpdf_log);
+      &run_thumbpdf($path.$base, $thumbpdf_log);
       $rerun=$TRUE;
    }
    
-   ### generate index if required
-   if ( -f $index_file and &param_value('forceindex') ne $NO ) {
+   ### generate index file exists
+   if ( -f $path.$base.'.idx' and &param_value('forceindex') ne $NO ) {
       print "\n$MYNAME: Document seems to have an index. Generating ...\n\n";
-      &makeindex($index_file);
+      &makeindex($path.$base.'.idx');
       $rerun=$TRUE;
    }
    
    ### One final pdflatex run if requested
    if ( $rerun ) {
       print "\n************ One final pdflatex run no. $runno *************\n";
-      &run_pdflatex($tex_doc, $pdflog_base.$runno.'.log');
+      &run_pdflatex($path.$base, $pdflog_base.$runno.'.log');
    }
+
+   if ( ! -f $path.$base.'.pdf' ) {
+      print "\n";
+      &abort "The new PDF file could not be generated: ".$path.$base.'.pdf';
+   }
+
+   return $path.$base.'.pdf';
 }
    
 ################## Lift off !!!! (main part) ##################
@@ -1734,22 +1780,20 @@ $AUTHOR=;
 
 my $hyperref_params;
 my $texdoc;
-my $pdf_path;
+my $doc_argument;
+my $input_path;
+my $target_name;
 
 print "\n$MYNAME: Script starts (Release $MYRELEASE)\n";
 
 ##### read and analyse configuration and options and adjust basic variables
 ##### accordingly
 ##### write RC file on config request
-
-print "\n$MYNAME: Processing given parameters and arguments.\n";
-&adjust_configuration(@_);
-
 #### use the finished configuration to get all further settings before we
 #### actually start doing something
 
-print "\n$MYNAME: Doing some tests.\n";
-&do_basic_test;
+print "\n$MYNAME: Processing given parameters and arguments.\n";
+$doc_argument = &adjust_configuration;
 
 #### prepare the script to write some information to specified log files
 
@@ -1761,7 +1805,7 @@ print "\n$MYNAME: Preparing directory for log files.\n";
 #### a lyx file will be translated to LaTeX first
 
 print "\n$MYNAME: Analysing your document argument.\n";
-&process_doc_argument;
+$texdoc = &process_doc_argument($doc_argument);
 
 #### we would like to get some more information from the actual
 #### main LaTeX document before we really start
@@ -1773,10 +1817,14 @@ print "\n$MYNAME: Setting up parameters for hyperref.\n";
 @hyperref_params = &generate_hyperref_params($texdoc);
 
 ## set the working dir to the input path if the document has one and
-## determine the path for the result
 
-print "\n$MYNAME: Setting the correct path for the result.\n";
-$pdf_path = &get_pdf_path($texdoc);
+print "\n$MYNAME: Processing a possible input path in the tex document.\n";
+$input_path = &process_inputpath($texdoc);
+
+## determine the name for the result
+
+print "\n$MYNAME: Setting the correct name for the result.\n";
+$target_name = &get_targetname($texdoc, $input_path);
    
 ## as much as possible is prepared in advance at this point
 ## so hopefully we will succeed in generating the PDF document
@@ -1786,21 +1834,16 @@ $pdf_path = &get_pdf_path($texdoc);
 ##### Generate adjusted temp tex files and convert all their images
 
 print "\n$MYNAME: Preparing all documents and images.\n";
-&prepare_documents($texdoc);
+$tmp_tex_doc = &prepare_documents($texdoc, @hyperref_params);
 
 ##### Generate the final PDF document
 
 print "\n$MYNAME: Processing the actual generation of the PDF document.\n";
-&generate_pdf_doc($texdoc);
+$new_pdf_doc = &generate_pdf_doc($tmp_tex_doc);
 
-##### Clean up
-if ( ! -f $TMPBASE.'.pdf' ) {
-   print "\n";
-   &abort "The PDF file $TMPBASE.pdf was not generated.";
-}
-
-rename($TMPBASE.'.pdf', $pdf_path.$DOCBASE.'.pdf');
+##### Finalize
+rename($new_pdf_doc, $target_name);
 print "\n";
 &clean_up;
-print "\nThe new pdf file is: ${PDFOUTDIR}${DOCBASE}.pdf\n\n";
+print "\nThe new pdf file is: $target_name\n\n";
 
