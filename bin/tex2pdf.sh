@@ -18,14 +18,13 @@
 #      along with this program; if not, write to the Free Software
 #      Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-# Credits:
-# Thanks to Matej Cepl and Herbert Voss for helping me with the latex stuff!
-# Thanks to all the people who supported me with their feedback!
-# 
 # Version History:
 #
 # Aug 13th, 2000 -- Version 1.2
-#   initial version
+#  * initial public version
+#     (thanks to Matej Cepl helping me with the pdflatex stuff)
+#     (thanks to Herbert Voss for helping me with the latex stuff)
+#     (thanks to all the people who supported me with their feedback)
 #
 # Aug 14th, 2000 -- Version 1.3
 #  * added command to rename ~/.lyx/lyxpipe.out and ~/.lyx/lyxpipe.in 
@@ -53,41 +52,95 @@
 #  * some more status messages for pdflatex
 #  * minor changes
 #
+# Oct 14th, 2000 -- Version 1.6
+#  * added bibtex support
+#     (thanks to Mark van Rossum for hinting to the problem)
+#     (thanks to Matt Bandy for his patch)
+#  * improved pdflatex error checking, hint to log file
+#  * introduced paramter to set the location of the generated PDF document
+#  * change working directory to document directory (for local images, etc.)
+#     (thanks to Matt Bandy for his patch)
+#  * put in tex command before 'makeletter' instead 'makeatother' (fixes problem
+#    with apacite package - requires different order)
+#     (thanks to Mark van Rossum for this patch)
+#  * introduced paramters to specifiy title, author and link colors
+#     (thanks to Matt Bandy for this patch)
+#  * minor changes
+#
 
-##### You will need pdftex and epstopdf for the translation!
+MYVERSION="1.6"
+
+##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
 ##### Have fun!!!
 
 ##### Parameters: Adjust them to your personal system
+
+### pdftex package options: 
+### see hyperref manual for more:/usr/share/texmf/doc/latex/hyperref/manual.pd
+
 # papersize of the resulting pdf document
 # some possible values: a4paper, letterpaper, legalpaper, executivepaper
 PAPERSIZE=a4paper
 
-# sed executable this script should use
-SEDEXE=/usr/bin/sed
+# use color for links in the resulting document
+# options: 'true' or 'false'
+COLORLINKS=true
+
+# color to use for URLS in resulting document
+# some possible values:  red, green, cyan, blue, magenta, black
+URLCOLOR=blue
+
+# color to use for citations in resulting document
+# some possible values:  red, green, cyan, blue, magenta, black
+CITECOLOR=red
+
+# Title info for resulting document
+# leave blank for LaTex document title
+TITLE=
+
+# Author info for resulting document
+# leave blank for LaTex document author
+AUTHOR=
+
+### other parameters
+
+# directory where the generated pdf file is stored
+# no value means the same directory as the lyx file
+PDFOUTDIR=
+
+# the sed executable this script should use
+# no value means script should use the sed in your path
+SEDEXE=
+
+# usage of bibtex
+# possible values: 'yes' (always run bibtex), 'no' (never run bibtex), 
+# 'test' (scan tex file for a bibtex entry and run it if required)
+BIBTEX=test
 
 # maximal number of runs for pdflatex
-MAXRUNNO=9
+MAXRUNNO=6
 
-# log file for the output of pdflatex
-PDFLOGFILE=/tmp/latex2pdf.log
+# log file for the output of pdflatex and bibtex
+PDFLOGFILE=/tmp/pdflatex.log
+BIBTEXLOG=/tmp/bibtex.log
 
 # additional options for pdflatex
 PDFTEXOPTS=""
 
 # Use which command to check executables
-WHICHON=yes
+WHICHON="yes"
 
 ##### Lift off
 MYNAME=`basename $0`
 
 echo
-echo $MYNAME: Script starts
+echo "$MYNAME: Script starts (Version $MYVERSION)"
 
 ##### set the sed executable
 # GNU sed version 3.02 or higher is recommended
 
-if [ ! -x ${SEDEXE} ]
+if [ -n "$SEDEXE" -a ! -x "$SEDEXE" ]
 then
    echo
    echo "$MYNAME: Specified sed executable not found (${SEDEXE})"
@@ -124,6 +177,10 @@ then
       checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed"
       SEDEXE=sed
    fi
+   if [ "$BIBTEX" != "no" ]
+   then
+      checkCommand bibtex "You can switch off BibTeX support by setting BIBTEX=no in the parameter section of $MYNAME."
+   fi
 fi
 
 ##### Check arguments
@@ -142,11 +199,18 @@ echo
 echo $MYNAME: Setting environment variables
 LYXDOC=$1
 DOCUMENTBASE=`basename $LYXDOC .lyx`
-LYXPATH=`echo $LYXDOC | ${SEDEXE} -e "s/^\(.*\)$DOCUMENTBASE\.lyx/\1/"`
-TEXDOC=${LYXPATH}${DOCUMENTBASE}.tex
+DOCPATH=`echo $LYXDOC | ${SEDEXE} -e "s/^\(.*\)$DOCUMENTBASE\.lyx/\1/"`
+TEXDOC=${DOCUMENTBASE}.tex
+TMPBASE=${DOCUMENTBASE}-pdf
+
+###### change working directory to document directory
+if [ -n "$DOCPATH" ]
+then
+   cd $DOCPATH
+fi
 
 ##### some variables not used ...
-#VERSION=`rlog ${LYXPATH}$DOCUMENTBASE.lyx,v | ${SEDEXE} -n "s/^head: \([[:digit:].]*\)$/\1/1p"`
+#VERSION=`rlog ${DOCPATH}$DOCUMENTBASE.lyx,v | ${SEDEXE} -n "s/^head: \([[:digit:].]*\)$/\1/1p"`
 #TRANSTIME=`date`
 
 ##### export TEX file with lyx (needs a display!)
@@ -155,7 +219,7 @@ echo $MYNAME: Exporting latex file
 [ -f $HOME/.lyx/lyxpipe.out ] && mv $HOME/.lyx/lyxpipe.out $HOME/.lyx/lyxpipe.out~
 [ -f $HOME/.lyx/lyxpipe.in ] && mv $HOME/.lyx/lyxpipe.in $HOME/.lyx/lyxpipe.in~
 [ -f $TEXDOC ] && mv $TEXDOC $TEXDOC~
-lyx --export tex $1
+lyx --export tex ${DOCUMENTBASE}.lyx
 
 ##### check if tex file now really exists
 if [ ! -f $TEXDOC ]
@@ -170,8 +234,16 @@ fi
 ##### get title, author and images from the produced tex file
 echo
 echo $MYNAME: Parsing latex file 
-TITLE=`${SEDEXE} -n "s/^.title{\(.*\)}.*$/\1/1p" $TEXDOC`
-AUTHOR=`${SEDEXE} -n "s/^.author{\(.*\)}.*$/\1/1p" $TEXDOC`
+if [ -z "$TITLE" ]
+then
+   TITLE=`${SEDEXE} -n "s/^.title{\(.*\)}.*$/\1/1p" $TEXDOC`
+fi
+
+if [ -z "$AUTHOR" ]
+then
+   AUTHOR=`${SEDEXE} -n "s/^.author{\(.*\)}.*$/\1/1p" $TEXDOC`
+fi
+
 IMAGES=`${SEDEXE} -n "s/^.*includegraphics{\([^}]\+\.\(e\)*ps\)}.*$/\1 /p" $TEXDOC`
 
 echo
@@ -186,11 +258,11 @@ echo
 echo $MYNAME: Preparing LaTex document for translation to pdf
 
 ${SEDEXE} -e "s/\(\\includegraphics{[^}]\+\.\)\(e\)*ps}/\1pdf}/g" \
--e '/^\\makeatother$/i \
+-e '/^\\makeatletter$/i \
 \\usepackage{pslatex}' \
--e '/^\\makeatother$/i \
-\\usepackage[pdftex,pdftitle={'"$TITLE},pdfauthor={$AUTHOR},linktocpage,$PAPERSIZE,colorlinks=true,urlcolor=blue,citecolor=magenta]{hyperref}"  \
-$TEXDOC > ${LYXPATH}${DOCUMENTBASE}-pdf.tex
+-e '/^\\makeatletter$/i \
+\\usepackage[pdftex,pdftitle={'"$TITLE},pdfauthor={$AUTHOR},linktocpage,$PAPERSIZE,colorlinks={$COLORLINKS},urlcolor={$URLCOLOR},citecolor={$CITECOLOR}]{hyperref}"  \
+$TEXDOC > $TMPBASE.tex
 
 ####### Convert eps images to pdf
 echo
@@ -203,13 +275,6 @@ do
    IMAGEPATH=`echo "$image" | ${SEDEXE} -n "s/^\(.*\)$IMAGENAME$/\1/p"`
    IMAGEBASE=`basename $IMAGENAME .eps`
    IMAGEBASE=`basename $IMAGEBASE .ps`
-
-   #### determine image path
-   if [ `echo $image | cut -c 1` != "/" ]
-   then
-      # relative pathname
-      IMAGEPATH=${LYXPATH}$IMAGEPATH
-   fi
 
    #### check if image file really exists
    if [ ! -f ${IMAGEPATH}${IMAGENAME} ]
@@ -235,25 +300,88 @@ do
    echo "************ Pdflatex run no. $runno *************"
    echo "Pdflatex is running. Please wait."
    echo
-   pdflatex --interaction nonstopmode ${PDFTEXOPTS} ${LYXPATH}${DOCUMENTBASE}-pdf.tex > $PDFLOGFILE
+   pdflatex --interaction nonstopmode ${PDFTEXOPTS} ${TMPBASE} > $PDFLOGFILE
    echo "Pdflatex finished. Errors:"
-   rerun=`grep "Error:\|LaTeX Warning:" $PDFLOGFILE | wc -l`
+   rerun=`grep "! Emergency stop\|Error:\|LaTeX Warning:" $PDFLOGFILE | wc -l`
    if [ $rerun -ne 0 ]
    then
+      if [ -n "`grep '! Emergency stop' $PDFLOGFILE`" ]
+      then
+         cat $PDFLOGFILE
+	 echo
+	 echo "$MYNAME: Fatal error occured. I am lost."
+	 echo "$MYNAME: Aborting ..."
+	 exit 1
+      fi
       grep "Error:\|LaTeX Warning:" $PDFLOGFILE
+      echo
+      echo "$MYNAME: See $PDFLOGFILE for details."
    else
       echo "None."
    fi
+   
+   ##### Check for BibTeX references after first run
+   if [ $runno -eq 1 -a "$BIBTEX" != "no" ]
+   then
+      if [ "$BIBTEX" = "yes" ]
+      then
+	 BIBLIO=1
+         echo "$MYNAME: BibTeX paramter set to 'yes'; running BibTeX."
+      else
+         echo
+         echo "$MYNAME: Checking for BibTeX bibliography in document."
+         BIBLIO=`grep "[\]bibliography{" ${TMPBASE}.tex | wc -l`
+         if [ $BIBLIO -ne 0 ]
+         then
+            echo "Bibliography detected; running BibTeX."
+         else
+            echo "No bibliography detected."
+         fi
+      fi
+      if [ $BIBLIO -ne 0 ]
+      then
+         if ! bibtex ${TMPBASE} > ${BIBTEXLOG}
+         then
+	    BIBTEXERR=1
+	 else
+	    BIBTEXERR=`grep "error message" ${BIBTEXLOG} | wc -l`
+         fi
+         if [ $BIBTEXERR -ne 0 ]
+         then
+	    echo
+            echo "****************** BibTeX errors reported *******************"
+            cat ${BIBTEXLOG}
+            echo "*************************************************************"
+	    echo
+            echo "$MYNAME: You can switch off BibTeX support by setting BIBTEX=no in the parameter section of $MYNAME."
+         else
+            echo "BibTeX finished without errors."
+         fi
+      fi
+      echo
+   fi
+
    runno=$((runno+1))
 done
 
 ### Clean up
-echo
-echo $MYNAME: Cleaning up
-mv ${LYXPATH}${DOCUMENTBASE}-pdf.pdf ${LYXPATH}${DOCUMENTBASE}.pdf
-rm ${LYXPATH}${DOCUMENTBASE}-pdf.* $PDFIMAGES
+if [ -f ${TMPBASE}.pdf ]
+then
+   mv ${TMPBASE}.pdf ${PDFOUTDIR}${DOCUMENTBASE}.pdf
+else
+   echo
+   echo "$MYNAME: The PDF file ${TMPBASE}.pdf was not generated."
+   echo $MYNAME: Cleaning up
+   rm ${TMPBASE}.* $PDFIMAGES
+   echo "$MYNAME: Aborting ..."
+   exit 1
+fi
 
 echo
-echo "The new pdf file is: ${LYXPATH}${DOCUMENTBASE}.pdf"
+echo $MYNAME: Cleaning up
+rm ${TMPBASE}.* $PDFIMAGES
+
+echo
+echo "The new pdf file is: ${PDFOUTDIR}${DOCUMENTBASE}.pdf"
 echo
 
