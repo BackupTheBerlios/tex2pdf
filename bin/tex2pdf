@@ -67,6 +67,7 @@ if (not $USER_HOME) { $USER_HOME = '/tmp'; }
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
 my @REF_DOCS=();
+my $MAIN_PREAMBLE = undef;
 
 ### text token for no value
 my $NIL="NOVALUE";
@@ -86,7 +87,7 @@ my $CONFIGURED=$FALSE;
 
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.10";
+my $MYRELEASE="3.1.11";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -1602,53 +1603,6 @@ sub generate_tex_file {
    }
 }
 
-#### search TeX document for a certain text tag (e.g. author, title)
-# parameter 1: file to parse
-# parameter 2: full TeX tag name
-# return value: list of the contents strings of all matching tags
-
-sub extract_tag_contents_OLD {
-   my $source=$_[0];
-   my $tag_name=$_[1];
-   my $contents;
-   my @results=();
-   my $error_message="Could not read TeX document to extract $tag_name";
-
-   &check_file($source, $error_message.'.');
-   open(EXTRACT_SOURCE, "<$source") or
-      &abort($error_message." ($source).");
-
-
-   while(<EXTRACT_SOURCE>) {
-      ### ignore comments
-      s/(^|[^\\])%.*/$1/;
-      # ignore \thanks{}
-      s/\\thanks\{.*?\}//g;
-      # change \and to and
-      s/\\and/ and/g;
-
-      $contents .= $_;
-   }
-
-   close EXTRACT_SOURCE;
-
-   $_ = $contents;
-
-   # add contents of all occurences of this tag in a line to result list
-   while ( /\\($tag_name)(\[[^]]*?\])*?{+([^{}]*?)}/s ) {
-      my $text = $3;
-      $_ = $';
-      # remove newlines
-      $text =~ s/\n//g;
-      # remove latex newlines
-      $text =~ s/\\\\/ /g;
-      $text="" if (!defined($text));
-      push(@results, $text);
-   }
-
-   return @results;
-}
-
 
 #### extract initial occurence of specified tag from given string (e.g. author, title)
 # parameter 1: string to parse
@@ -1733,6 +1687,11 @@ sub extract_tag {
       $result{name} = substr($matched_tag_name,1);
       $tag_prefix = substr($data, 0, $tag_pos - length($matched_tag_name));
       $tag_remainder = substr($data, pos($data));
+      #my $prefix_tail = length($tag_prefix) < 60 ? $tag_prefix 
+      # : substr($tag_prefix, length($tag_prefix)-60);
+      #&report(10, "--------------------\nprefix:>".$prefix_tail."<\ntag:>"
+      #.join_tag(%result)."<\nremainder:>".substr($tag_remainder, 0,60).
+      #"<\n-----------");
       &report(10, "Tag found (".$result{name}.") - plain contents: >".
                $result{contents}."<");
       
@@ -1807,112 +1766,6 @@ sub extract_tag_contents {
 
 #### search for filenames in given TeX Tag in entire document
 ### skip all comments and duplicates while parsing
-# parameter 1: file to parse
-# parameter 2: full TeX tag name
-# parameter 3: reference to a list of possible filename suffixes (without '.')
-# parameter 4: regexp for suffix to ignore when specified in TeX file
-#              (undef if not used)
-# return value: list of identified files
-
-sub identify_files {
-   my $source=$_[0];
-   my $tag_name=$_[1];
-   my @suffixes=@{$_[2]};
-   my $ignore_suffix=$_[3];
-   my @matched_tags;
-   my @found_files=();
-   my $regexp_suffixes;
-
-   # create one large regexp from given suffixes and escape dots in them
-   $regexp_suffixes= '.('.join('|', @suffixes).')';
-   $regexp_suffixes =~ s/\./\\./g;
-
-   @matched_tags = &extract_tag_contents($source, $tag_name);
-
-   foreach my $tag_contents (@matched_tags) {
-      my $path;
-      my $base;
-      my $suffix;
-      my $kpse_result;
-      my $working_dir = cwd."/";
-
-      ($base,$path,$suffix) = fileparse($tag_contents, $regexp_suffixes);
-
-      # if a suffix is specified in the tag_contents handle it as requested
-      # 
-      # 1. $suffix: TRUE if $suffix is defined and not of zero length
-      #    means: a valid suffix has been found in the filename
-      # 2. defined($ignore_suffix): TRUE if $ignore_suffix is defined
-      #    means: a regexp for suffixes to be ignored has been specified as
-      #          parameter4
-      # 3. $suffix =~ /$ignore_suffix/: TRUE if $suffix matches the regexp
-      #    means: the suffix in the filename is wanted to be ignored
-      #
-      # The IF statement will be executed when:
-      #   a valid suffix has been found in the filename (1)
-      #   AND regexp for suffixes to be ignored has NOT been specified (not 2)
-      # OR
-      #   a valid suffix has been found in the filename (1)
-      #   AND regexp for suffixes to be ignored has been specified (2)
-      #   AND the suffix in the filename is NOT wanted to be ignored (not 3)
-      #
-      # The stuff that is executed if the entire IF statement is TRUE does the
-      # following: accept the found suffix and consider it as the only possible
-      # file name.
-      if($suffix and not (defined($ignore_suffix) and $suffix =~ /$ignore_suffix/)){
-         $kpse_result=`kpsewhich $tag_contents`;
-         # print warning and skip this tag if kpsewhich could not find it  
-         if (!$kpse_result) {
-            &report(4, "WARNING - Could not identify referenced file:\n",
-            " Ignoring '$tag_contents'.");
-            next;
-         }
-      } else {
-         # if there is a '.' in the basename assume that this is a reference
-         # to a file of another type and skip it
-         if( $base =~ /\./ ) {
-            &report(9, "Found an unknown extension. Ignoring '$tag_contents'.");
-            next;
-         }
-
-         # search for all possible files with allowed suffixes
-         foreach my $allowed_suffix (@suffixes) {
-            if (not $allowed_suffix =~ /[\]\)\(\|\[\\]/ ) {
-               # suffix is not a regexp, but a real extension
-               my $possible_file= $path.$base.'.'.$allowed_suffix;
-               $kpse_result=`kpsewhich $possible_file`;
-               if ($kpse_result) {
-                  last;
-               }
-            }
-         }
-      } 
-      
-      # if kpsewhich could not find any file with an allowed suffix
-      # assume that this reference is of a different type and skip it
-      # quietly   
-      if (!$kpse_result) {
-         &report(9, "No suitable file found. Ignoring '$tag_contents'.");
-         next;
-      }
-
-      # expand '.' in kpsewhich output to the current path
-      $kpse_result =~ s#^\./#$working_dir#;
-      
-      # remove trailing newline
-      chomp($kpse_result);
-
-      # add file to the found file list if it is not already on it
-      if( &array_index($kpse_result, @found_files) < 0 ) {
-         push(@found_files, $kpse_result);
-      }
-   }
-
-   return @found_files;
-}
-
-#### search for filenames in given TeX Tag in entire document
-### skip all comments and duplicates while parsing
 # parameter 1: filename without suffix (path might be present)
 # parameter 2: reference to list of possible filename suffixes (without '.')
 #              ordered according to their preference (best first)
@@ -1978,36 +1831,6 @@ sub identify_file {
    return $kpse_result;
 }
 
-### Build a list of all files which are included from the root file.
-# This function recurses, and is maybe smart enough to detect cycles.
-# Be sure to set REF_DOCS to the empty string prior to calling this.
-# parameter 1: tex file to start with
-# no return value
-# result is appended to global variable @REF_DOCS
-
-sub get_file_list {
-   my $source = $_[0];
-   my @imports = ();
-
-   # This is the cycle avoidance logic.
-   if ( &array_index($source, @REF_DOCS) < 0 ) {
-      # Make sure the file can be accessed
-      &check_file($source, "Included TeX file seems not to be available. Path problem?");
-
-      # Save the argument in the list of files.
-      push(@REF_DOCS, $source);
-
-      # Get the list of files included by the argument.
-      @imports=&identify_files($source, 'include|input', ['tex']);
-
-      # Recurse.
-      foreach my $file (@imports) {
-         if( ! ($file =~ /\.tex$/) ) { $file .= '.tex'; }
-         &get_file_list($file);
-      }
-   }
-}
-
 ### create the pdf files corresponding to eps files with psfrag substitutions
 # parameter 1: original preamble from the source file
 #              lines before \begin{document} tag (without this tag)
@@ -2015,8 +1838,8 @@ sub get_file_list {
 # return value: none
 
 sub pdffrag {
-   my $preamble = $_[0];
-   my $body     = $_[1];
+   my $preamble = $MAIN_PREAMBLE;
+   my $body     = $_[0];
    my $eps_file;
    my ($tex_target,$tex_src,$pdf_target,$frg_target,$tmp_target);
    my ($eps_base,$eps_path,$suffix);
@@ -2051,7 +1874,7 @@ sub pdffrag {
 	  &report(7, "Converting image $eps_file to $pdf_target ...\n");
 	  # Writing the simplified latex files with the psfrag substitution
 	  open(TARGET_FILE, ">$tex_target") or
-	     &abort("Could not open file to write temporary TeX document ($tex_target).");
+	     &abort("Could not write to temporary LaTeX document for psfrag ($tex_target).");
 
 	  print TARGET_FILE $preamble.$latex_code.$&.$latex_end;
 	  close TARGET_FILE;
@@ -2168,47 +1991,6 @@ sub adjust_preamble {
    return $` . $& . $extra_code . $' . $hyperref_code . $cut_code;
 }
 
-### adjust all filenames in the LaTeX code to the tmp files
-# parameter 1: original LaTeX code from the source file
-# return value: adjusted code
-
-sub adjust_filenames_OLD {
-   my $code = $_[0];
-   my $tmp_suffix = &param_value('tmp_base_suffix');
-   my $result;
-   
-   $_ = $code;
-
-   # Comment out the psfrag statements
-   s/(\\psfrag\{.*\}(\[[^]]*?\])*?\{.*\})/\%$1/g;
-
-   # cut off the suffix of eps, ps, *.gz and pstex graphics
-   s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)\n?\}/$1}/sg;
-
-   # replace the suffix 'pstex_t' with 'pdf_t'
-   s/(\\input\{[^}]+?\.)pstex_t\n?\}/$1pdf_t}/sg;
-
-   if ( &param_value('mtp_preamble') eq $NO ) {
-      # cut off the suffix of mmp graphics
-      s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)\.mmp\n?\}/$1}/sg;
-   } else {
-      # replace the suffix '.#' with '-mp.#'
-      s/(\\includegraphics(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1$MTP_TMP_BASESUFFIX\.$3}/sg;
-
-      # replace the suffix '.#' with '-mp.#'
-      s/(\\convertMPtoPDF(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1$MTP_TMP_BASESUFFIX\.$3}/sg;
-
-      # cut off optional suffix '.mmp' and append '-mp' in any case
-      s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)(\.mmp)?\n?\}/$1$MTP_TMP_BASESUFFIX}/sg;
-   }
-
-   # insert the tmp_suffix in tex filenames
-   # I assume that files with no extension are TeX files as well; correct?
-   s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#$1$tmp_suffix$4#sg;
-
-   return $_;
-}
-
 ### return the the given code commented out
 # functions takes care of trailing code by adding a final newline
 # parameter 1: TeX code as string
@@ -2225,7 +2007,7 @@ sub comment_out {
 # parameter 1: original LaTeX code from the source file
 # return value: adjusted code
 
-sub adjust_filenames {
+sub process_textags {
    my $source = $_[0];
    my $tmp_suffix = &param_value('tmp_base_suffix');
    my $mtp_preamble = &param_value('mtp_preamble');
@@ -2234,6 +2016,7 @@ sub adjust_filenames {
    my $context_depth=0;
    my @graphic_params = ();
    
+   report(10, ">>>>>>>>>>>process_textags started");
    while(defined($source) and $source ne "") {
       my %tag;
       my $prefix;
@@ -2267,7 +2050,7 @@ sub adjust_filenames {
          @directories = split(/\s*}\s*{\s*/m, $dirs ); # split string in dirctory list
          $tag{directories} = \@directories;
          $tag{context_depth} = $context_depth;
-         report(10,"tag graphicspath parsed: ".join(", ", @directories)."\n");
+         report(7,"tag graphicspath parsed: ".join(", ", @directories)."\n");
          push @graphic_params, \%tag;
       } elsif( $name eq "psfrag" ) {
          # Comment out the psfrag statements
@@ -2285,7 +2068,7 @@ sub adjust_filenames {
             $tag{extra_code} = $extra_code; 
             push @graphic_params, \%tag;
             $result .= comment_out(join_tag(%tag).$extra_code);
-            report(10, "psfrag code extracted successfully and commented out("
+            report(7, "psfrag code extracted successfully and commented out("
                   .$contents.")");
             next;
          }
@@ -2294,7 +2077,7 @@ sub adjust_filenames {
                $MPOST_SUFFIX);
          my $suffixes_regexp = join("|", @suffixes);
          $suffixes_regexp =~ s/\./\\./g;
-         my $found_suffix = undef;
+         my $found_suffix = "";
          my $found_file = undef;
 
          # cut off the suffix of eps, ps, *.gz and pstex graphics
@@ -2306,8 +2089,44 @@ sub adjust_filenames {
          # identify corresponding file (taking @graphic_params into account)
          $found_file = identify_file($contents, \@suffixes);
          # translate to pdf (taking @graphic_params into account)
-         # add in tmp file list and in translated figure list
-            
+         if ($found_file and $found_file =~ /\.($suffixes_regexp)$/ ) {
+            my $file_suffix = $1;
+            my $eps_regexp = join("|", @EPS_SUFFIXES);
+            if ( $file_suffix eq $PDF_ORIG_SUFFIX ) {
+               my $path;
+               my $base;
+               ($base,$path,undef) = fileparse($found_file, $PDF_ORIG_SUFFIX);
+               my $image_target = $path.$base.'pdf';
+               
+               if ( ! -f $image_target or -M $image_target > -M $found_file ) {
+                  &report(7, "Create temporary PDF file from original:\n"
+                     .$found_file);
+                  copy($found_file, $image_target)
+                     or &abort("Could not create tmp PDF file: $!");
+                  if (&param_value('delete_pdf_images') eq $YES) {
+                     push(@TMPFILES, $image_target);
+                  }
+               } else {
+                  &report(7, $base."pdf newer than $base$PDF_ORIG_SUFFIX, "
+                     ."copy skipped ...");
+               }
+            } elsif ($file_suffix =~ /$eps_regexp/ ) {
+               report(7, "EPS graphic identified: $found_file");
+               &convert_eps2pdf($found_file);
+            } elsif ($file_suffix eq $MPOST_SUFFIX) {
+               report(7, "Metapost graphic identified: $found_file");
+               &convert_mp2pdf($found_file);
+            } else {
+               report(7, "Bitmap graphic identified: $found_file");
+            }
+         } elsif ($found_file) {
+            report(4, "Included graphic of unknown type, ignoring it:"
+            ."\n\t".$found_file);
+         } else {
+            report(3, "Included graphic not found, ignoring it: "
+               .$contents.$found_suffix);
+         }
+         
          if ($mtp_preamble ne $NO and $found_suffix =~ /^\d+$/) {
             # replace the suffix '.#' with '-mp.#'
             #s/(\\includegraphics(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1
@@ -2315,50 +2134,93 @@ sub adjust_filenames {
             $contents .=~ $MTP_TMP_BASESUFFIX.'.'.$found_suffix;
          }
       } elsif ($name eq "input" or $name eq "include") {
-         my $test_suffix = undef;
-         my $append_suffix = undef;
          my $found_file = undef;
-         # replace the suffix 'pstex_t' with 'pdf_t'
-         # s/(\\input\{[^}]+?\.)pstex_t\n?\}/$1pdf_t}/sg;
-         if($contents =~ s/\.pstex_t\s*$//) {
-            $append_suffix = ".pdf_t";
-            $test_suffix = "pstex_t";
-         # insert the tmp_suffix in tex filenames
-         # I assume that files with no extension are TeX files as well; correct?
-         # s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#
-         # $1$tmp_suffix$4#sg;
+         my $tmp_file = undef;
+         my $found_suffix = "";
+         my $test_suffix = undef;
+
+         if($contents =~ s/\.(pstex_t|tex)\s*$//) {
+            $found_suffix = '.'.$1;
+            $test_suffix = $1;
          } else {
-            $contents =~ s/((\.tex)?)\s*$//;
-            $append_suffix = "$tmp_suffix$1";
             $test_suffix = "tex";
          }
-          # identify corresponding file
+            
          $found_file = identify_file($contents, [ $test_suffix ]);
-         $contents .= $append_suffix;
-          # translate to pdf (taking @graphic_params into account)
-          # generate adjusted temp file for pdf translatation
-          # add in tmp file list and in temp doc list
-      } elsif ($name eq "multiinclude") {
-         if ($mtp_preamble eq $NO) {
-            # cut off the suffix of mmp graphics
-            # s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)\.mmp\n?\}/$1}/sg;
-            $contents =~ s/\.mmp\s*$//;
+         if ($found_file) {
+            report(7, "Referenced LaTeX document identified: $found_file");
+            if($test_suffix eq "pstex_t") {
+               # replace the suffix 'pstex_t' with 'pdf_t'
+               # s/(\\input\{[^}]+?\.)pstex_t\n?\}/$1pdf_t}/sg;
+               # identify corresponding file
+               $contents .= ".pdf_t";
+               $tmp_file = $found_file;
+               $tmp_file =~ s/pstex_t$/pdf_t/;
+               if ( &array_index($tmp_file, @TMPFILES) < 0 ) {
+                  push(@TMPFILES, $tmp_file);
+                  &convert_tex2tmp($found_file, $tmp_file);
+               }
+            } else {
+               # insert the tmp_suffix in tex filenames
+               # I assume that files with no extension are TeX files; correct?
+               # s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#
+               # $1$tmp_suffix$4#sg;
+               $contents .= $tmp_suffix.$found_suffix;
+               # This is the cycle avoidance logic.
+               if ( &array_index($found_file, @REF_DOCS) < 0 ) {
+                  # add in tmp file list and in temp doc list
+                  $tmp_file = &reserve_tmp_texname($found_file);
+                  push(@REF_DOCS, $found_file);
+                  # generate adjusted temp file for pdf translatation
+                  &convert_tex2tmp($found_file, $tmp_file);
+               }
+            }
          } else {
+            $contents .= $found_suffix;
+            report(3, "Referenced LaTeX document not found, ignoring it: "
+               .$contents);
+         }
+      } elsif ($name eq "multiinclude") {
+         my $found_file = undef;
+         # cut off the suffix of mmp graphics
+         # s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)\.mmp\n?\}/$1}/sg;
+         $contents =~ s/\.$MULTI_MP_SUFFIX\s*$//;
+         $found_file = identify_file($contents, [ $MULTI_MP_SUFFIX ]);
+         if ($found_file) {
+            report(7, "Included metapost document identified: $found_file");
+            &convert_mp2pdf($found_file);
+         } else {
+            report(3, "Included metapost not found, ignoring it: $contents"
+               .$MULTI_MP_SUFFIX);
+         }
+         if ($mtp_preamble ne $NO) {
             # cut off optional suffix '.mmp' and append '-mp' in any case
             # s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)(\.mmp)?\n?\}/
             # $1$MTP_TMP_BASESUFFIX}/sg;
-            $contents =~ s/\.mmp\s*$/$MTP_TMP_BASESUFFIX/;
+            $contents .= $MTP_TMP_BASESUFFIX;
          }
       } elsif ($name eq "convertMPtoPDF" and $mtp_preamble ne $NO) {
+         my $found_suffix = undef;
+         my $found_file = undef;
          # replace the suffix '.#' with '-mp.#'
          # s/(\\convertMPtoPDF(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/
          # $1$MTP_TMP_BASESUFFIX\.$3}/sg;
-         $contents =~ s/(\.\d+?)\s*$/$MTP_TMP_BASESUFFIX$1/;
+         $found_suffix = $1 if($contents =~ s/(\.\d+?)\s*$//);
+         $found_file = identify_file($contents, [ $MPOST_SUFFIX ]);
+         if ($found_file) {
+            report(7, "Referenced metapost document identified: $found_file");
+            &convert_mp2pdf($found_file);
+         } else {
+            report(3, "Referenced metapost file not found, ignoring it: "
+               .$contents.$found_suffix);
+         }
+         $contents .= $MTP_TMP_BASESUFFIX.$found_suffix;
       }
       
       $tag{contents} = $contents;
       $result .= join_tag(%tag);
    }
+   report(10, "<<<<<<<<<<<<<<< process_textags finished");
 
    return $result;
 }
@@ -2370,14 +2232,12 @@ sub adjust_filenames {
 # parameter 2: tex tmp file
 # parameter 3: reference to hyperref parameter list or
 #              'undef' if preamble should not be changed
-# parameter 4: main preamble 
-#              'undef' if $_[0] is the main document
+# return value: none
 
 sub convert_tex2tmp {
    my $source = $_[0];
    my $target = $_[1];
    my $hyperref_params_ref = $_[2];
-   my $main_preamble = defined($_[3]) ? $_[3] : "";
    my $contents;
    my $preamble;
    my $body;
@@ -2403,24 +2263,24 @@ sub convert_tex2tmp {
       $preamble = $`;
       # Just to make sure that the original latex preamble goes
       # to the included documents
-      $main_preamble = $preamble;
+      $MAIN_PREAMBLE = $preamble;
       $body = $&.$';
       if ($preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
 	 &report(6, "Psfrag substitution detected. Entering pdffrag process");
          &pdffrag($preamble,$body);
       }
       $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
-      $preamble = &adjust_filenames($preamble);
+      $preamble = &process_textags($preamble);
    } else {
       $preamble = "";
       $body = $contents;
-      if ($main_preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
+      if ($body =~ /\\psfrag/) {
          &report(6, "Psfrag substitution detected in included document. Entering pdffrag process");
-         &pdffrag($main_preamble,$body);
+         &pdffrag($body);
       }
    }
    
-   $body = &adjust_filenames($body);
+   $body = &process_textags($body);
       
    ### write the new LaTeX target file
    open(TARGET_FILE, ">$target") or
@@ -2429,14 +2289,6 @@ sub convert_tex2tmp {
    print TARGET_FILE $preamble.$body;
    
    close TARGET_FILE;
-
-   if ( $adjust_preamble eq $YES ) {
-      # main document
-      return $main_preamble;
-   } else {
-      # included document
-      return undef;
-   }
 
 }
 
@@ -2486,52 +2338,6 @@ sub convert_eps2pdf {
       }
    } else {
       &report(7, "$image_base.pdf newer than $image_name, conversion skipped...");
-   }
-}
-
-### Convert the given PSTEX_T file to PDF_T
-# parameters 1: PSTEX_T filename with absolute path
-# return value: none
-
-sub convert_pstex2pdf {
-   my $pstex_file = $_[0];
-   my $pstex_path;
-   my $pstex_base;
-   my $pstex_name;
-   my $suffix;
-   my $pstex_target;
-   my @eps_images;
-
-   ($pstex_base,$pstex_path,$suffix) = fileparse($pstex_file, ('\.pstex_t'));
-   $pstex_name = $pstex_base . $suffix;
-   $pstex_target = $pstex_path . $pstex_base . '.pdf_t';
-   
-   #### check if image file really exists
-   #&check_file($pstex_file, "Could not convert referenced file.");
-
-   ### return if directory is not writeable
-   if (! -w $pstex_path) {
-      &report(4, "WARNING - Directory not writable: $pstex_path\n",
-      " Skipping '$pstex_name', assume you have converted it manually.");
-      return;
-   }
-
-   # descend into file
-   &report(7, "Converting file $pstex_name ...\n");
-
-   # find included EPS image(s)
-   @eps_images=&identify_files($pstex_file, 'includegraphics',
-      ['pstex', 'pstex\.gz']);
-
-   # create .pdf_t file
-   &convert_tex2tmp($pstex_file, $pstex_target, undef, undef); 
-
-   # put tmp file in the tmp file list
-   push(@TMPFILES, $pstex_target);
-
-   # convert image(s) to pdf
-   foreach my $image (@eps_images) {
-      &convert_eps2pdf($image);
    }
 }
 
@@ -2652,139 +2458,6 @@ sub modify_mp_file {
 
 }
 
-
-### Convert included images to pdf
-# parameter 1: tex source file
-# no return value
-
-sub convert_images {
-   my $tex_source=$_[0];
-   my @pstex_file_list;
-   my @image_list;
-   my @mp_image_list;
-   my @mmp_image_list;
-   my @major_suffixes;
-   my $ignore_regexp;
-
-   &report(6, "\nConverting images referenced in $tex_source.");
-
-   ##### Get images of major type from the source file
-   @major_suffixes = (@BITMAP_SUFFIXES, $PDF_ORIG_SUFFIX, @EPS_SUFFIXES);
-   $ignore_regexp = '.('.join('|',@EPS_SUFFIXES).')';
-   $ignore_regexp =~ s/\./\\./g;
-
-   &report(6, "\nScanning for major image types (".join(', ',@major_suffixes)."):");
-   @image_list = &identify_files($tex_source,'includegraphics',
-      \@major_suffixes, $ignore_regexp );
-
-   if ( @image_list > 0 ) {
-      &report(7, join("\n", @image_list));
-   } else {
-      &report(7, "None.");
-   }
-
-   ##### Get PSTEX_T files from the source file
-   &report(6, "\nScanning for PSTEX_T files (.pstex_t):");
-   @pstex_file_list=&identify_files($tex_source, 'input', ['pstex_t']);
-   if ( @pstex_file_list > 0 ) {
-      &report(7, join("\n", @pstex_file_list));
-   } else {
-      &report(7, "None.");
-   }
-
-   ##### Get MP images from the source file
-   &report(6, "\nScanning for MP images (.mp):");
-   @mp_image_list=&identify_files($tex_source,
-      'convertMPtoPDF|includegraphics',['mp','(\d+)'],'\.(\d+)');
-   # FIXME
-   # fixed for now by ignoring strange extension in identify_files
-   #
-   # the above could cause problems as identify_files is expecting a list of
-   # real extensions and not of regexps
-   # maybe the only way to fix this is to adjust identify_files to ignore
-   # invalid extension when testing them with kpsewhich
-   # ALTERNATIVE: design identify_files to use preffered_suffixes instead
-   # of ignore_suffixes
- 
-   if ( @mp_image_list > 0 ) {
-      &report(7, join("\n", @mp_image_list));
-   } else {
-      &report(7, "None.");
-   }
-
-   ##### Get MMP images from the source file
-   &report(6, "\nScanning for MMP images (.mmp):");
-   @mmp_image_list=&identify_files($tex_source,'multiinclude',['mmp']);
-   if ( @mmp_image_list > 0 ) {
-      &report(7, join("\n", @mmp_image_list));
-   } else {
-      &report(7, "None.");
-   }
-
-   ### Convert EPS images to PDF, copy pdf.orig image files to pdf,
-   ### and simply ignore all other
-   if ( @image_list > 0) {
-      my $handled_suffixes;
-
-      &report(6, "\nProcessing images of major types:");
-   
-      # create one large regexp from suffixes and escape dots in them
-      $handled_suffixes = '.('.join('|',(@EPS_SUFFIXES, $PDF_ORIG_SUFFIX)).')';
-      $handled_suffixes =~ s/\./\\./g;
-
-      foreach my $image (@image_list) {
-         my $path;
-         my $base;
-         my $suffix;
-         ($base,$path,$suffix) = fileparse($image, $handled_suffixes);
-         if (not $suffix) {
-            &report(7, "No special handling required for image: $base$suffix");
-         } elsif ($suffix eq ('.'.$PDF_ORIG_SUFFIX) ) {
-            my $image_target = $path.$base.'.pdf';
-               
-            if ( ! -f $image_target or -M $image_target > -M $image ) {
-               &report(7, "Create temporary PDF file from original: $base$suffix");
-               copy($image, $image_target)
-                  or &abort("Could not create tmp file: $!");
-               if (&param_value('delete_pdf_images') eq $YES) {
-                  push(@TMPFILES, $image_target);
-               }
-            } else {
-               &report(7, "$base.pdf newer than $base$suffix, copy skipped ...");
-            }
-         } else {
-            &convert_eps2pdf($image);
-         }
-      }
-   }
-
-   ### Convert all PSTEX_T files to PDF_T
-   if ( @pstex_file_list > 0 ) { 
-      &report(6, "\nConverting pstex_t docs to pdf_t docs");
-      foreach my $image (@pstex_file_list) {
-         &convert_pstex2pdf($image);
-      }
-   }
-
-   ### Convert all MP images to PDF
-   if ( @mp_image_list > 0) {
-      &report(6, "\nConverting MP images to PDF");
-      foreach my $image (@mp_image_list) {
-         &convert_mp2pdf($image);
-      }
-   }
-
-   ### Convert all MMP images to PDF
-   if ( @mmp_image_list > 0) {
-      &report(6, "\nConverting MMP images to PDF");
-      foreach my $image (@mmp_image_list) {
-         &convert_mp2pdf($image);
-      }
-   }
-
-   &report(6, "\nFinished converting for ${tex_source}.");
-}
-
 ### run latex
 # parameter 1: LaTeX file without extension
 # parameter 2: log-file where the full output is stored
@@ -2902,7 +2575,6 @@ sub run_pdftex {
    &report(7, "Running $pdftex_exec_base. This may take a while.");
    system("$pdftex_exec --interaction nonstopmode $extra_options $texfile > $logfile 2>&1");
    $exit_status=$?;
-   &report(7, "$pdftex_exec_base finished. Errors:");
 
    ### extract all errors and warnings from the log file
    @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
@@ -3585,42 +3257,14 @@ sub generate_hyperref_params {
 sub prepare_documents {
    my ($main_tex_doc, $input_path, @hyperref_params) = @_;
    @REF_DOCS=();
-   my $main_preamble;
 
    ## get a name for the tmp tex file
    my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc, $input_path);
 
-   ## Get the list of imported files from the tex file
-   &get_file_list($main_tex_doc);
-   
-   ## remove main file from list (first element; needs special handling)
-   shift @REF_DOCS;
-   
-   ## tell user about the identified refereneced docs
-   if ( @REF_DOCS > 0 ) {
-      &report(7, "\nFound the following referenced TeX files:");
-      foreach my $file (@REF_DOCS) {
-         &report(7, ">>>>> $file");
-      }
-   } else {
-      &report(7, "\nFound no referenced TeX files.");
-   }
-   
    ##### Generate adjusted temp tex files and convert all their images
    ## main doc
    &report(6, "\nGenerating main temporary LaTeX document: $main_tmp_doc");
-   $main_preamble = &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params, undef);
-   &convert_images($main_tex_doc);
-   
-   ## referenced docs
-   foreach my $file (@REF_DOCS) {
-      my $tmp_file = &reserve_tmp_texname($file);
-   
-      ### Insert pdf conversation tags in tex file and write it to tmp_file
-      &report(7, "\nGenerating temporary LaTeX document: $tmp_file");
-      &convert_tex2tmp($file, $tmp_file, undef, $main_preamble);
-      &convert_images($file);
-   }
+   &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params);
 
    return $main_tmp_doc;
 }
