@@ -2092,7 +2092,7 @@ sub process_textags {
          }
          # identify corresponding file (taking @PATH_TAGS into account)
          $found_file = identify_file($contents, \@suffixes);
-         # translate to pdf (taking @PSFRAG_TAGS into account)
+         # translate graphics to pdf
          if ($found_file and $found_file =~ /\.($suffixes_regexp)$/ ) {
             my $file_suffix = $1;
             my $params = defined($tag{params}) ? $tag{params} : "";
@@ -2117,8 +2117,14 @@ sub process_textags {
                }
                $file_suffix = "pdf";
             } elsif ($file_suffix =~ /$eps_regexp/ ) {
-               report(7, "EPS graphic identified: $found_file");
-               &convert_eps2pdf($found_file);
+               if ($#PSFRAG_TAGS != 0) {
+                  report(7, "EPS graphic identified (psfrag tags present): "
+                     .$found_file);
+                  ### generated PDFFRAG graphics using @PSFRAG_TAGS
+               } else {
+                  report(7, "EPS graphic identified: $found_file");
+                  &convert_eps2pdf($found_file);
+               }
                $file_suffix = "pdf";
             } elsif ($file_suffix eq $MPOST_SUFFIX) {
                report(7, "Metapost graphic identified: $found_file");
