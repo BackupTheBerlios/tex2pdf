@@ -123,8 +123,12 @@
 # Mar 14th, 2001 -- Version 2.0
 #  * Version 2.0 beta 3 becomes Release 2.0
 #
+# ?????????????? -- Version 2.1
+#  * bugfix: included graphics haven't been recognised with [...] parameter
+#     (thanks to Ahmet Sekercioglu for this bug report)
+#
 
-MYVERSION="2.0"
+MYVERSION="2.0.1"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -411,10 +415,10 @@ convert_pstex2pdf() {
       echo Converting file ${PSTEXNAME} ...
 
       # create .pdf_t file
-      sed -e "s/\(^[^%]*[\]includegraphics{.*\.\)pstex\(.*$\)/\1pdf\2/g" ${PSTEXPATH}${PSTEXNAME} > "${PSTEXPATH}${PSTEXBASE}.pdf_t"
+      sed -e "s/\(^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{.*\.\)pstex\(.*$\)/\2pdf\3/g" ${PSTEXPATH}${PSTEXNAME} > "${PSTEXPATH}${PSTEXBASE}.pdf_t"
       
       # find included EPS image
-      EPSIMAGE=`${SEDEXE} -n "s/^[^%]*[\]includegraphics{\([^}]\+\)}.*$/\1/pg" ${PSTEXPATH}${PSTEXNAME}`
+      EPSIMAGE=`${SEDEXE} -n "s/^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{\([^}]\+\)}.*$/\2/pg" ${PSTEXPATH}${PSTEXNAME}`
       EPSBASE=`basename $EPSIMAGE .pstex`
 
       # convert image to pdf
@@ -442,7 +446,7 @@ prepare_document() {
    ##### Get EPS images from the source file
    echo
    echo "Scanning for EPS images (.eps/.ps):"
-   EPSIMAGES=`${SEDEXE} -n "s/^[^%]*[\]includegraphics{\([^}]\+\.\(e\)*ps\)}.*$/\1 /pg" $TEXSOURCE`
+   EPSIMAGES=`${SEDEXE} -n "s/^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{\([^}]\+\.\(e\)*ps\)}.*$/\2 /pg" $TEXSOURCE`
    if [ -n "$EPSIMAGES" ]
    then
       echo "$EPSIMAGES"
@@ -468,7 +472,7 @@ prepare_document() {
    echo
    echo $MYNAME: Generating temporary LaTeX document
 
-   ${SEDEXE} -e "s/\([\]includegraphics{[^}]\+\.\)\(e\)*ps}/\1pdf}/g" \
+   ${SEDEXE} -e "s/\([\]includegraphics\(\[[^{]*\]\)\?{[^}]\+\.\)\(e\)*ps}/\2pdf}/g" \
    -e "s/\([\]input{[^}]\+\.\)pstex_t}/\1pdf_t}/g" \
    -e 's/\([\]include{[^}]\+\)}/\1${TMPBASESUFFIX}}/g' \
    -e "1,/^[\]begin{document}$/s/^[\]batchmode$//" \
