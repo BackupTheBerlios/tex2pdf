@@ -56,39 +56,7 @@ use Cwd;
 use Text::Balanced extract_bracketed;
 use strict;
 
-####### HARD CODED PARAMETERS
-
-my $MYRELEASE="3.1.8";
-my $NUM_PARAM_MIN=0;
-my $NUM_PARAM_MAX=10;  
-my $MTP_PREAMBLE_FILENAME="preamble.cfg";
-my $MTP_TMP_BASESUFFIX="-mp";
-my @EPS_SUFFIXES=('eps','ps','ps.gz','eps.gz' );
-my $PDF_ORIG_SUFFIX='pdf.orig';
-my @BITMAP_SUFFIXES=( 'jpg', 'png', 'tif' );
-
-# (initial) log file of this script
-# this log file will be moved to the specified log_dir after configuration
-# and the variable will be updated to the new name
-my $MYLOGFILE="$USER_HOME/tex2pdf-$$.log";  
-# maximal supported level of verbosity
-my $MAX_VERBOSITY=10;  
-# verbosity for screen output when debugging; log file will be set to max
-my $DEBUG_VERBOSITY=9;
-# level of verbosity for log files in non-debug mode execution
-my $LOGFILE_VERBOSITY=9;
-# screen verbosity before configuration data active
-my $PRE_CONFIG_VERBOSITY=4;
-
-### file to store private parameters
-# If you only want to change your private parameters change them there
-# default: $HOME/.tex2pdf3rc
-my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
-my $MYRCFILE_VERSION=8;
-my $RCVERSION_STRING="rcfile_version";
-
-
-############### INITIALAZATION OF GLOVAL VARAIABLES
+############### INITIALAZATION OF GLOBAL VARAIABLES
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -115,6 +83,39 @@ my $TRUE=1;
 ## set global variable configured to prevent access to configuration
 #  parameters before configuration process is finished
 my $CONFIGURED=$FALSE;
+
+####### HARD CODED PARAMETERS
+
+my $MYRELEASE="3.1.9";
+my $NUM_PARAM_MIN=0;
+my $NUM_PARAM_MAX=10;  
+my $MTP_PREAMBLE_FILENAME="preamble.cfg";
+my $MTP_TMP_BASESUFFIX="-mp";
+my @EPS_SUFFIXES=('eps','ps','ps.gz','eps.gz' );
+my $PDF_ORIG_SUFFIX='pdf.orig';
+my $MPOST_SUFFIX='mp';
+my $MULTI_MP_SUFFIX='mmp';
+my @BITMAP_SUFFIXES=( 'jpg', 'png', 'tif' );
+
+# (initial) log file of this script
+# this log file will be moved to the specified log_dir after configuration
+# and the variable will be updated to the new name
+my $MYLOGFILE="$USER_HOME/tex2pdf-$$.log";  
+# maximal supported level of verbosity
+my $MAX_VERBOSITY=10;  
+# verbosity for screen output when debugging; log file will be set to max
+my $DEBUG_VERBOSITY=9;
+# level of verbosity for log files in non-debug mode execution
+my $LOGFILE_VERBOSITY=10;
+# screen verbosity before configuration data active
+my $PRE_CONFIG_VERBOSITY=4;
+
+### file to store private parameters
+# If you only want to change your private parameters change them there
+# default: $HOME/.tex2pdf3rc
+my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
+my $MYRCFILE_VERSION=8;
+my $RCVERSION_STRING="rcfile_version";
 
 ########################## NEW PERL CONFIGURATON
 
@@ -1910,6 +1911,73 @@ sub identify_files {
    return @found_files;
 }
 
+#### search for filenames in given TeX Tag in entire document
+### skip all comments and duplicates while parsing
+# parameter 1: filename without suffix (path might be present)
+# parameter 2: reference to list of possible filename suffixes (without '.')
+#              ordered according to their preference (best first)
+# parameter 3: reference to list of additional directories (undef if none)
+# return value: identified filename (incl. path and suffix) (undef if not found)
+
+sub identify_file {
+   my $given_name = $_[0];
+   my @suffixes = $_[1] ? @{$_[1]} : ();
+   my @directories = $_[2] ? @{$_[2]} : ();
+   my $path = undef;
+   my $base = undef;
+   my $kpse_result = undef;
+   my $working_dir = cwd."/";
+
+   ($base, $path, undef) = fileparse($given_name, "");
+
+   if(substr($given_name,0,1) eq '/' and $#directories == 0 ) {
+      report(9, "Absolute path and directories specified (".$given_name.": "
+         .join(@directories, ',').")");
+   }
+
+   # search all suggested directories
+   foreach my $suggested_dir (@directories) {
+      # try out all suffixes
+      foreach my $suggested_suffix (@suffixes) {
+         my $possible_file= $given_name.'.'.$suggested_suffix;
+         $kpse_result=`kpsewhich --path $suggested_dir $possible_file`;
+         if ($kpse_result) {
+            report(10, "kpsewhich output ($possible_file, $suggested_dir):\n"
+               .$kpse_result);
+            last;
+         }
+      }
+   } 
+   
+   # try out all suffixes in standard directories
+   foreach my $suggested_suffix (@suffixes) {
+      my $possible_file= $given_name.'.'.$suggested_suffix;
+      $kpse_result=`kpsewhich $possible_file`;
+      if ($kpse_result) {
+         report(10, "kpsewhich output ($possible_file, STANDARD):\n"
+            .$kpse_result);
+         last;
+      }
+   }
+   
+   # return if kpsewhich could not find a corresponding file
+   if (!$kpse_result) {
+      report(9, "No suitable file found for ".$given_name.": "
+         .join(@directories, ','));
+      return undef;
+   }
+
+   # expand '.' in kpsewhich output to the current path
+   $kpse_result =~ s#^\./#$working_dir#;
+   
+   # remove trailing newline
+   chomp($kpse_result);
+      
+   report(10, "Identified file for ".$given_name.": ".$kpse_result);
+
+   return $kpse_result;
+}
+
 ### Build a list of all files which are included from the root file.
 # This function recurses, and is maybe smart enough to detect cycles.
 # Be sure to set REF_DOCS to the empty string prior to calling this.
@@ -2162,7 +2230,7 @@ sub adjust_filenames {
    my $tmp_suffix = &param_value('tmp_base_suffix');
    my $mtp_preamble = &param_value('mtp_preamble');
    my $result="";
-   my $handled_tagnames="psfrag|begin|end|graphicspath|psfrag|includegraphics|input|include|multiinclude|convertMPtoPDF";
+   my $handled_tagnames="psfrag|begin|end|graphicspath|includegraphics|input|include|multiinclude|convertMPtoPDF";
    my $context_depth=0;
    my @graphic_params = ();
    
@@ -2222,18 +2290,29 @@ sub adjust_filenames {
             next;
          }
       } elsif ($name eq "includegraphics") {
+         my @suffixes = (@BITMAP_SUFFIXES, $PDF_ORIG_SUFFIX, @EPS_SUFFIXES,
+               $MPOST_SUFFIX);
+         my $suffixes_regexp = join("|", @suffixes);
+         $suffixes_regexp =~ s/\./\\./g;
+         my $found_suffix = undef;
+         my $found_file = undef;
+
          # cut off the suffix of eps, ps, *.gz and pstex graphics
          #s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)
          #\n?\}/$1}/sg;
-         $contents =~ s/\.(e?ps|pstex|e?ps\.gz)\s*$//;
-          # identify corresponding file
-          # translate to pdf (taking @graphic_params) into account
-          # add in tmp file list and in translated figure list
-         if ($mtp_preamble ne $NO) {
+         if ($contents =~ s/\.($suffixes_regexp|\d+)\s*$//) {
+            $found_suffix = $1; 
+         }
+         # identify corresponding file ((taking @graphic_params into account)
+         $found_file = identify_file($contents, \@suffixes);
+         # translate to pdf (taking @graphic_params into account)
+         # add in tmp file list and in translated figure list
+            
+         if ($mtp_preamble ne $NO and $found_suffix =~ /^\d+$/) {
             # replace the suffix '.#' with '-mp.#'
             #s/(\\includegraphics(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1
             #$MTP_TMP_BASESUFFIX\.$3}/sg;
-            $contents =~ s/(\.\d+?)\s*$/$MTP_TMP_BASESUFFIX$1/;
+            $contents .=~ $MTP_TMP_BASESUFFIX.'.'.$found_suffix;
          }
       } elsif ($name eq "input" or $name eq "include") {
          # replace the suffix 'pstex_t' with 'pdf_t'
@@ -2366,8 +2445,8 @@ sub convert_eps2pdf {
 
    ($image_base,$image_path,$suffix) = fileparse($image, '\.eps', '\.ps', '\.pstex', '\.gz');
    if ($suffix eq "\.gz") {
-	$zipped = 1;
-	($image_base,$dummy,$suffix) = fileparse($image_base, '\.eps', '\.ps', '\.pstex');
+      $zipped = 1;
+	   ($image_base,$dummy,$suffix) = fileparse($image_base, '\.eps', '\.ps', '\.pstex');
    }
    $image_name = $image_base . $suffix;
    $image_target = $image_path . $image_base . '.pdf';
