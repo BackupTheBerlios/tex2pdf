@@ -45,7 +45,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.11"
+MYRELEASE="2.2.12"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -1118,7 +1118,7 @@ prepare_document() {
    # wipe out pdf extension \includegraphics
    ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^]]*\]\)\?\({[^}]\+\)\.\(e\)*ps}/\1\2\3}/g" \
    -e "s/\([\]input{[^}]\+\.\)pstex_t}/\1pdf_t}/g" \
-   -e "s/\([\]\(input\|include\){\([^}]*\/\)\?[^}/.]\+\)\(\.tex\)\?}/\1\3${TMPBASESUFFIX}\4}/g" \
+   -e "s/\([\]\(input\|include\){\([^}]*\/\)\?[^}/.]\+\)\(\.tex\)\?}/\1${TMPBASESUFFIX}\4}/g" \
    -e "1,/^[\]begin{document}$/s/^[\]batchmode$//" \
    -e "$INSERTCOMMAND"' \
    \\usepackage{pslatex}' \
