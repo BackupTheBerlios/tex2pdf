@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.19";
+my $MYRELEASE="3.0.20";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1408,6 +1408,7 @@ sub configure {
 # parameters: none
 
 sub check_commands {
+   my $exec_epstopdf;
    ### check for which command
    &checkCommand("which","You can switch off all command checks to fix this.");
 
@@ -1415,6 +1416,16 @@ sub check_commands {
    # Homepage: http://tug.org/applications/pdftex
    &checkCommand("pdflatex","See pdftex homepage for details: http://tug.org/applications/pdftex");
    &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
+   $exec_epstopdf = `which epstopdf`;
+   chomp $exec_epstopdf;
+   if (&grep_file($exec_epstopdf, "-dCompatibilityLevel=1\\.1", $TRUE) > 0) {
+      &report(9, "Good: ghostscript option '-dCompatibilityLevel=1.1' detected "
+         ."in\n'$exec_epstopdf'.");
+   } else {
+      &report(4, "WARNING: no ghostscript option '-dCompatibilityLevel=1.1' "
+         ."in\n'$exec_epstopdf'. You may run into problems with the "
+         ."conversions of bitmaps.");
+   }
 
    if ( &param_value('thumbpdf') eq $YES ) {
       &checkCommand("thumbpdf","You can switch off thumbpdf support to fix this.");
