@@ -93,7 +93,7 @@ my $CONFIGURED=$FALSE;
 my $RUN_PSforPDF = $NO;
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.20";
+my $MYRELEASE="3.1.21";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -1175,7 +1175,7 @@ sub handle_option {
       }
       &set_param_value($key, $value);
    } elsif (defined(&type_enum_array($type))){
-      &set_enum_param($key, $value);
+      &set_enum_value($key, $value);
    } else {
       &set_param_value($key, $value);
    }
