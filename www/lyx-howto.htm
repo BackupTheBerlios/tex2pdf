@@ -16,13 +16,16 @@ What you have to do to make tex2pdf work from inside LyX:
 <ol>
    <li>Download tex2pdf (I suggest the Perl version, beta7 should be fine)
    from <a href=http://developer.berlios.de/projects/tex2pdf/>
-      http://developer.berlios.de/projects/tex2pdf/</a></li>
+   http://developer.berlios.de/projects/tex2pdf/</a></li>
    <li>Unpack it with '<code>tar -xfz FILE</code>'
    <li>Make sure it is executable with '<code>chmod a+rx tex2pdf</code>'
-   <li>Put it in your binary path, (e.g. /usr/local/bin) , e.g.
+   <li>Make sure that the first line in the script points to your Perl
+   executable; e.g. '/usr/bin/perl'. For most people the default setting
+   should be fine.'
+   <li>Move tex2pdf to your binary path, (e.g. /usr/local/bin) , e.g.
    '<code>mv tex2pdf /usr/local/bin</code>'.
-   <li>Run '<code>tex2pdf --configure</code>' ('<code>tex2pdf -r</code>' for
-   bash port) as the regular user who wants to use it.<br>
+   <li>Run '<code>tex2pdf --configure</code>' as the regular user who wants
+   to use it.<br>
    NOTE: The script refuses to start without prior configuration!
    <li>Have a look at possible command line options with '<code>tex2pdf --help
    </code>'
@@ -39,7 +42,7 @@ What you have to do to make tex2pdf work from inside LyX:
 <a href=mailto:tex2pdf-devel@lists.berlios.de>tex2pdf-devel@lists.berlios.de</a> and/or the lyx-users list.</li>
 </ol>
 
-To use tex2pdf from outside Lyx simply call it by
+To use tex2pdf from outside LyX simply call it by
    '<code>tex2pdf [OPTIONS] DOCUMENT.lyx</code>'
    or '<code>tex2pdf [OPTIONS] DOCUMENT.tex</code>'
 <p>
