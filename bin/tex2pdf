@@ -1574,7 +1574,7 @@ sub convert_tex2tmp {
    ### read, parse, modify and write the TeX body
    while(<SOURCE_FILE>) {
       # cut off the suffix of eps, ps, *.gz and pstex graphics
-      s/((\\includegraphics)(\[[^]]*\])?(\{[^}]+))\.(e?ps|pstex|eps.gz)\}/$1}/g;
+      s/((\\includegraphics)(\[[^]]*\])?(\{[^}]+))\.(e?ps|pstex|e?ps\.gz)\}/$1}/g;
 
       # replace the suffix 'pstex_t' with 'pdf_t'
       s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
@@ -1626,12 +1626,12 @@ sub convert_eps2pdf {
 
    if ( ! -f $image_target or -M $image_target > -M $image ) {
       print "Converting image $image_name to $image_target ...\n";
-        if ($zipped > 0) {
-    	    system("gunzip -c $image | epstopdf -f -outfile=$image_target")
-        	and &abort("epstopdf failed on $image_name: $!");
+      if ($zipped > 0) {
+    	   system("gunzip -c $image | epstopdf -f -outfile=$image_target")
+        	   and &abort("epstopdf failed on $image_name: $!");
 	} else {
-    	    system("epstopdf -outfile=$image_target  $image ")
-        	and &abort("epstopdf failed on $image_name: $!");
+         system('epstopdf', '-outfile='.$image_target, $image)
+        	   and &abort("epstopdf failed on $image_name: $!");
 	}
       if (&param_value('delete_pdf_images') eq $YES) {
          push(@TMPFILES, $image_target);
@@ -1672,7 +1672,8 @@ sub convert_pstex2pdf {
    print "Converting file $pstex_name ...\n";
 
    # find included EPS image(s)
-   @eps_images=&identify_files($pstex_file, 'includegraphics', ['pstex']);
+   @eps_images=&identify_files($pstex_file, 'includegraphics',
+      ['pstex', 'pstex\.gz']);
 
    # create .pdf_t file
    &convert_tex2tmp($pstex_file, $pstex_target, undef); 
@@ -1698,8 +1699,9 @@ sub convert_images {
    print "\nConverting images referenced in $tex_source.\n";
 
    ##### Get EPS images from the source file
-   print "\nScanning for EPS images (.eps/.ps/eps.gz):\n";
-   @eps_image_list=&identify_files($tex_source,'includegraphics',['eps','ps','gz']);
+   print "\nScanning for EPS images (.eps/.ps/ps.gz/eps.gz):\n";
+   @eps_image_list=&identify_files($tex_source,'includegraphics',
+      ['eps','ps','ps\.gz','eps\.gz']);
    if ( @eps_image_list > 0 ) {
       print join("\n", @eps_image_list);
       print "\n";
