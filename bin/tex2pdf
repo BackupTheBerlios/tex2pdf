@@ -1047,234 +1047,6 @@ sub extract_tag_text {
    return $result;
 }
 
-##### read and analyse configuration and options and adjust basic variables
-##### accordingly
-#### The following sources are considered (last value overrides previous)
-# general configuration (global variables in the script)
-# private configuration (in user's RC file)
-# command line options
-
-sub adjust_configuration {
-   my $configured=$FALSE;
-   my %opt_specs =();
-
-   ### Check number of arguments
-   if ( @ARGV == 0 ) {
-      print "\n$MYNAME: I need at least one argument!\n";
-      &usage;
-      exit 1;
-   }
-   
-   ##### command line options and private configuration files handling
-   
-   ### set parameters from rc file
-   if ( -f $RC_FILENAME ) {
-      &read_configuration $RC_FILENAME;
-      $configured=$TRUE;
-   }
-   
-   ### scan parameters 
-   foreach (keys %PARAMETER_LIST) {
-      %opt_specs{&option_specifier($_)} = \&handle_option;
-   }
-   GetOptions(%opt_specs);
-
-   if( ! $configured ) {
-      &abort "Script is not configured. Please run $MYNAME -r.";
-   }
-   
-   #### do some test in order to secure as good as possible that we will
-   #### succeed before to much work was done and maybe some data as damaged
-
-   ### Check number of arguments
-   if ( @ARGV != 1 ) {
-      print "\n$MYNAME: Wrong number of arguments. I need exactly one file.\n";
-      &usage;
-      exit 1;
-   }
-   
-   ### make sure that tmp_base_suffix is not empty
-   if ( &param_value('tmp_base_suffix') eq "" ) {
-      print "\n$MYNAME: CAUTION: Parameter tmp_base_suffix is not set.\n";
-      &abort "Using these settings would destroy the original files!";
-   }
-   
-   ##### check for required commands
-   if (&param_value('check_commands') ne $NO ) {
-      &check_commands;
-   }
-}
-
-#### prepare the logdir for the log files of the various called appplications
-
-sub prepare_logdir {
-   my $log_dir= &param_value('logdir');
-
-   ##### Preparing the LOGDIR
-   if (! &check_dir($log_dir, "Could not create log directory", $YES)) {
-      &abort("Please, set a different path and restart");
-   }
-   
-   if( <$log_dir/*.log> > 0 and &param_value('cleanlogs') eq $YES ) { 
-      print "\nRemoving old log files ($log_dir).\n";
-      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/thumbpdf-*.log>);
-   } else {
-      print "\nAll log files will be stored in ($log_dir).\n";
-   }
-}
-
-##### analyse document argument
-#### process the one and only argument (besides the options) which specifies
-#### which LaTeX document the user wants to translate to PDF
-#### a lyx file will be translated to LaTeX first
-
-sub process_doc_argument {
-   my $argument = $_[0];
-   my $doc_base;
-   my $doc_path;
-   my $arg_suffix;
-   
-   ##### Getting document name, suffix and path
-   ($doc_base,$doc_path,$arg_suffix) = fileparse($argument, ('\.tex', '\.lyx'));
-
-   if (! defined($arg_suffix) or $arg_suffix eq "") {
-      $arg_suffix = '.tex';
-   }
-   
-   ###### change working directory to document directory
-   if ( $doc_path ne "" ) {
-      chdir $doc_path;
-   }
-   
-   ###### make DOCPATH an absolute path
-   $doc_path = cwd;
-   
-   ###### Cut off suffix and do lyx or tex specific stuff
-   if ( $arg_suffix eq '.lyx' ) {
-      # Lyx document argument: generate Latex document if required
-      &generate_tex_file($doc_base.'.lyx', $doc_base.'.tex');
-   } else {
-      # LaTeX document argument: check access to given LaTeX document
-      &check_file($doc_base.'.tex', "Cannot read the specified LaTeX document!");
-   }
-   
-   return $doc_path.'/'.$doc_base.'.tex';
-}
-
-#### set theworking dir to the input path if the document has one and
-#### and determine the path for the result
-# parameter 1: main tex doc
-# return value: absolute path were the resulting pdf doc should be stored
-
-sub get_pdf_path {
-   my $texdoc = $_[0];
-   my $inputpath;
-   my $doc_path= cwd;
-   my $destination;
-   my $pdf_path;
- 
-   ###### change working directory to input_path if set
-   # When the files' path (images, included documents, etc.) in your document is
-   # relative to another directory than the PASSED document's directory.
-   # This is useful when the calling application (e.g. LyX) generates a temporary
-   # TeX file and calls the tex2pdf with it instead of the original file.
-   $input_path=&extract_tag_tex($texdoc, '\\def\\input\@path');
-   
-   ## check if input_path is ok
-   if ( defined ($input_path) and $input_path ne "" ) {
-      print "$MYNAME: Found an input path in the latex document: $input_path\n";
-      if( &check_dir($input_path, 'The retrieved input@path seems not to be valid.', $NO)) {
-         print "Change working directory to input path.\n";
-         chdir $input_path;
-      } else {
-          &abort ('I am lost.');
-      }
-   } else {
-      print "$MYNAME: No input path in the latex document found.\n";
-      print "Resources are expected to be relative to document's location: $doc_path\n";
-         $input_path=$doc_path;
-   }
-
-   ##### set the directory where the final pdf will be stored
-   $destination=&param_value('destination');
-   $pdf_path=undef;
-   
-   if ($destination eq 'custom' ) {
-      $pdf_path=&param_value('custom-path');
-   } elsif ($destination eq 'input') {
-      $pdf_path=$input_path;
-   }
-
-      if( ! defined($pdf_path) or $pdf_path eq "" or &check_dir($pdf_path,
-         'The specified destination directory for the final PDF documents is not valid.', $NO)) {
-      print "$MYNAME: Using document's instead of destination path: $doc_path\n";
-      $pdf_path=$doc_path;
-   }
-
-   return $pdf_path;
-}
-
-### generate hyperref parameters from given settings
-# parameter 1: main tex doc
-# return_value: result
-
-sub generate_hyperref_params {
-   my $texdoc = $_[0];
-   my $para;
-   my @params = ('pdftex');
-
-   ##### Set title and author from main LaTeX document or parameters
-   foreach my $info (('title', 'author')) {
-      my $value;
-
-      $value=&param_value("$info");
-      if (! defined($value) ) {
-         $value=&extract_tag_text($texdoc, $info);
-         if (! defined($value) ) {
-            print "\n$MYNAME: WARNING: Could not identify document's $info correctly.\n";
-            print "Maybe you have used a LaTeX tag inside the $info which confuses me.\n";
-            print "Adjust the $info of the LaTeX file in order to avoid the problem or\n";
-            print "you could set the $info parameter manually.";
-            $value= &param_value("default-$info");
-	    print "Using default-$info: $value\n";
-         }
-      }
-      if (! defined($value) or $value eq $NIL ) {
-            print "$info field set to $NIL - no value will be passed.\n";
-         } else {
-            print "Document's $info: $value\n";
-            push(@params, "pdf$info={$value}");
-         }
-      }
-   }
-   
-   print "\n";
-   
-   $para=&param_value('paper');
-   if ( $para ne $NIL ) { push(@params, $para); }
-   
-   if ( &param_value('linktocpage') eq $YES ) { push(@params, 'linktocpage'); }
-
-   $para=&param_value('colorlinks');
-   if ( $para ne $NIL ) {
-      $para= $para eq $YES ? 'true' : 'false';
-      push(@params, "colorlinks=$para");
-   }
-
-   if ( $para ne 'false' ) {
-      foreach (('linkcolor', 'pagecolor', 'urlcolor', 'citecolor')) {
-         $para=&param_value($_);
-      if ( $para ne $NIL ) { push(@params, "$_={$para}"); }
-   }
-
-   $para=&param_value('hyperref_opts');
-   if(defined($para) and $para ne "" and $para ne $NIL) {
-      push(@params, $para);
-   }
-   
-   return @params;
-}
-
 #### search for filenames in given TeX Tag in entire document
 ### skip all comments and duplicates while parsing
 # parameter 1: file to parse
@@ -1520,48 +1292,6 @@ sub convert_images {
    print "\nFinished converting for ${tex_source}.\n";
 }
 
-#### Prepare the main document and all referenced ones for the generation
-#### of the PDF document (including referenced images)
-# parameter 1: top level tex document
-
-sub prepare_documents {
-   my $main_tex_doc=$_[0];
-   my $main_tmp_doc = &get_tmp_filename($main_tex_doc);
-   @REF_DOCS=();
-
-   ##### Get the list of imported files from the tex file
-   &get_file_list($main_tex_doc);
-   
-   ## remove main file from list (first element; needs special handling)
-   shift @REF_DOCS;
-   
-   ## tell user about the identified refereneced docs
-   if ( @REF_DOCS > 0 ) {
-      print "\nFound the following referenced TeX files:\n";
-      foreach my $file (@REF_DOCS) {
-         print ">>>>> $file\n";
-      }
-   } else {
-      print "\nFound no included TeX files.\n";
-   }
-   
-   ##### Generate adjusted temp tex files and convert all their images
-   ## main doc
-   print "\n$MYNAME: Generating main temporary LaTeX document: $main_tmp_doc\n";
-   &convert_tex2tmp($main_tex_doc, $main_tmp_doc, $YES);
-   &convert_images($main_tex_doc);
-   
-   ## referenced docs
-   foreach my $file (@REF_DOCS) {
-      my $tmp_file = &get_tmp_filename($file);
-   
-      ### Insert pdf conversation tags in tex file and write it to tmp_file
-      print "\n$MYNAME: Generating temporary LaTeX document: $tmp_file\n";
-      &convert_tex2tmp($file, $tmp_file);
-      &convert_images($file);
-   }
-}
-
 ### run pdflatex
 # parameter $1: LaTeX file without extension
 # parameter $2: log-file where the full out put is stored
@@ -1662,6 +1392,276 @@ sub run_thumbpdf {
    push (@TMPFILES, glob 'thumb???.png');
    if ( -f "thumbpdf.pdf" ) { push (@TMPFILES, 'thumbpdf.pdf'); }
    if ( -f "thumbdta.tex" ) { push(@TMPFILES, 'thumbdta.tex'); }
+}
+
+##### read and analyse configuration and options and adjust basic variables
+##### accordingly
+#### The following sources are considered (last value overrides previous)
+# general configuration (global variables in the script)
+# private configuration (in user's RC file)
+# command line options
+
+sub adjust_configuration {
+   my $configured=$FALSE;
+   my %opt_specs =();
+
+   ### Check number of arguments
+   if ( @ARGV == 0 ) {
+      print "\n$MYNAME: I need at least one argument!\n";
+      &usage;
+      exit 1;
+   }
+   
+   ##### command line options and private configuration files handling
+   
+   ### set parameters from rc file
+   if ( -f $RC_FILENAME ) {
+      &read_configuration $RC_FILENAME;
+      $configured=$TRUE;
+   }
+   
+   ### scan parameters 
+   foreach (keys %PARAMETER_LIST) {
+      %opt_specs{&option_specifier($_)} = \&handle_option;
+   }
+   GetOptions(%opt_specs);
+
+   if( ! $configured ) {
+      &abort "Script is not configured. Please run $MYNAME -r.";
+   }
+   
+   #### do some test in order to secure as good as possible that we will
+   #### succeed before to much work was done and maybe some data as damaged
+
+   ### Check number of arguments
+   if ( @ARGV != 1 ) {
+      print "\n$MYNAME: Wrong number of arguments. I need exactly one file.\n";
+      &usage;
+      exit 1;
+   }
+   
+   ### make sure that tmp_base_suffix is not empty
+   if ( &param_value('tmp_base_suffix') eq "" ) {
+      print "\n$MYNAME: CAUTION: Parameter tmp_base_suffix is not set.\n";
+      &abort "Using these settings would destroy the original files!";
+   }
+   
+   ##### check for required commands
+   if (&param_value('check_commands') ne $NO ) {
+      &check_commands;
+   }
+}
+
+#### prepare the logdir for the log files of the various called appplications
+
+sub prepare_logdir {
+   my $log_dir= &param_value('logdir');
+
+   ##### Preparing the LOGDIR
+   if (! &check_dir($log_dir, "Could not create log directory", $YES)) {
+      &abort("Please, set a different path and restart");
+   }
+   
+   if( <$log_dir/*.log> > 0 and &param_value('cleanlogs') eq $YES ) { 
+      print "\nRemoving old log files ($log_dir).\n";
+      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/thumbpdf-*.log>);
+   } else {
+      print "\nAll log files will be stored in ($log_dir).\n";
+   }
+}
+
+##### analyse document argument
+#### process the one and only argument (besides the options) which specifies
+#### which LaTeX document the user wants to translate to PDF
+#### a lyx file will be translated to LaTeX first
+
+sub process_doc_argument {
+   my $argument = $_[0];
+   my $doc_base;
+   my $doc_path;
+   my $arg_suffix;
+   
+   ##### Getting document name, suffix and path
+   ($doc_base,$doc_path,$arg_suffix) = fileparse($argument, ('\.tex', '\.lyx'));
+
+   if (! defined($arg_suffix) or $arg_suffix eq "") {
+      $arg_suffix = '.tex';
+   }
+   
+   ###### change working directory to document directory
+   if ( $doc_path ne "" ) {
+      chdir $doc_path;
+   }
+   
+   ###### make DOCPATH an absolute path
+   $doc_path = cwd;
+   
+   ###### Cut off suffix and do lyx or tex specific stuff
+   if ( $arg_suffix eq '.lyx' ) {
+      # Lyx document argument: generate Latex document if required
+      &generate_tex_file($doc_base.'.lyx', $doc_base.'.tex');
+   } else {
+      # LaTeX document argument: check access to given LaTeX document
+      &check_file($doc_base.'.tex', "Cannot read the specified LaTeX document!");
+   }
+   
+   return $doc_path.'/'.$doc_base.'.tex';
+}
+
+#### set theworking dir to the input path if the document has one and
+#### and determine the path for the result
+# parameter 1: main tex doc
+# return value: absolute path were the resulting pdf doc should be stored
+
+sub get_pdf_path {
+   my $texdoc = $_[0];
+   my $inputpath;
+   my $doc_path= cwd;
+   my $destination;
+   my $pdf_path;
+ 
+   ###### change working directory to input_path if set
+   # When the files' path (images, included documents, etc.) in your document is
+   # relative to another directory than the PASSED document's directory.
+   # This is useful when the calling application (e.g. LyX) generates a temporary
+   # TeX file and calls the tex2pdf with it instead of the original file.
+   $input_path=&extract_tag_tex($texdoc, '\\def\\input\@path');
+   
+   ## check if input_path is ok
+   if ( defined ($input_path) and $input_path ne "" ) {
+      print "$MYNAME: Found an input path in the latex document: $input_path\n";
+      if( &check_dir($input_path, 'The retrieved input@path seems not to be valid.', $NO)) {
+         print "Change working directory to input path.\n";
+         chdir $input_path;
+      } else {
+          &abort ('I am lost.');
+      }
+   } else {
+      print "$MYNAME: No input path in the latex document found.\n";
+      print "Resources are expected to be relative to document's location: $doc_path\n";
+         $input_path=$doc_path;
+   }
+
+   ##### set the directory where the final pdf will be stored
+   $destination=&param_value('destination');
+   $pdf_path=undef;
+   
+   if ($destination eq 'custom' ) {
+      $pdf_path=&param_value('custom-path');
+   } elsif ($destination eq 'input') {
+      $pdf_path=$input_path;
+   }
+
+      if( ! defined($pdf_path) or $pdf_path eq "" or &check_dir($pdf_path,
+         'The specified destination directory for the final PDF documents is not valid.', $NO)) {
+      print "$MYNAME: Using document's instead of destination path: $doc_path\n";
+      $pdf_path=$doc_path;
+   }
+
+   return $pdf_path;
+}
+
+### generate hyperref parameters from given settings
+# parameter 1: main tex doc
+# return_value: result
+
+sub generate_hyperref_params {
+   my $texdoc = $_[0];
+   my $para;
+   my @params = ('pdftex');
+
+   ##### Set title and author from main LaTeX document or parameters
+   foreach my $info (('title', 'author')) {
+      my $value;
+
+      $value=&param_value("$info");
+      if (! defined($value) ) {
+         $value=&extract_tag_text($texdoc, $info);
+         if (! defined($value) ) {
+            print "\n$MYNAME: WARNING: Could not identify document's $info correctly.\n";
+            print "Maybe you have used a LaTeX tag inside the $info which confuses me.\n";
+            print "Adjust the $info of the LaTeX file in order to avoid the problem or\n";
+            print "you could set the $info parameter manually.";
+            $value= &param_value("default-$info");
+	    print "Using default-$info: $value\n";
+         }
+      }
+      if (! defined($value) or $value eq $NIL ) {
+            print "$info field set to $NIL - no value will be passed.\n";
+         } else {
+            print "Document's $info: $value\n";
+            push(@params, "pdf$info={$value}");
+         }
+      }
+   }
+   
+   print "\n";
+   
+   $para=&param_value('paper');
+   if ( $para ne $NIL ) { push(@params, $para); }
+   
+   if ( &param_value('linktocpage') eq $YES ) { push(@params, 'linktocpage'); }
+
+   $para=&param_value('colorlinks');
+   if ( $para ne $NIL ) {
+      $para= $para eq $YES ? 'true' : 'false';
+      push(@params, "colorlinks=$para");
+   }
+
+   if ( $para ne 'false' ) {
+      foreach (('linkcolor', 'pagecolor', 'urlcolor', 'citecolor')) {
+         $para=&param_value($_);
+      if ( $para ne $NIL ) { push(@params, "$_={$para}"); }
+   }
+
+   $para=&param_value('hyperref_opts');
+   if(defined($para) and $para ne "" and $para ne $NIL) {
+      push(@params, $para);
+   }
+   
+   return @params;
+}
+
+#### Prepare the main document and all referenced ones for the generation
+#### of the PDF document (including referenced images)
+# parameter 1: top level tex document
+
+sub prepare_documents {
+   my $main_tex_doc=$_[0];
+   my $main_tmp_doc = &get_tmp_filename($main_tex_doc);
+   @REF_DOCS=();
+
+   ##### Get the list of imported files from the tex file
+   &get_file_list($main_tex_doc);
+   
+   ## remove main file from list (first element; needs special handling)
+   shift @REF_DOCS;
+   
+   ## tell user about the identified refereneced docs
+   if ( @REF_DOCS > 0 ) {
+      print "\nFound the following referenced TeX files:\n";
+      foreach my $file (@REF_DOCS) {
+         print ">>>>> $file\n";
+      }
+   } else {
+      print "\nFound no included TeX files.\n";
+   }
+   
+   ##### Generate adjusted temp tex files and convert all their images
+   ## main doc
+   print "\n$MYNAME: Generating main temporary LaTeX document: $main_tmp_doc\n";
+   &convert_tex2tmp($main_tex_doc, $main_tmp_doc, $YES);
+   &convert_images($main_tex_doc);
+   
+   ## referenced docs
+   foreach my $file (@REF_DOCS) {
+      my $tmp_file = &get_tmp_filename($file);
+   
+      ### Insert pdf conversation tags in tex file and write it to tmp_file
+      print "\n$MYNAME: Generating temporary LaTeX document: $tmp_file\n";
+      &convert_tex2tmp($file, $tmp_file);
+      &convert_images($file);
+   }
 }
 
 ##### Generate the final PDF document
