@@ -57,9 +57,11 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.13";
+my $MYRELEASE="3.0.14";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
+my $MYUSER=$ENV{'USER'};
+my $USER_HOME=$ENV{'HOME'};
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
 my $NUM_PARAM_MIN=0;
@@ -92,7 +94,7 @@ my $TRUE=1;
 ### file to store private parameters
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdf3rc
-my $RC_FILENAME="$ENV{'HOME'}/.tex2pdf3rc";
+my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
 my $MYRCFILE_VERSION=6;
 my $RCVERSION_STRING="rcfile_version";
 
@@ -175,13 +177,13 @@ my $EXPLANATION=6;
 # parameter type action is not allowed
 # $key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation
 
-&add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s',
+&add_param('logdir', 'directory',"/tmp/tex2pdf-$MYUSER/", '', '=s',
    'set directory for saving log files',
    'What log directory should be used?',
    "The log directory is used to store information about the generation\n"
    ."process for later review, e.g. for debugging.");
 
-&add_param('lyxrc_path', 'directory', "$ENV{'HOME'}/.lyx/", '', '=s',
+&add_param('lyxrc_path', 'directory', "$USER_HOME/.lyx/", '', '=s',
    'set the configuration directory of LyX',
    'What is the directory for your LyX configuration data?',
    "If I have to generate a LateX file from a LyX file I need to clear two "
@@ -251,7 +253,7 @@ my $EXPLANATION=6;
    ."it\ndirectly) you might want to have the resulting PDF document located "
    ."at\ndifferent places.");
 
-&add_param('custom_path', 'directory', $ENV{'HOME'}.'/', '|d', '=s',
+&add_param('custom_path', 'directory', $USER_HOME.'/', '|d', '=s',
    "specify custom path for 'destination' parameter",
    'What custom directory should be used?',
    "When ever you specifiy to store the generated PDF document (command line "
@@ -1248,7 +1250,7 @@ sub write_configuration {
    chomp($date);
    
    print "# Configuration file for $MYNAME V$MYRELEASE\n";
-   print "# Generated $date by $ENV{'USER'} on $MYHOSTNAME\n";
+   print "# Generated $date by $MYUSER on $MYHOSTNAME\n";
    print "$RCVERSION_STRING=$MYRCFILE_VERSION\n";
    
    foreach my $key (@PARAMETER_ORDER) {
@@ -2441,12 +2443,10 @@ sub adjust_configuration {
       if( $rcfile_version == $MYRCFILE_VERSION ) {
          $valid_rcfile = $TRUE;
       } elsif ( $rcfile_version == 0 ) {
-         &report(2, "Could not determine version of read RC file. ",
-            "Reconfiguration required.");
+         &report(4, "Could not determine version of read RC file.");
       } else {
-         &report(2, "Version of read RC file ($rcfile_version) and ",
-            "this script ($MYRCFILE_VERSION) differs.\n",
-            "Reconfiguration required.");
+         &report(4, "Version of read RC file ($rcfile_version) and ",
+            "this script ($MYRCFILE_VERSION) differs.");
       }
    }
    
@@ -2460,7 +2460,9 @@ sub adjust_configuration {
    }
 
    if( ! $valid_rcfile ) {
-      &abort("No valid configuration file found. Please run $MYNAME --configure.");
+      &report(3,"No valid configuration file found. Please run '$MYNAME "
+         ."--configure'.\nUsing default values for missing parameters in this "
+         ."session.");
    }
 
    ### As the configuration process is done now, it is time to set the
