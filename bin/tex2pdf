@@ -63,7 +63,7 @@ $NIL="NOVALUE";
 
 # possible paper sizes
 # this list MUST have the syntax "PAPER1 PAPER2 ..."
-$POSSIBLE_PAPER="a4paper letterpaper legalpaper executivepaper $NIL";
+@POSSIBLE_PAPER = (qw< a4paper letterpaper legalpaper executivepaper >, $NIL);
 
 # papersize of the resulting pdf document
 $PAPERSIZE="a4paper";
@@ -74,7 +74,7 @@ $COLORLINKS="yes";
 
 # possible link colors
 # this list MUST have the syntax "COLOR1 COLOR2 ..."
-$LINK_COLORS="yellow red green cyan blue magenta black $NIL";
+@LINK_COLORS= (qw< yellow red green cyan blue magenta black >, $NIL);
 
 # color to use for page links in resulting document
 # some possible values: see above
@@ -122,12 +122,12 @@ $LINKTOCPAGE="yes";
 $PDFOUT="source_dir";
 
 # custom directory where the generated pdf file is stored
-$PDFCUSTOMDIR="$HOME";
+$PDFCUSTOMDIR=$ENV{'HOME'};
 
 # usage of bibtex
 # possible values: 'yes' (always run bibtex), 'no' (never run bibtex),
 # 'test' (scan tex file for a bibtex entry and run it if required)
-$POSSIBLE_BIBTEX="yes no test";
+@POSSIBLE_BIBTEX= qw< yes no test >;
 $BIBTEX="test";
 
 # maximal number of runs for pdflatex
@@ -141,7 +141,7 @@ $MAXRUNNO=6;
 $MINRUNNO=2;
 
 # directory for log files
-$LOGDIR="/tmp/tex2pdf-$USER/";
+$LOGDIR="/tmp/tex2pdf-$ENV{'USER'}/";
 
 # clean log files before execution
 # You might get problems with this when you run tex2pdf on several documents
@@ -200,12 +200,15 @@ $INSERTCOMMAND='/^[\]documentclass\(\[[^]]*\]\)\?{.*}/a';
 ### file to store private parameters
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdfrc
-$RC_FILENAME="$HOME/.tex2pdfrc";
+$RC_FILENAME="$ENV{'HOME'}/.tex2pdfrc";
 
 # variables for the rc file
 # list of all variables that should be stored/read in/from the rc file
 # this list MUST have the syntax "VARIABLE1 VARIABLE2 ..."
-$RC_VARIABLES="PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR DEFAULT_TITLE DEFAULT_AUTHOR LINKTOCPAGE ADDITIONAL_PARAMETERS PDFOUT PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERTCOMMAND";
+@RC_VARIABLES= qw< PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR
+   DEFAULT_TITLE DEFAULT_AUTHOR LINKTOCPAGE ADDITIONAL_PARAMETERS PDFOUT
+   PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS
+   COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERTCOMMAND >;
 
 ##### Functions ###########################################
 
@@ -213,14 +216,14 @@ $RC_VARIABLES="PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR DEFAU
 
 sub clean_up {
    print "$MYNAME: Removing temporary files ...\n";
-   if ( "$TMPFILES" ) { unlink glob "$TMPFILES"; }
-   if ( "$TMPBASE" ) { unlink glob "${TMPBASE}.*"; }
+   if ( $TMPFILES ) { unlink glob "$TMPFILES"; }
+   if ( $TMPBASE ) { unlink glob "$TMPBASE.*"; }
 }
 
 ###  exit with an error message
 
 sub abort {
-   print "$MYNAME: $@\n";
+   print "$MYNAME: @_\n";
    if ( "$CLEAN_ON_ABORT" eq "yes" ) { clean_up; }
    print "Aborting ...\n";
    exit 1;
@@ -233,8 +236,8 @@ sub abort {
 # $2 default value
 
 sub questionYN {
-   local $user_input;
-   local $default;
+   my $user_input;
+   my $default;
    $RESPONSE="";
    while ( $RESPONSE eq "" ) {
       if ( $_[1] eq "yes" ) {
@@ -267,11 +270,11 @@ sub questionYN {
 # $RESPONSE: the input number
 
 sub input_number {
-   local $user_input;
-   local $question = $_[0];
-   local $default = $_[1];
-   local $min_limit = $_[2];
-   local $max_limit = $_[3];
+   my $user_input;
+   my $question = $_[0];
+   my $default = $_[1];
+   my $min_limit = $_[2];
+   my $max_limit = $_[3];
    $RESPONSE="";
 
    while ( $RESPONSE eq "" ) {
@@ -279,15 +282,13 @@ sub input_number {
       $user_input = <STDIN>;
       chomp($user_input);
       
-      if ( ! "$user_input" ) {
+      if ( $user_input eq "" ) {
          $RESPONSE=$_[1];
-         return;
       } else {
          $_ = $user_input;
-         s/^([[:digit:]]+)$/$1/;
-         $RESPONSE = $_;
-         if ( ! "$RESPONSE" ) || ( $RESPONSE < $min_limit or $RESPONSE > $max_limit ) {
-	 $RESPONSE="";
+         if (s/^([[:digit:]]+)$/$1/ and $_ >= $min_limit and $_ <= $max_limit ) {
+            $RESPONSE = $_;
+	 } else {
             print "Invalid input. Please enter a positve integer from $min_limit to $max_limit.\n";
          }
       }
@@ -301,24 +302,24 @@ sub input_number {
 # $RESPONSE chosen value
 
 sub chooseValue {
-   local $QUESTION=$_[0];
-   local $DEFAULT_VALUE=$_[1];
-   local $INDEX=1;
-   local $DEFAULT_NUMBER=1;
+   my $question=$_[0];
+   my $default=$_[1];
+   my $list_index=1;
+   my $default_no=1;
 
    shift @_;
    shift @_;
 
-   print "$QUESTION\n";
-   while ( $INDEX <= @_ )
+   print "$question\n";
+   foreach (@_)
    {
-      print "$INDEX) $_[$INDEX]\n";
-      if ( $DEFAULT_VALUE eq $_[$INDEX] ) { $DEFAULT_NUMBER=$INDEX; }
-      $INDEX = $INDEX + 1;
+      print "$list_index) $_\n";
+      if ( $default eq $_ ) { $default_no=$list_index; }
+      $list_index = $list_index + 1;
    }
 
-   &input_number("Please enter the corresponding number", $DEFAULT_NUMBER, 1, @_);
-   $RESPONSE = $_[$RESPONSE];
+   &input_number("Please enter the corresponding number", $default_no, 1, scalar @_);
+   $RESPONSE = $_[$RESPONSE - 1 ];
 }
 
 ### interactively answer a question
@@ -326,13 +327,18 @@ sub chooseValue {
 # $2: current value
 
 sub input_text {
+   my $user_input;
+
    print "Suggested value: $_[1]\n";
-   questionYN "Do you want to keep this value?" "yes";
-   if ( "$RESPONSE" eq "yes" ) {
+   questionYN("Do you want to keep this value?", "yes");
+   if ( $RESPONSE eq "yes" ) {
       $RESPONSE="$_[1]";
    } else {
       print "$_[0] ";
-      read RESPONSE </dev/tty;
+      $user_input = <STDIN>;
+      chomp($user_input);
+      
+      $RESPONSE = $user_input;
    }
 }
 
@@ -340,18 +346,18 @@ sub input_text {
 # parameter $1: file to check
 # parameter $2: remark if check fails on specified file
 
-sub check_file  {
-   local $MESSAGE=$_[1];
-   if ( ! "$MESSAGE" ) { $MESSAGE="Required file cannot be accessed!"; }
+sub check_file {
+   my $file = $_[0];
+   my $message = defined($_[1]) ? $_[1] : "Required file cannot be accessed!";
 
-   if ( ! -f "$_[0]" ) {
+   if ( ! -f $file ) {
       print "\n";
-      print "$MYNAME: Sorry. I cannot find '$_[0]'.\n";
-      &abort "$MESSAGE";
-   } elif ( ! -r "$_[0]" ) {
+      print "$MYNAME: Sorry. I cannot find '$file'.\n";
+      &abort($message);
+   } elsif ( ! -r $file ) {
       print "\n";
-      print "$MYNAME: Sorry. File '$_[0]' exists, but is not readable.\n";
-      &abort "$MESSAGE";
+      print "$MYNAME: Sorry. File '$file' exists, but is not readable.\n";
+      &abort($message);
    }
 }
 
@@ -361,41 +367,41 @@ sub check_file  {
 # parameter $2: remark if check fails on specified directory
 # paramter $3: if yes, creation is allowed
 
-sub check_dir  {
-   local $MESSAGE=$_[1];
-   if ( ! "$MESSAGE" ) { $MESSAGE="Not a valid path!"; }
+sub check_dir {
+   my $directory = $_[0];
+   my $message = defined($_[1]) ? $_[1] : "Not a valid path!";
+   my $allow_creation = defined($_[2]) ? $_[2] : "no";
 
-   if ( `echo $_[0] | cut -b 1` ne "/" ) {
+   if ( index($directory, "/") != 0 ) {
       print "\n";
-      print "$MYNAME: Sorry. '$_[0]' is not an absolute path.\n";
-      print "$MESSAGE\n";
+      print "$MYNAME: Sorry. '$directory' is not an absolute path.\n";
+      print "$message\n";
       return 1;
-   } elif ( ! -d "$_[0]" ) {
+   } elsif ( ! -d $directory ) {
       # dir does not exist
       print "\n";
-      if ( "$3" eq "yes" ) {
+      if ( $allow_creation eq "yes" ) {
          # creation allowed
-         print "$MYNAME: I cannot find '$_[0]'. Try to create it.\n";
-	 if mkdir "$_[0]";
-	    print "Creation of '$_[0]' was successful.\n";
+         print "$MYNAME: I cannot find '$directory'. Try to create it.\n";
+	 if ( mkdir($directory, 0755) ) {
+	    print "Creation of '$directory' was successful.\n";
 	    return 0;
 	 } else {
-	    print "$MYNAME: Creation of '$_[0]' failed.\n";
-	    print "$MESSAGE\n";
+	    print "$MYNAME: Creation of '$directory' failed.\n";
+	    print "$message\n";
 	    return 1;
 	 }
       } else {
          # creation not allowed
-         print "$MYNAME: Sorry. Directory '$_[0]' does not exist.\n";
-         print "$MESSAGE\n";
+         print "$MYNAME: Sorry. Directory '$directory' does not exist.\n";
+         print "$message\n";
          return 1;
       }
-   } elif ( ! -w "$_[0]" ) {
+   } elsif ( ! -w $directory ) {
       # dir not writable
       print "\n";
-      print "$MYNAME: Sorry. Directory '$_[0]' exists, but is not writable.\n";
-      print "$MESSAGE\n";
-      print "\n";
+      print "$MYNAME: Sorry. Directory '$directory' exists, but is not writable.\n";
+      print "$message\n";
       return 1;
    }
    return 0;
@@ -407,38 +413,41 @@ sub check_dir  {
 # $3 if 'yes' allow creation of directory
 # $RESPONSE: the given directory 
 
-sub input_dir  {
-   local $user_input;
-   local $default_dir;
-   local $question;
+sub input_dir {
+   my $question = $_[0];
+   my $default_dir = $_[1];
+   my $allow_creation = defined($_[2]) ? $_[2] : "no";
+   my $user_input;
+   $RESPONSE = "";
 
-   if ( `echo $_[1] | cut -b 1` eq "/" and ( (! -d "$_[1]" and "$3" eq "yes") or (-d "$2" and -w "$2") ) ) {
-      $default_dir="$_[1]";
-      $question="$_[0] [$_[1]]: ";
+   if ( defined($default_dir) and index($default_dir, "/") == 0 
+        and ( (! -d $default_dir and $allow_creation eq "yes") 
+        or (-d $default_dir and -w $default_dir) ) ) {
+      $question .= " [$default_dir]: ";
    } else {
-      $default_dir="";
-      $question="$_[0]: ";
+      $default_dir = undef;
+      $question .= ": ";
    }
 
-   while true; {
+   while ( $RESPONSE eq "" ) {
       print "$question";
-      read user_input </dev/tty;
-      if ( ! "$user_input" and "$default_dir" ) {
+      $user_input = <STDIN>;
+      chomp($user_input);
+      
+      if( $user_input eq "" and defined($default_dir) ) {
          # user has only pressed <ENTER> and thereby confirmed default value
-	 if ! check_dir "$default_dir" "Default value was not valid. Please, give different directory." "$3";
+	 if( &check_dir("$default_dir","Default value was not valid. Please, give different directory.", $allow_creation ) != 0 ) {
 	    # default dir does not exist and cannot be created
-	    $default_dir="";
-	    $question="$_[0]: ";
+	    $default_dir = undef;
+	    $question = "$_[0]: ";
 	 } else {
 	    # valid default dir has already existed or has been created
-            $RESPONSE="$default_dir";
-            return;
+            $RESPONSE = $default_dir;
 	 }
       } else {
          # user has given a directory
-         if check_dir "$user_input" "This is not a valid directory!" "$3";
-	    $RESPONSE="$user_input";
-            return;
+         if( &check_dir($user_input,"This is not a valid directory!", $allow_creation) == 0 ) {
+	    $RESPONSE = $user_input;
          }
       }
    }
@@ -447,32 +456,48 @@ sub input_dir  {
 ### set a variable by a command line option to 'yes' or' no'; abort on error
 # $1 variable
 # $2 given value
-# $3 Option letter
+# $3 option letter
 
-sub setYNValue  {
-   case $_[1] in;
-      yes|y|Y|YES) export $_[0]="yes" ;;;
-      no|n|N|NO) export $_[0]="no" ;;;
- print "\n";
-         print "$_[0] requires 'yes' or 'no'." ;
-         &abort "Illegal argument for option -$3: $_[1]";
-   esac;
+sub setYNValue {
+   my $variable = $_[0];
+   my $argument = $_[1];
+   my $option_letter = $_[2];
+
+   if( $argument =~ /^[yY]([Ee][Ss])?/ ) {
+      $$variable = "yes";
+   } elsif ( $argument =~ /^[Nn][Oo]?/ ) {
+      $$variable = "no";
+   } else {
+      print "\n";
+      print "$variable requires 'yes' or 'no'." ;
+      &abort("Illegal argument for option -$option_letter: $argument");
+   }
 }
 
 ### set a variable by a command line option to a possible values; abort on error
 # $1 variable
 # $2 given value
-# $3 Option letter
+# $3 option letter
 # $4 list of possible values
 
-sub setValue  {
-   if ( ! "`echo $4 | $SEDCMD -n "\|$_[1]|p"`" ) {
+sub setValue {
+   my $variable = $_[0];
+   my $argument = $_[1];
+   my $option_letter = $_[2];
+
+   shift @_;
+   shift @_;
+   shift @_;
+
+   my @possible_values = @_;
+
+   if ( index("@possible_values", $argument) < 0 ) {
       print "\n";
-      print "$_[0] allows: $4.\n";
-      &abort "Illegal argument for option -$3: $_[1]";
+      print "$variable allows: @possible_values.\n";
+      &abort("Illegal argument for option -$option_letter: $argument");
       exit 1;
    }
-   $$_[0]=$_[1];
+   $$variable = $argument;
 }
 
 ### Check for required command with 'which'; abort if not found
@@ -480,15 +505,20 @@ sub setValue  {
 # parameter $2: remark if specified command is not found
 
 sub checkCommand {
-   $WHICHRESULT=`which $_[0] 2>&1`;
-   $WHICHBASE=`basename "$WHICHRESULT"`;
-   if ( "$WHICHBASE" ne "$_[0]" ) {
+   my $command = $_[0];
+   my $message = $_[1];
+
+   $_ = `which $command 2>&1`; 
+   chomp;
+   s|^(.*/)?([^/]+)$|$2|;
+
+   if ( $_ ne $command ) {
       print "\n";
-      system "which", $_[0];
+      system "which", $command;
       print "\n";
-      print "$MYNAME: Required command '$_[0]' seems not to be in your path.\n";
-      if ( "$_[1]" ) {
-         print "$_[1]\n";
+      print "$MYNAME: Required command '$command' seems not to be in your path.\n";
+      if ( defined($message) ) {
+         print "$message\n";
       }
       print "Aborting ...\n";
       exit 1;
@@ -498,16 +528,22 @@ sub checkCommand {
 ### save configuration in rc file
 
 sub write_configuration {
-   open RCFILE ">$RC_FILENAME" or
-      &abort "Could not open configuration file for writing ($RC_FILENAME)";
+   my $date;
+   open(RCFILE, ">$RC_FILENAME") or
+      &abort("Could not open configuration file for writing ($RC_FILENAME)");
    select RCFILE;
 
-   print "# Configuration file for $MYNAME V$MYRELEASE";
-   print "# Generated `date` by $USER on $HOSTNAME";
-   foreach ($RC_VARIABLES) {
-      print "$_=$$_";
+   $date = `date`;
+   chomp($date);
+   
+   print "# Configuration file for $MYNAME V$MYRELEASE\n";
+   print "# Generated $date by $ENV{'USER'} on $ENV{'HOSTNAME'}\n";
+   
+   foreach my $variable (@RC_VARIABLES) {
+      print "$variable".'='."$$variable\n";
    }
-   print "# EOF";
+   
+   print "# EOF\n";
    select STDOUT;
    close RCFILE;
 }
@@ -515,31 +551,36 @@ sub write_configuration {
 ### print the configuration parameters
 sub print_configuration {
    print "Configuration for $MYNAME V$MYRELEASE\n";
-   foreach ($RC_VARIABLES) {
-      print "$_=$$_";
+   
+   foreach my $variable (@RC_VARIABLES) {
+      print "$variable".'='."$$variable\n";
    }
+   
    print "\n";
 }
 
 ### load parameters from rc file
 
 sub read_configuration {
-   check_file $RC_FILENAME "Could not access configuration file";
-   open RCFILE "<$RC_FILENAME" or
-      &abort "Could not open configuration file for reading ($RC_FILENAME)";
-   select RCFILE;
+   my $line;
 
-   foreach ($RC_VARIABLES) {
-      $TEMPVAR=`$SEDCMD -n "s/^\($i=[[:print:]]*\)$/\1/1p" $RC_FILENAME`;
-      if ( "$TEMPVAR" ) {
-         $$_=`echo $TEMPVAR | cut -d = -f 2-`; 
+   &check_file($RC_FILENAME, "Could not access configuration file");
+   open(RCFILE, "<$RC_FILENAME") or
+      &abort("Could not open configuration file for reading ($RC_FILENAME)");
+
+   while (defined($line = <RCFILE>)) {
+      foreach my $parameter (@RC_VARIABLES) {
+         $_ = $line;
+         chomp;
+         if( s/^$parameter=([[:print:]]*)$/$1/ ) {
+            $$parameter = $_; 
+         }
       }
    }
-   select STDIN;
    close RCFILE;
 }
 
-#### Specific functions (for use with this script only)
+###################### Specific functions (for use with this script only)
 
 ### print usage of command
 
