@@ -112,6 +112,7 @@
 <br><hr>
 <a name "tex2pdf">
 <h1> Tex2pdf Release History </h1>
+<ul>
 <li><b>Mar 11nd, 2001 -- <a href="http://download.berlios.de/tex2pdf/tex2pdf-2.0b2.tar.gz">Release 2.0 beta 2</a></b><br>
 <ul>
   <li> renamed lyx2pdf script to tex2pdf to reflect change of functionality
@@ -121,6 +122,18 @@
   <li> fixed bug: only documents in current working directory have been found
   <li> changed WHICHON in COMMANDCHECK
   <li> minor changes 
+</ul>
+<br>
+<li><b>Mar 15nd, 2001 -- <a href="http://download.berlios.de/tex2pdf/tex2pdf-2.0.tar.gz">Release 2.0</a></b><br>
+<ul>
+  <li> bugfix: if the specified sed executable did not exist tex2pdf failed
+  <li> improved title and author handling: ignore text with included TeX tags
+  <li> scan for an input@path in the document and make it the working directory
+  <li> bugfix: sed command in getFileList could not handle files with a path
+  <li> additonal TeX code is now inserted before \begin{document}
+  <li> batchmode command is removed in TeX files to protect pdflatex execution
+  <li> introduced directory for log files that is cleaned up before execution
+  <li> cleaned up the code and other minor changes
 </ul>
 <br><hr>
 
