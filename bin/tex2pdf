@@ -1927,7 +1927,7 @@ sub adjust_filenames {
    $_ = $code;
 
    # Comment out the psfrag statements
-   s/(\\psfrag(\[[^]]*?\])*?\{.*\}\{.*\})/\%$1/g;
+   s/(\\psfrag\{.*\}(\[[^]]*?\])*?\{.*\})/\%$1/g;
 
    # cut off the suffix of eps, ps, *.gz and pstex graphics
    s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)\n?\}/$1}/sg;
