@@ -279,7 +279,7 @@ my $EXPLANATION=6;
    'What papersize should be used?',
    "I can set the papersize of the resulting PDF document");
 
-&add_param('citecolor', 'color', 'red', '', '=s',
+&add_param('citecolor', 'color', 'blue', '', '=s',
    'specify color of citations in PDF doc (hyperref)',
    'What color should be used for citation?', "");
 
@@ -287,11 +287,11 @@ my $EXPLANATION=6;
    'specify color of URLs in PDF doc (hyperref)',
    'What color should be used for URLs?', "");
 
-&add_param('linkcolor', 'color', 'green', '', '=s',
+&add_param('linkcolor', 'color', 'blue', '', '=s',
    'specify color of internal links in PDF doc (hyperref)',
    'What color should be used for normal internal links?', "");
 
-&add_param('pagecolor', 'color', 'magenta', '', '=s',
+&add_param('pagecolor', 'color', 'blue', '', '=s',
    'specify color of links to other pages in PDF doc (hyperref)',
    'What color should be used for page links?', "");
 
