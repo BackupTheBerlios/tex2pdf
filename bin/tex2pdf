@@ -1782,7 +1782,7 @@ sub pdffrag {
    # and the last line related with includegraphics
    # Therefore, we look for every paragraph starting with \psfrag and ending with an includegraphics.The chunk between 
    # them and themselves is considered the psfrag code that applies to the corresponding eps graphic.
-   while ($body =~ m/^*\\psfrag(.*?)((\\includegraphics)(\[[^]]*?\])?(\{([^}]*?(\.(e?ps|pstex|e?ps\.gz))?)\})?)/msg){
+   while ($body =~ m/\\psfrag(.*?)((\\includegraphics)(\[[^]]*?\])?(\{([^}]*?(\.(e?ps|pstex|e?ps\.gz))?)\})?)/msg){
        if (defined($7)) {
 	  $eps_file = $6;
 	  $suffix = $7;
