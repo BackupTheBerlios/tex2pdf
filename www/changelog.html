@@ -174,6 +174,33 @@
   <li> improved handling of log files
   <li> some other improvements
 </ul>
+<br>
+<li><b>Sep 09th, 2001 -- <a href="http://download.berlios.de/tex2pdf/tex2pdf-2.3.tar.gz">Release 2.3</a></b><br>
+<ul>
+  <li> Jean-Pierre Chretien added some more functionality<br>
+     (thanks to him for this patch):
+  <ul> 
+    <li> add a control variable REUSEPDF to activate the time stamp check which
+      avoids recalculating images,
+    <li> add a control variable ORIGINALBITMAP to use the original jpg, png or
+      pdf.orig file instead of back converting from converted eps (this one is
+      useful due to the compatibility option needed in epstopdf)
+    <li> eliminate the extension in image file names to let graphics deal
+      automagically with it
+    <li> deal with \inputted files (other than pstex_t) as well as \included
+      files (and consider the possibility to have or have not a extension).
+  </ul>
+  <li> Internal improvement in order to make tex2pdf suitable for more systems:
+  <ul>
+    <li> better setting of the sed executable (now in SEDEXE, SEDCMD) in order
+      to improve portability<br>
+      (thanks to Jean-Pierre Chretien for the report and his help)
+    <li> better error detection for called application<br>
+      (thanks to morten for the bug report)
+    <li> better extraction of referenced filenames from a tex files
+  </ul>
+  <li> bugfix: log files have never been cleaned up even if requested
+</ul>
 </ul>
 <br><hr>
 
