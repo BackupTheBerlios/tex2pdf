@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0beta8";
+my $MYRELEASE="3.0beta9";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -140,7 +140,7 @@ $DEF_VALUE=3;
 &add_param('print_config', 'action', undef, '|o', '',
    'print the current configuration and exit');
 
-&add_param('configure', 'action', undef, '|r', '',
+&add_param('configure', 'action', undef, '|c', '',
    'configure all parameters interactivly, store them and exit');
 
 &add_param('title', 'text', undef, '|t', '=s',
@@ -219,7 +219,7 @@ $DEF_VALUE=3;
    ."same time. If you\nwant to be on the safe side, answer '$NO'. Than you "
    ."have to remove the logs\nmanually from time to time.");
 
-&add_param('check_commands', 'bool', $YES, '|c', '!',
+&add_param('check_commands', 'bool', $YES, '', '!',
    'make sure that required shell commands does exist before start',
    'Should I look for required executables?',
    "As I use several different applications for PDF generation you might want "
@@ -1170,8 +1170,11 @@ sub print_version {
 
 sub print_usage {
    print "\nUsage: $MYNAME [OPTIONS] DOCUMENT.lyx\n";
-   print "       $MYNAME [OPTIONS] DOCUMENT[.tex]\n";
-   print "       $MYNAME [-h|-v|-o|-r]\n\n";
+   print "       $MYNAME [OPTIONS] DOCUMENT[.tex]\n\n";
+   print "       $MYNAME -c | --configure     modify/set up configuration\n";
+   print "       $MYNAME -h | --help          give a short help,\n";
+   print "       $MYNAME -o | --print_config  print current configuration\n";
+   print "       $MYNAME -v | --version       print my version\n\n";
 }
 
 ### print command help
@@ -1514,7 +1517,7 @@ sub convert_tex2tmp {
    
    if ( $adjust_preamble eq $YES ) {
       ### check if a4wide paper package is used
-      my $a4_regexp = '^[^%]*\\\\usepackage\{a4wide\}';
+      my $a4_regexp = '^[^%]*\\\\usepackage(\[widemargins\])?\{(a4|a4wide)\}';
       my $a4_extra_paper = (&grep_file($source, $a4_regexp, $TRUE) > 0);
 
       ### read, parse, modify and write the LaTeX preamble
