@@ -49,57 +49,54 @@
 use File::Basename;
 use Getopt::Long;
 use Cwd;
+use strict;
 
-####### Release version
+####### global variables
 
-$MYRELEASE="2.2.8pl1";
-$MYNAME="tex2pdf.pl";
-@TMPFILES=();
-$NUM_PARAM_MIN=0;
-$NUM_PARAM_MAX=9;  
-
-##### You will need pdftex and epstopdf for the generation!
-##### See pdftex homepage for details: http://tug.org/applications/pdftex/
-##### Have fun!!!
-
-##### Default parameters
-## Change the parameters below if you want to change the default settings for
-## all users.  If you only want to change your private parameters change them
-## in the RC_FILENAME
+our $MYRELEASE="2.4alpha1";
+our $MYNAME="tex2pdf.pl";
+our @TMPFILES=();
+our $NUM_PARAM_MIN=0;
+our $NUM_PARAM_MAX=9;  
+our @REF_DOCS;
 
 ### text token for no value
-$NIL="NOVALUE";
-$UNDEF="undefined";
+our $NIL="NOVALUE";
+our $UNDEF="undefined";
 
 ### token for boolean 'false', 'no' 
-$NO="no";
-$FALSE=0;
+our $NO="no";
+our $FALSE=0;
 
 ### token for boolean 'true', 'yes' 
-$YES="yes";
-$TRUE=1;
+our $YES="yes";
+our $TRUE=1;
 
 ### file to store private parameters
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdfrc
-$RC_FILENAME="$ENV{'HOME'}/.tex2pdfplrc";
-
+our $RC_FILENAME="$ENV{'HOME'}/.tex2pdfplrc";
 
 ########################## NEW PERL CONFIGURATON
 
-%CONFIGURATION = ();
-%PARAMETER_LIST = ();
-%PARAMETER_TYPES = ();
+our %CONFIGURATION = ();
+our %PARAMETER_LIST = ();
+our %PARAMETER_TYPES = ();
  
 ## Array index for the various information in each parameter specifcation
 ## referenced by %PARAMETER_LIST
-$TYPE=0;
-$OPT_ALIAS=1;
-$OPT_SPEC=2;
+our $TYPE=0;
+our $OPT_ALIAS=1;
+our $OPT_SPEC=2;
+our $DEF_VALUE=3;
+our $DESCRIPTION=4;
+our $EXPLANATION=5;
+our $QUESTION=6;
+
+$QUESTION=6;
 $DEF_VALUE=3;
 $DESCRIPTION=4;
 $EXPLANATION=5;
-$QUESTION=6;
 
 &add_param_type('paper',
    { 'a4paper' => 'a4 paper',
@@ -136,9 +133,8 @@ $NIL => 'do not set this value - leave it to hyperref'
 &add_param('clean_on_abort', 'bool', $NO, '', '!');
 &add_param('clean_logs', 'bool', $YES, '|l', '!');
 &add_param('check_commands', 'bool', $YES, '|c', '!');
-&add_param('regexp_append', 'text', '^\\documentclass(\[[^]]*\])?\{.*\}', '', '=s');
 &add_param('destination', 'destination', 'source', '', '=s');
-&add_param('custom_path', 'directory', $ENV{'HOME'}, '|d', '=s');
+&add_param('custom_path', 'directory', $ENV{'HOME'}.'/', '|d', '=s');
 &add_param('tmp_base_suffix', 'text', '-pdf', '', '=s');
 &add_param('colorlinks', 'three', $YES, '', '!');
 &add_param('paper', 'paper', 'a4paper', '|p', '=s');
@@ -172,12 +168,17 @@ $NIL => 'do not set this value - leave it to hyperref'
 ##### Functions ###########################################
 
 ### Index of the first occurence of a string in an array
-# parameter 1: list
-# parameter 2: text
+# parameter 1: text
+# parameter 2: list
 # return value: index or -1 if not element of the array 
 
 sub array_index {
-   my (@list, $text) = @_;
+   my ($text, @list) = @_;
+
+   if(!defined($text)) {
+      warn "Oppss! Cannot compare nothing.";
+      return -1;
+   }
 
    foreach (0..$#list) {
       if ( $list[$_] eq $text ) { return $_; }
@@ -217,7 +218,7 @@ sub checkCommand {
 
    if ( $_ ne $command ) {
       print "\n";
-      system "which", $command;
+      system("which", $command);
       print "\n$MYNAME: Required command '$command' seems not to be in your path.\n";
       if ( defined($message) ) {
          print "$message\n";
@@ -322,17 +323,16 @@ sub input_number {
 
 sub choose_value {
    my ($question, $default, $values_hash_ref)=@_;
-   my $list_index=1;
    my $default_no=1;
    my $chosen_no;
    my @possible_values = keys %$values_hash_ref;
 
    print "$question\n";
-   foreach (@possible_values)
+   foreach (0..$#possible_values)
    {
-      print "$list_index) " . ${$values_hash_ref}{$_} . "\n";
-      if ( $default eq $_ ) { $default_no=$list_index; }
-      $list_index = $list_index + 1;
+      my $no = $_ + 1;
+      print "$no) " . ${$values_hash_ref}{$possible_values[$_]} . "\n";
+      if ( $default eq $possible_values[$_] ) { $default_no=$no; }
    }
 
    $chosen_no=&input_number("Please enter the corresponding number", $default_no, 1, $#possible_values);
@@ -741,7 +741,9 @@ sub write_configuration {
    print "# Generated $date by $ENV{'USER'} on $ENV{'HOSTNAME'}\n";
    
    while (($key, $value) = each %CONFIGURATION ) {
-      print "$key".'='."$value\n" if(&param_type($key) ne 'action');
+      if(&param_type($key) ne 'action' and defined($value)) {
+         print $key.'='.$value."\n";
+      }
    }
    
    print "# EOF\n";
@@ -755,10 +757,12 @@ sub print_configuration {
    my $key;
    my $value;
 
-   print "Configuration for $MYNAME V$MYRELEASE\n";
+   print "\nConfiguration for $MYNAME V$MYRELEASE\n";
    
    while (($key, $value) = each %CONFIGURATION ) {
-      print "$key".'='."$value\n" if(&param_type($key) ne 'action');
+      if(&param_type($key) ne 'action' and defined($value)) {
+         print $key.'='.$value."\n";
+      }
    }
    
    print "\n";
@@ -826,6 +830,8 @@ sub help {
 # return value: none
 
 sub configure {
+   my $maxrunno;
+
    print "\nConfiguration for tex2pdf.\n";
    print "The following answers are considered as defaults in later executions\n";
    print "of $MYNAME. You can change these values by using option -r.\n";
@@ -939,7 +945,7 @@ sub configure {
 
    print "\n----------------\n";
    print "$MYNAME can check for the required executables.\n";
-   &config_param("Should $MYNAME check for the required executables?",'commandcheck');
+   &config_param("Should $MYNAME check for the required executables?",'check_commands');
 
    print "\n----------------\n";
    print "$MYNAME can use thumbpdf to include thumbnails of the document pages.\n";
@@ -974,7 +980,7 @@ sub check_commands {
    }
 
    ### bibtex executable
-   if ( &param_value('BIBTEX') ne $NO ) {
+   if ( &param_value('bibtex') ne $NO ) {
    &checkCommand("which","You can switch off BibTeX support to fix this.");
    }
 }
@@ -1032,12 +1038,13 @@ sub generate_tex_file {
 #### search TeX document for a certain text tag (e.g. author, title)
 # parameter 1: file to parse
 # parameter 2: full TeX tag name
-# return value: contents of the tag as a string (undef if not found)
+# return value: list of the contents strings of all matching tags
 
-sub extract_tag_text {
+sub extract_tag_contents {
    my $source=$_[0];
    my $tag_name=$_[1];
-   my $result = undef;
+   my $text;
+   my @results=();
    my $error_message="Could not read TeX document to extract $tag_name";
 
    &check_file($source, $error_message.'.');
@@ -1046,15 +1053,17 @@ sub extract_tag_text {
 
    while(<SOURCE_FILE>) {
       s/([^\\])%.*$/$1/;
-      if( /\\$tag_name(\[[^{]*\])?{+([^{}]*)}/ ) {
-         $result=$2; 
-	 last;
+      while ( /\\($tag_name)(\[[^{]*\])?{+([^{}]*)}/ ) {
+         $text=$3; 
+	 die "Oopps!" if (!defined($text));
+	 push(@results, $text);
+	 $_ = $';
       }
    }
    
    close SOURCE_FILE;
    
-   return $result;
+   return @results;
 }
 
 #### search for filenames in given TeX Tag in entire document
@@ -1068,26 +1077,19 @@ sub extract_files {
    my $source=$_[0];
    my $tag_name=$_[1];
    my $suffix=$_[2];
-   my $matched_file;
+   my @matched_tags;
    my @found_files=();
 
-   &check_file($source, "Could not access TeX document to extract filenames.");
-   open(SOURCE_FILE, "<$source") or
-      &abort("Could not open TeX document to extract filenames ($source)");
-
-   while(<SOURCE_FILE>) {
-      chomp;
-      s/([^\\])%.*$/$1/;
-      while( m#\\$tag_name(\[[^{]*\])?\{(([^}]*/)?[^}/.]+($suffix))\}# ) {
-         $matched_file = $2; 
-         if( &array_index(@found_files, $matched_file) < 0 ) {
-	    push(@found_files, $matched_file);
+   @matched_tags = &extract_tag_contents($source, $tag_name);
+   
+   foreach (@matched_tags) {
+      if( m#^([^{}]*/)?[^{}/.]+($suffix)$# ) {
+         if( &array_index($_, @found_files) < 0 ) {
+	    push(@found_files, $_);
 	 }
       } 
    }
    
-   close SOURCE_FILE;
-
    return @found_files;
 }
 
@@ -1097,11 +1099,13 @@ sub extract_files {
 # parameter 1: tex file to start with
 
 sub get_file_list {
-   local $source = $_[0];
-   local @imports = ();
+   my $source = $_[0];
+   my @imports = ();
+   
 
    # This is the cycle avoidance logic.
-   if ( &array_index(@REF_DOCS, $source) < 0 ) {
+   if (!defined($source)) { die "OOOps!";}
+   if ( &array_index($source, @REF_DOCS) < 0 ) {
       # Make sure the file can be accessed
       &check_file($source, "Included TeX file seems not to be available. Path problem?");
 
@@ -1113,7 +1117,8 @@ sub get_file_list {
 
       # Recurse.
       foreach my $file (@imports) {
-         if( ! $file =~ /\.tex$/ ) { $file .= '.tex'; }
+         if( ! ($file =~ /\.tex$/) ) { $file .= '.tex'; }
+         print"\n$file\n";
          &get_file_list($file);
       }
    }
@@ -1132,8 +1137,7 @@ sub convert_tex2tmp {
    my $target = $_[1];
    my $hyperref_params_ref = $_[2];
    my $adjust_preamble = defined($hyperref_params_ref) ? $YES : $NO;
-   my $tmp_base_suffix = &param_value('tmp_base_suffix');
-   my $regexp_append=&param_value('regexp_append');
+   my $tmp_suffix = &param_value('tmp_base_suffix');
    my $read_err_msg = "Could not read original TeX document to generate temporary document";
    
    ### open source and target file
@@ -1158,7 +1162,7 @@ sub convert_tex2tmp {
          print $_;
    
          # append our extra TeX commands after the matching line
-         if ( /$regexp_append/ ) {
+         if ( /^\\documentclass(\[[^]]*\])?\{.*\}/ ) {
             print '\usepackage{pslatex}' . "\n";
             
    	    if ( &param_value('thumbpdf') eq $YES ) {
@@ -1179,9 +1183,9 @@ sub convert_tex2tmp {
    
    ### read, parse, modify and write the TeX body
    while(<SOURCE_FILE>) {
-      s/(\\includegraphics)(\[[^]]*\])?(\{[^}]+)\.(e?ps|pstex)\}/$1$2$3}/g;
+      s/((\\includegraphics)(\[[^]]*\])?(\{[^}]+))\.(e?ps|pstex)\}/$1}/g;
       s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
-      s/(\\(input|include)\{[^}]+)(\.tex)?\}/$1$tmp_base_suffix$3}/g;
+      s#(\\(input|include)\{([^}]*/)?[^}/.]+)((\.tex)?\})#$1$tmp_suffix$4#g;
 
       # print the read and manipulted line
       print $_;
@@ -1208,7 +1212,7 @@ sub convert_eps2pdf {
       my $suffix;
       my $image_target;
 
-      ($image_base,$image_path,$suffix) = fileparse($image, ('\.eps', '\.ps', '\pstex'));
+      ($image_base,$image_path,$suffix) = fileparse($image, '\.eps', '\.ps', '\.pstex');
       $image_name = $image_base . $suffix;
       $image_target = $image_path . $image_base . '.pdf';
       
@@ -1218,7 +1222,7 @@ sub convert_eps2pdf {
       if ( ! -f $image_target or -M $image_target > -M $image ) {
          print "Converting image $image_name ...\n";
          system("epstopdf", '-outfile='.$image_target, $image)
-	    or &abort("epstopdf failed on $image_name: $!");
+	    and &abort("epstopdf failed on $image_name: $!");
          push(@TMPFILES, $image_target);
       } else {
          print "$image_base.pdf newer than $image_name, conversion skipped...\n";
@@ -1275,7 +1279,7 @@ sub convert_images {
 
    ##### Get EPS images from the source file
    print "\nScanning for EPS images (.eps/.ps):\n";
-   @eps_image_list=&extract_files($tex_source, 'includegraphics', '\.e\?ps');
+   @eps_image_list=&extract_files($tex_source, 'includegraphics', '\.e?ps');
    if ( @eps_image_list > 0 ) {
       print "@eps_image_list\n";
    } else {
@@ -1316,7 +1320,11 @@ sub run_pdflatex {
    my $logfile=$_[1];
    my $errors=0;
    my $exit_status=0;
-   my $extra_options=&param_value('pdftex-opts');
+   my $extra_options=&param_value('pdftex_opts');
+
+   if( !defined($extra_options) or $extra_options eq $NIL ) {
+      $extra_options = "";
+   }
    
    print "Pdflatex is running. Please wait.\n\n";
    system("pdflatex --interaction nonstopmode $extra_options $texfile > $logfile");
@@ -1359,7 +1367,7 @@ sub handle_bibtex  {
       print "$MYNAME: BibTeX paramter set to '$YES'; running BibTeX.\n";
    } else {
       print "$MYNAME: Checking for BibTeX bibliography in document.\n";
-      if(`grep "^[^%]*[\]bibliography{" $auxfile.tex` ne "") {
+      if(`grep "^[^%]*[\\]bibliography{" $auxfile.tex` ne "") {
          $run_bibtex=$TRUE;
 	 print "Bibliography detected; running BibTeX.\n";
       } else {
@@ -1480,7 +1488,7 @@ sub prepare_logdir {
       &abort("Please, set a different path and restart");
    }
    
-   if( <$log_dir/*.log> > 0 and &param_value('cleanlogs') eq $YES ) { 
+   if( <$log_dir/*.log> ne "" and &param_value('clean_logs') eq $YES ) { 
       print "\nRemoving old log files ($log_dir).\n";
       unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/thumbpdf-*.log>);
    } else {
@@ -1530,12 +1538,13 @@ sub process_doc_argument {
 # parameter 1: main tex doc
 # return value: absolute input path
 
-sub handle_inputpath {
+sub process_inputpath {
    my $texdoc = $_[0];
    my $doc_base;
    my $doc_path;
    my $doc_suffix;
    my $input_path;
+   my @matches;
    
    ##### Getting document name, suffix and path
    ($doc_base,$doc_path,$doc_suffix) = fileparse($texdoc, ('\.tex'));
@@ -1545,7 +1554,9 @@ sub handle_inputpath {
    # relative to another directory than the PASSED document's directory.
    # This is useful when the calling application (e.g. LyX) generates a temporary
    # TeX file and calls the tex2pdf with it instead of the original file.
-   $input_path=&extract_tag_tex($texdoc, '\\def\\input\@path');
+   
+   @matches=&extract_tag_contents($texdoc, 'def\\\\input@path');
+   $input_path=$matches[0];
    
    ## check if input_path is ok
    if ( defined ($input_path) and $input_path ne "" ) {
@@ -1589,14 +1600,14 @@ sub get_target_name {
    $pdf_path=undef;
    
    if ($destination eq 'custom' ) {
-      $pdf_path=&param_value('custom-path');
+      $pdf_path=&param_value('custom_path');
    } elsif ($destination eq 'input') {
       $pdf_path=$input_path;
    } else {
       $pdf_path=$doc_path;
    }
 
-   if( ! defined($pdf_path) or $pdf_path eq "" or &check_dir($pdf_path,
+   if( ! defined($pdf_path) or $pdf_path eq "" or ! &check_dir($pdf_path,
       'The specified destination directory for the final PDF documents is not valid.', $NO)) {
       print "$MYNAME: Using document's instead of destination path: $doc_path\n";
       $pdf_path=$doc_path;
@@ -1620,13 +1631,14 @@ sub generate_hyperref_params {
 
       $value=&param_value("$info");
       if (! defined($value) ) {
-         $value=&extract_tag_text($texdoc, $info);
+         my @matches=&extract_tag_contents($texdoc, $info);
+         $value= $matches[0];
          if (! defined($value) ) {
             print "\n$MYNAME: WARNING: Could not identify document's $info correctly.\n";
             print "Maybe you have used a LaTeX tag inside the $info which confuses me.\n";
             print "Adjust the $info of the LaTeX file in order to avoid the problem or\n";
             print "you could set the $info parameter manually.";
-            $value= &param_value("default-$info");
+            $value= &param_value("default_$info");
 	    print "Using default-$info: $value\n";
          }
       }
@@ -1708,6 +1720,8 @@ sub prepare_documents {
       &convert_tex2tmp($file, $tmp_file, undef);
       &convert_images($file);
    }
+
+   return $main_tmp_doc;
 }
 
 ##### Generate the final PDF document
@@ -1784,13 +1798,14 @@ sub generate_pdf_doc {
 }
    
 ################## Lift off !!!! (main part) ##################
-@TMPFILES=();
 
-my $hyperref_params;
 my $texdoc;
 my $doc_argument;
 my $input_path;
 my $target_name;
+my @hyperref_params;
+my $new_pdf_doc;
+my $tmp_tex_doc;
 
 print "\n$MYNAME: Script starts (Release $MYRELEASE)\n";
 
@@ -1832,8 +1847,8 @@ $input_path = &process_inputpath($texdoc);
 ## determine the name for the result
 
 print "\n$MYNAME: Setting the correct name for the result.\n";
-$target_name = &get_targetname($texdoc, $input_path);
-   
+$target_name = &get_target_name($texdoc, $input_path);
+
 ## as much as possible is prepared in advance at this point
 ## so hopefully we will succeed in generating the PDF document
 
