@@ -1850,6 +1850,7 @@ sub convert_epsfrag2pdf {
    my $item;
    my $tex_file     = $_[0];
    my $eps_file     = $_[1];
+   my $options      = $_[2];
    my ($tex_target,$tex_src,$pdf_target,$frg_target,$tmp_target);
    my ($eps_base,$eps_path,$suffix);
    my $dvi_log;
@@ -1875,7 +1876,7 @@ sub convert_epsfrag2pdf {
         my %psfrag = %$item;
         $text .= '\\'.$psfrag{name}."{".$psfrag{contents}."}".$psfrag{extra_code}."\n";
       }
-      $text .= "\n\\includegraphics{$eps_file}\n\n";
+      $text .= "\n\\includegraphics[$options]{$eps_file}\n\n";
 
       &report(7, "Converting image $eps_file to $pdf_target ...\n");
       # Writing the simplified latex files with the psfrag substitution
@@ -2053,7 +2054,6 @@ sub process_textags {
       
       $name = $tag{name};
       $contents = $tag{contents};
-
       if ( $name eq "begin" ) {
          $CONTEXT_DEPTH++;
          if ($contents =~ /pspicture/) {
@@ -2152,7 +2152,8 @@ sub process_textags {
                if (@PSFRAG_TAGS != 0) {
                   report(7, "EPS graphic identified (psfrag tags present): "
                      .$found_file);
-                  &convert_epsfrag2pdf($tex_source,$found_file);
+                  my $params =$tag{params};
+                  &convert_epsfrag2pdf($tex_source,$found_file,$params);
                } else {
                   report(7, "EPS graphic identified: $found_file");
                   &convert_eps2pdf($found_file);
