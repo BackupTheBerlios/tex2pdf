@@ -2284,7 +2284,7 @@ sub convert_tex2tmp {
       $body = $&.$';
       if ($preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
 	 &report(6, "Psfrag substitution detected. Entering pdffrag process");
-         &pdffrag($preamble,$body);
+         &pdffrag($body);
       }
       $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
       $preamble = &process_textags($preamble);
