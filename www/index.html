@@ -5,11 +5,11 @@
 <body>
 <h1> Tex2pdf/Lyx2pdf Homepage </h1>
 The major goal of the tex2pdf script is to help people who do not know a lot
-about LaTeX or PDF generation (like me :-) to obtain a useable PDF document
+about LaTeX or PDF generation (like us :-) to obtain a useable PDF document
 without spending a lot of time on this issue.<br>
 Additionally, it might be even a useful tool for someone who knows about all
 these tricks, tools and everything, but wants to have it quick!<br>
-Anyway, I hope people can make use of it.
+Anyway, we hope people can make use of it.
 <h2>Description</h2>
 tex2pdf (formerly lyx2pdf) is a script that generates a PDF document from a
 LaTeX or LyX document using pdf(la)tex, hyperref and other tools. There is a
@@ -23,10 +23,10 @@ When the input file is a LyX document the script produces a LaTeX file with the
 LyX export function first and than processes the exported LaTeX document.<br>
 LaTeX documents are searched for referenced files (other LaTeX docs, images),
 prepared for pdflatex, included EPS/PS/PSTEX images are converted to PDF with 
-epstopdf and finally the script runs pdflatex, bibtex, makeindex, thumbpdf or 
-authorindex depending on the dependencies encountered. The entire behavior can
-be adjusted to your personal needs and workarounds for
-known problems with called applications are already integrated.<br>
+epstopdf and finally the script runs pdflatex, bibtex, makeindex, thumbpdf, 
+authorindex or ppower, depending on the dependencies encountered and the parameter
+selection. The entire behavior can be adjusted to your personal needs and
+workarounds for known problems with called applications are already integrated.<br>
 
 <h2>Primary dependencies</h2>
 <ul>
@@ -41,7 +41,7 @@ known problems with called applications are already integrated.<br>
    have been replaced by Perl now and it is only needed for the old bash port.
 </ul>
 
-<h2>Other dependencies</h2> Depending on the selected options tex2pdf supports the 
+<h2>Other dependencies</h2> Depending on the selected options, tex2pdf supports the 
 following tools:
 <ul>
    <li>bibtex: handles a bibliograhy and its references.
@@ -85,6 +85,14 @@ again.<br>
 There is also an <a href="ftp://ftp.berlios.de/pub/tex2pdf/">
 anonymous FTP Space</a> with some test data and some more stuff.
 
+<h2>Bugs and feature requests</h2>
+If you find a bug in tex2pdf please do not hesitate contact us by
+sending a bug report to the <a href="mailto:tex2pdf-devel@lists.berlios.de">developer mailing list</a>.<br>
+
+If you would like to see a new feature supported in forthcoming versions of tex2pdf, please send us a feature request 
+to the <a href="mailto:tex2pdf-devel@lists.berlios.de">developer mailing list</a>.
+
+
 <h2>Feedback and Help</h2>
 Anyone is invited to help to improve tex2pdf. Therefore any kind of feedback
 is welcome. Maybe you even would like to hack the code and send us your
@@ -108,6 +116,21 @@ There are also two mailing lists:
  <li> <a href="lyx-howto.htm">Install/LyX HOWTO</a> 
 </ul>
 <br>
+
+<h2>Forthcoming features</h2>
+New features are scheduled to be implemented in forthcoming versions of tex2pdf. Several latex packages are claiming for tex2pdf support.
+Hopefully, the following latex packages will be supported in next beta release:
+<ul>
+ <li>bibtopics
+ <li>bibunits
+</ul>
+<br>
+
+<h2>Credits</h2>
+
+Many people out there have been helping us to keep up tex2pdf project. We would especially like to express our deep gratitude to
+Jean-Pierre Chretien,Fernando Perez, Herbert Voss and anyone else who has helped us.<br><br>
+
 Sooooo, have fun with it !!!! <br>
 <br><hr>
 
