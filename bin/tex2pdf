@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.15";
+my $MYRELEASE="3.0.16";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -95,7 +95,7 @@ my $TRUE=1;
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdf3rc
 my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
-my $MYRCFILE_VERSION=6;
+my $MYRCFILE_VERSION=7;
 my $RCVERSION_STRING="rcfile_version";
 
 ## set global variable configured to prevent access to configuration
@@ -190,6 +190,14 @@ my $EXPLANATION=6;
    ."temporary\nfiles in your LyX configuration directory. They will "
    ."be backuped and normally\ndo not contain any valuable data anyway. If "
    ."you do not use LyX, simply leave\nthe default.");
+
+&add_param('lyx_exec', 'text', "lyx", '', '=s',
+   'specify the LyX executable for converting lyx to latex',
+   'Which executable should I use for converting LyX docs to LaTeX?',
+   "I use LyX to generate a LateX file from a LyX file. As you might use\n"
+   ."several versions of LyX at the same time or do not have it in your path"
+   ."\nyou can give me the apropriate executable here (e.g. '/usr/bin/lyx')."
+   ."\nIn most cases the default 'lyx' should be fine.");
 
 &add_param('debug', 'bool', $NO, '', '!',
 'do not delete temporary files after execution and be as verbose as possible',
@@ -429,6 +437,8 @@ my $EXPLANATION=6;
 
 sub report {
    my $level;
+   my $verbosity;
+   my $log_verbosity;
    my @output;
 
    if (@_ < 2 ) {
@@ -438,17 +448,26 @@ sub report {
       ($level, @output) = @_;
    }
 
-   if ( $level <= $LOGFILE_VERBOSITY ) {
+   if($CONFIGURED) {
+      if( &param_value('debug') eq $NO ) {
+         $verbosity = &param_value('verbosity');
+         $log_verbosity = $LOGFILE_VERBOSITY;
+      } else {
+         $verbosity = 9;
+         $log_verbosity = 9;
+      } 
+   } else {
+      $verbosity = $PRE_CONFIG_VERBOSITY;
+      $log_verbosity = $LOGFILE_VERBOSITY;
+   }
+
+   if ( $level <= $log_verbosity ) {
       open LOGFILE, ">> $MYLOGFILE";
       print LOGFILE @output,"\n";
       close LOGFILE;
    }
 
-   if($CONFIGURED) {
-      if ($level <= &param_value('verbosity') ) {
-         print @output,"\n";
-      }
-   } elsif ($level <= $PRE_CONFIG_VERBOSITY ) {
+   if( $level <= $verbosity ) {
       print @output,"\n";
    }
 }
@@ -1486,8 +1505,10 @@ sub generate_tex_file {
    my $tex_doc = $_[1];
    my $lyx_dir;
    my $lyx_output;
+   my $lyx_exec=&param_value('lyx_exec');
    
    $lyx_dir = &param_value('lyxrc_path');
+   $lyx_dir .= '/' if( ! ($lyx_dir =~ m#/$#) );
    $lyx_dir .= '/' if( ! ($lyx_dir =~ m#/$#) );
 
    ### Check if LyX file can be accessed
@@ -1500,7 +1521,7 @@ sub generate_tex_file {
       "Remove it to force its new generation.");
    } else {
       ### export LaTeX file with LyX (needs a display!)
-      &checkCommand("lyx","Cannot generate LaTeX document without LyX!");
+      &checkCommand($lyx_exec, "Cannot generate LaTeX document without LyX!");
       &report(6, "\nExporting LaTeX file");
       
       ### move some files out of the way that stop LyX from exporting
@@ -1508,7 +1529,7 @@ sub generate_tex_file {
          if ( -f $file ) { rename($file, $file.'~'); }
       }
 
-      $lyx_output = `lyx --export latex $lyx_doc 2>&1`;
+      $lyx_output = `$lyx_exec --export latex $lyx_doc 2>&1`;
 
       ### check if LaTeX file now really exists
       if ( ! -f $tex_doc ) {
@@ -1637,10 +1658,13 @@ sub identify_files {
 
          # search for all possible files with allowed suffixes
          foreach my $allowed_suffix (@suffixes) {
-            my $possible_file= $path.$base.'.'.$allowed_suffix;
-            $kpse_result=`kpsewhich $possible_file`;
-            if ($kpse_result) {
-               last;
+            if (not $allowed_suffix =~ /[\]\)\(\|\[\\]/ ) {
+               # suffix is not a regexp, but a real extension
+               my $possible_file= $path.$base.'.'.$allowed_suffix;
+               $kpse_result=`kpsewhich $possible_file`;
+               if ($kpse_result) {
+                  last;
+               }
             }
          }
       } 
@@ -2082,6 +2106,8 @@ sub convert_images {
    @mp_image_list=&identify_files($tex_source,
       'convertMPtoPDF|includegraphics',['mp','(\d+)'],'\.(\d+)');
    # FIXME
+   # fixed for now by ignoring strange extension in identify_files
+   #
    # the above could cause problems as identify_files is expecting a list of
    # real extensions and not of regexps
    # maybe the only way to fix this is to adjust identify_files to ignore
