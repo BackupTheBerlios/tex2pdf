@@ -2,7 +2,7 @@
 
 #      tex2pdf - script for translating latex docs to pdf
 #
-#      Copyright (C) 2000,2001 by Steffen Evers (tron@cs.tu-berlin.de)
+#      Copyright (C) 2000,2001 by Steffen Evers
 #
 #      This program is free software; you can redistribute it and/or modify
 #      it under the terms of the GNU General Public License as published by
@@ -18,131 +18,31 @@
 #      along with this program; if not, write to the Free Software
 #      Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-# Release History:
+# Thanks a lot to all the people that have already contributed to this project!
 #
-# Aug 13th, 2000 -- Release 1.2
-#  * initial public version
-#     (thanks to Matej Cepl helping me with the pdflatex stuff)
-#     (thanks to Herbert Voss for helping me with the latex stuff)
-#     (thanks to all the people who supported me with their feedback)
+# The changelog with all the credits has become too long. So, I had to remove it
+# from the script, but it is still available online (see below). 
 #
-# Aug 14th, 2000 -- Release 1.3
-#  * added command to rename ~/.lyx/lyxpipe.out and ~/.lyx/lyxpipe.in
-#     (thanks to Herbert Voss for this hint)
-#  * converted the sed command to be suitable for a single line
-#  * added check for number of command line arguments
+# Special thanks to the following people for their contribution
+# (see the changelog for details):
+# Matej Cepl, Herbert Voss, Nicolas Marsgui, Bruce Foster, Mark van Rossum,
+# Matt Bandy, Garrick Chien Welsh, Stacy J. Prowell, Pavel Sedivy,
+# Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke
 #
-# Sep 15th, 2000 -- Release 1.4
-#  * added some reports while execution
-#  * stopped rerunning pdflatex when there are no more warnings/errors
-#     (thanks to Nicolas Marsgui for the idea and his patch)
-#  * made sed commands work with GNU sed v3.02 and made them more readable
-#     (thanks to Bruce Foster (bef@nwu.edu) for this patch)
-#  * introduced environment variable for sed executable
-#     (thanks to Bruce Foster for the idea and his patch)
-#  * added parameter section
-#  * added the possibility to give pdflatex some additional options
-#  * added check for required commands (sed, pdflatex, epstopdf)
-#  * added existence check for images and tex document
-#  * reduced output of pdflatex to warnings and errors
+# Project Homepage: http://tex2pdf.berlios.de
+# Developer Homepage: http://developer.berlios.de/projects/tex2pdf
+# Mailing lists: http://developer.berlios.de/mail/?group_id=57
+# Changelog: http://tex2pdf.berlios.de/changelog.html
 #
-# Sep 20th, 2000 -- Release 1.5
-#  * made command checking work on more systems and give advice
-#  * stopped pdflatex to prompt for input (output redirection=> invisible!)
-#  * some more status messages for pdflatex
-#  * minor changes
+# Anyone is invited to help to improve tex2pdf. Therefore any kind of feedback
+# is welcome. Maybe you even would like to hack the code and send us your
+# changes. This would help a lot and is highly appreciated. Think about it :-)
+# Subscribing to the developer mailing list might be a first step (see above).
 #
-# Oct 14th, 2000 -- Release 1.6
-#  * added bibtex support
-#     (thanks to Mark van Rossum for hinting to the problem)
-#     (thanks to Matt Bandy for his patch)
-#  * improved pdflatex error checking, hint to log file
-#  * introduced paramter to set the location of the generated PDF document
-#  * change working directory to document directory (for local images, etc.)
-#     (thanks to Matt Bandy for his patch)
-#  * put in tex command before 'makeletter' instead 'makeatother' (fixes problem
-#    with apacite package - requires different order)
-#     (thanks to Mark van Rossum for this patch)
-#  * introduced paramters to specifiy title, author and link colors
-#     (thanks to Matt Bandy for this patch)
-#  * minor changes
-#
-# Oct 15th, 2000 -- Release 1.7
-#  * fixed checkCommand function - buggy output redirection generated file '1'
-#     (thanks to Nicolas Marsgui for this patch)
-#
-# Oct 20th, 2000 -- Release 1.8 beta 1
-#  * fixed permission problems with multiple users (log-files)
-#     (thanks to Garrick Chien Welsh for this patch)
-#
-# Jan 14th, 2001 -- Release 1.8 beta 2
-#  * added conversation of pictures in included TeX files
-#     (thanks to Stacy J. Prowell <sprowell@cs.utk.edu> for his patch)
-#  * corrected sed expressions to check for backslash
-#  * introduced function section (code more structured)
-#  * added support for pstex_t files with included EPS image
-#     (thanks to Pavel Sedivy for his patch)
-#  * added check if TeX file is newer than LyX document
-#     (thanks to Pavel Sedivy for this idea)
-#  * minor changes
-#
-# Jan 21st, 2001 -- Release 1.8 beta 3
-#  * modified LyX export command to work with LyX 1.1.6
-#     (thanks to Stacy J. Prowell <sprowell@cs.utk.edu> for this hint)
-#
-# Mar 02nd, 2001 -- Release 1.8 beta 4
-#  * modified image searching to cover not only first image in a line
-#     (thanks to Holger Daszler for this hint)
-#
-# Mar 09th, 2001 -- Release 1.8
-#  * included convert_pstex2pdf tmp files in clean up
-#  * added support for PDF thumbnails
-#     (thanks to Olaf Gabler for his patch)
-#  * better code structure (more functions)
-#  * minor changes
-#
-# Mar 11th, 2001 -- Release 2.0 beta 2
-#  * renamed lyx2pdf script to tex2pdf to reflect change of functionality
-#  * accept both: lyx and tex files
-#     (thanks to Olaf Gabler for his patch)
-#  * restructured the code - most code is now in functions
-#  * fixed bug: only documents in current working directory have been found
-#  * changed WHICHON in COMMANDCHECK
-#  * minor changes
-#
-# Mar 14th, 2001 -- Release 2.0 beta 3
-#  * bugfix: if the specified sed executable did not exist tex2pdf failed
-#  * improved title and author handling: ignore text with included TeX tags
-#  * scan for an input@path in the document and make it the working directory
-#  * bugfix: sed command in getFileList could not handle files with a path
-#  * additonal TeX code is now inserted before \begin{document}
-#  * batchmode command is removed in TeX files to protect pdflatex execution
-#  * introduced directory for log files that is cleaned up before execution
-#  * cleaned up the code and other minor changes
-#
-# Mar 14th, 2001 -- Release 2.0
-#  * Release 2.0 beta 3 becomes Release 2.0
-#
-# Apr 06th, 2001 -- Release 2.1
-#  * bugfix: included graphics haven't been recognised with [...] parameter
-#     (thanks to Ahmet Sekercioglu for the bug report)
-#  * introduced parameters MINRUNNO, INSERTCOMMAND and CLEANLOGS
-#  * bugfix: env variable in single quotes (handling of included TeX files)
-#  * bugfix: TOC was not created as pdflatex has been running only once
-#     (thanks to Richard for the bug report)
-#  * bugfix: commented out \include and \bibliography have been processed
-#     (thanks to Ahmet Sekercioglu for the bug report)
-#  * added optional makeindex support (set MAKEINDEX=test to activate)
-#     (thanks to Steffen Macke for his work)
-#
-# ?????????????? -- Release 2.2
-#  * made the script a little bit safer (log files, temp files, parameters)
-#  * introduced experimental support for private configuration files and
-#    command line options (set USE_EXTENDED_OPTIONS=yes to activate)
-#     (thanks to Steffen Macke for this great patch)
+# Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.1.4"
+MYRELEASE="2.1.5"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -151,48 +51,55 @@ MYRELEASE="2.1.4"
 ##### Default parameters
 ## Change the parameters below if you want to change the default settings for
 ## all users.  If you only want to change your private parameters change them
-## in the RC_FILE (experimental - see below)
+## in the RC_FILE
 
 ### pdftex package options:
 ### see hyperref manual for more:/usr/share/texmf/doc/latex/hyperref/manual.pdf
 
+# possible paper sizes
+# this list MUST have the syntax "PAPER1 PAPER2 ..."
+POSSIBLE_PAPER="a4paper letterpaper legalpaper executivepaper"
+
 # papersize of the resulting pdf document
-# some possible values: a4paper, letterpaper, legalpaper, executivepaper
 PAPERSIZE=a4paper
 
 # use color for links in the resulting document
-# options: 'true' or 'false'
-COLORLINKS=true
+# options: 'yes' or 'no'
+COLORLINKS=yes
+
+# possible link colors
+# this list MUST have the syntax "COLOR1 COLOR2 ..."
+LINK_COLORS="red green cyan blue magenta black"
 
 # color to use for URLS in resulting document
-# some possible values:  red, green, cyan, blue, magenta, black
+# some possible values: see above
 URLCOLOR=blue
 
 # color to use for citations in resulting document
-# some possible values:  red, green, cyan, blue, magenta, black
+# some possible values: see above
 CITECOLOR=red
 
-# Title info for resulting document
-# leave blank for LaTeX document title
-TITLE=
+# Default title for document info in the resulting PDF 
+DEFAULT_TITLE=""
 
-# Author info for resulting document
-# leave blank for LaTeX document author
-AUTHOR=
+# Default author for document info in the resulting PDF 
+DEFAULT_AUTHOR=""
 
 ### other parameters
 
-# directory where the generated pdf file is stored
-# no value means the same directory as the LaTeX file
-PDFOUTDIR=
+# place where generated pdf file is stored:
+# source_dir - same directory as the LaTeX file
+# input_dir - same directory as the input files of the LaTeX file
+# custom      - specified directory PDFCUSTOMDIR
+PDFOUT=source_dir
 
-# the sed executable this script should use
-# no value means script should use the sed in your path
-SEDEXE=
+# custom directory where the generated pdf file is stored
+PDFCUSTOMDIR=$HOME
 
 # usage of bibtex
 # possible values: 'yes' (always run bibtex), 'no' (never run bibtex),
 # 'test' (scan tex file for a bibtex entry and run it if required)
+POSSIBLE_BIBTEX="yes no test"
 BIBTEX=test
 
 # maximal number of runs for pdflatex
@@ -223,7 +130,7 @@ COMMANDCHECK="yes"
 # requires ghostscript version 5.50 or higher to generate the thumbnails (PNG)
 # see more informations: /usr/share/texmf/doc/pdftex/thumbpdf/readme.txt
 # possible values: "yes" for thumbnails, "no" - without thumbnails
-THUMB="no"
+THUMBNAILS="no"
 
 # execution of the makeindex command for index handling
 # this should fix the problem with a missing document index
@@ -234,6 +141,10 @@ MAKEINDEX="yes"
 ##### expert parameters
 ## the following parameters should NOT be modified by regular users!
 ## study the script carefully before you change them !!!
+
+# the sed executable this script should use
+# no value means script should use the sed in your path
+SEDEXE=
 
 # additional options for pdflatex
 PDFTEXOPTS=""
@@ -251,22 +162,15 @@ TMPBASESUFFIX=-pdf
 # INSERTCOMMAND="/^[\]makeatletter$/i"
 INSERTCOMMAND="/^[\]documentclass\(\[[^]]*\]\)\?{.*}/a"
 
-# use private configuration files (RC_FILES) and command line options
-# This is experimental at the moment and should not be used for regular work
-# Be careful with it!
-# possible values: "yes" - use RCS_FILES and command line options,
-#                  "no"  - do not use this feature
-USE_EXTENDED_OPTIONS=no
-
 ### file to store private parameters
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdfrc
 RC_FILE=$HOME/.tex2pdfrc
 
-# print the configuration parameters and exit
-# used for debugging USE_EXTENDED_OPTIONS (see above)
-# possible values: "yes" - print and exit, "no" - regular execution
-PRINT_ONLY=no
+# variables for the rc file
+# list of all variables that should be stored/read in/from the rc file
+# this list MUST have the syntax "VARIABLE1 VARIABLE2 ..."
+RC_VARIABLES="PAPERSIZE COLORLINKS URLCOLOR CITECOLOR DEFAULT_TITLE DEFAULT_AUTHOR PDFOUT PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERTCOMMAND"
 
 ##### Functions ###########################################
 
@@ -397,6 +301,137 @@ check_file() {
    fi
 }
 
+##### Make sure that specified directory exists and is writable
+# return values: 0 - ok; 1 - error
+# parameter $1: directory to check
+# parameter $2: remark if check fails on specified directory
+# paramter $3: if yes, creation is allowed
+
+check_dir() {
+   local MESSAGE=$2
+   [ -z "$MESSAGE" ] && MESSAGE="Not a valid path!"
+
+   if [ ! "`echo $1 | cut -b 1`" == "/" ]
+   then
+      echo
+      echo "$MYNAME: Sorry. '$1' is not an absolute path."
+      echo "$MESSAGE"
+      return 1
+   elif [ ! -d "$1" ]
+   then
+      # dir does not exist
+      echo
+      if [ "$3" == "yes" ]
+      then
+         # creation allowed
+         echo "$MYNAME: I cannot find '$1'. Try to create it."
+	 if mkdir "$1"
+	 then
+	    echo "Creation of '$1' was successful."
+	    return 0
+	 else
+	    echo "$MYNAME: Creation of '$1' failed."
+	    echo "$MESSAGE"
+	    return 1
+	 fi
+      else
+         # creation not allowed
+         echo "$MYNAME: Sorry. Directory '$1' does not exist."
+         echo "$MESSAGE"
+         return 1
+      fi
+   elif [ ! -w "$1" ]
+   then
+      # dir not writable
+      echo
+      echo "$MYNAME: Sorry. Directory '$1' exists, but is not writable."
+      echo "$MESSAGE"
+      echo
+      return 1
+   fi
+   return 0
+}
+
+### interactively input an directory for data storage (absolute path)
+# $1 question
+# $2 default dir
+# $3 if 'yes' allow creation of directory
+# $RESPONSE: the given directory 
+
+input_dir() {
+   local user_input
+   local default_dir
+   local question
+
+   if [ "`echo $2 | cut -b 1`" == "/" ] \
+      && [ ! -d "$2" -a "$3" == "yes" -o -d "$2" -a -w "$2" ]
+   then
+      default_dir="$2"
+      question="$1 [$2]: "
+   else
+      default_dir=""
+      question="$1: "
+   fi
+
+   while true; do
+      echo -n "$question"
+      read user_input </dev/tty
+      if [ -z "$user_input" -a -n "$default_dir" ]
+      then
+         # user has only pressed <ENTER> and thereby confirmed default value
+	 if ! check_dir "$default_dir" "Default value was not valid. Please, give different directory." "$3"
+	 then
+	    # default dir does not exist and cannot be created
+	    default_dir=""
+	    question="$1: "
+	 else
+	    # valid default dir has already existed or has been created
+            RESPONSE="$default_dir"
+            return
+	 fi
+      else
+         # user has given a directory
+         if check_dir "$user_input" "This is not a valid directory!" "$3"
+         then
+	    RESPONSE="$user_input"
+            return
+         fi
+      fi
+   done
+}
+
+### set a variable by a command line option to 'yes' or' no'; abort on error
+# $1 variable
+# $2 given value
+# $3 Option letter
+
+setYNValue() {
+   case $2 in
+      yes|y|Y|YES) export $1=yes ;;
+      no|n|N|NO) export $1=no ;;
+      *) echo
+         echo "$1 requires 'yes' or 'no'." 
+         abort "Illegal argument for option -$3: $2"
+   esac
+}
+
+### set a variable by a command line option to a possible values; abort on error
+# $1 variable
+# $2 given value
+# $3 Option letter
+# $4 list of possible values
+
+setValue() {
+   if [ -z "`echo $4 | sed -n "\|$2|p"`" ]
+   then
+      echo
+      echo "$1 allows: $4."
+      abort "Illegal argument for option -$3: $2"
+      exit 1
+   fi
+   export $1=$2
+}
+
 ### Check for required command with 'which'; abort if not found
 # parameter $1: command to check
 # parameter $2: remark if specified command is not found
@@ -427,7 +462,7 @@ usage () {
    echo
    echo "Usage: $MYNAME [OPTIONS] DOCUMENT.lyx"
    echo "       $MYNAME [OPTIONS] DOCUMENT.tex"
-   echo "       $MYNAME [-h|-v|-p|-c]"
+   echo "       $MYNAME [-h|-v|-o|-r]"
    echo
 }
 
@@ -437,15 +472,21 @@ help () {
    echo
    echo "$MYNAME  Version $MYRELEASE"
    usage
-   echo "     -i : force makeindex"
-   echo "     -l : clean log files"
-   echo "     -t : create thumbnails"
-   echo "     -r : check for required commands"
+   echo " -h : print this message"
+   echo " -v : print version information"
+   echo " -o : print configuration parameters"
+   echo " -r : run configure parameters"
    echo
-   echo "     -h : print this message"
-   echo "     -v : print version information"
-   echo "     -p : print configuration parameters"
-   echo "     -c : configure parameters"
+   echo " -i BOOL   : makeindex"
+   echo " -l BOOL   : clean log files"
+   echo " -c BOOL   : check for required commands"
+   echo " -n BOOL   : generate thumbnails for PDF document"
+   echo " -t TITLE  : specify title for PDF document info"
+   echo " -a AUTHOR : specify author for PDF document info"
+   echo " -p SELECT : select papersize: $POSSIBLE_PAPER"
+   echo " -b SELECT : select bibtex handling: $POSSIBLE_BIBTEX"
+   echo " -d PATH   : custom directory where the final PDF is stored"
+   echo
 }
 
 ### print script version
@@ -460,10 +501,10 @@ print_version () {
 # parameters ($@): all arguments that were passed to the script by the shell
 
 check_arguments() {
-   if [ $# -eq 0 -o $# -gt 2 ]
+   if [ $# -eq 0 ]
    then
       echo
-      echo $MYNAME: Wrong number of arguments.
+      echo $MYNAME: I need at least one argument!
       usage
       exit 1
    fi
@@ -475,63 +516,69 @@ configure() {
    echo
    echo Configuration for tex2pdf.
    echo The following answers are considered as defaults in later executions
-   echo of $MYNAME. You can change these values by using option -c.
+   echo of $MYNAME. You can change these values by using option -r.
    echo The command-line options override these settings.
    echo
 
    echo "$MYNAME can set the papersize of the resulting PDF document."
-   echo "Possible values are: a4paper, letterpaper, legalpaper, executivepaper."
-   question "What papersize should be used?"
+   chooseValue "What papersize should be used?" $PAPERSIZE $POSSIBLE_PAPER
    PAPERSIZE=$RESPONSE
    echo
 
-   echo "$MYNAME can use color for URLs in the document."
-   if [ "$COLORLINKS" == "true" ]
-   then
-        questionYN "Should color be used for the URLs?" yes
-   else
-        questionYN "Should color be used for the URLs?" no
-   fi
-   if [ "$RESPONSE" == "yes" ]
-   then
-        COLORLINKS=true
-   else
-        COLORLINKS=false
-   fi
+   echo "$MYNAME can use different colors for links inside the PDF document."
+   questionYN "Should colors be used for links?" $COLORLINKS
+   COLORLINKS=$RESPONSE
    echo
 
-   if [ "$COLORLINKS" == "true" ]
+   if [ "$COLORLINKS" == "yes" ]
    then
         echo "It is possible to specify the URL color."
-        echo "Some possible values are: red, green, cyan, blue, magenta, black."
-        question "What URL color should be used?"
+        chooseValue "What color should be used for URLs?" $URLCOLOR $LINK_COLORS
         URLCOLOR=$RESPONSE
         echo
 
         echo "It is possible to specify the citation color."
-        echo "Some possible values are: red, green, cyan, blue, magenta, black."
-        question "What citation color should be used?"
+        chooseValue "What color should be used for citation?" $CITECOLOR $LINK_COLORS
         CITECOLOR=$RESPONSE
         echo
    fi
 
-   echo "The title of the resulting document can be specified."
-   echo "Leave blank in order to used LaTeX document title."
-   question "Resulting document title?"
-   TITLE=$RESPONSE
+   echo "A PDF document contains meta data about itself: the document info."
+   echo "Two of the info fields (title, author) can be set here as default"
+   echo "value which will be used in the case that $MYNAME cannot determine"
+   echo "proper settings from the LaTeX document."
    echo
 
-   echo "The author information of the resulting document can be specified."
-   echo "Leave blank in order to used LaTeX document author."
-   question "Resulting document author?"
-   AUTHOR=$RESPONSE
+   echo "The default title for the document info of all generated documents."
+   question "Default document title?"
+   DEFAULT_TITLE=$RESPONSE
    echo
 
-   echo "The output directory can be specified."
-   echo "Leave blank in order to use the same directory as the input file."
-   question "What output directory should be used?"
-   PDFOUTDIR=$RESPONSE
+   echo "The default author for the document info of all generated documents."
+   question "Default document author?"
+   DEFAULT_AUTHOR=$RESPONSE
    echo
+
+   echo "You can now specify in which directory the resulting document should"
+   echo "be written by default:"
+   echo "- 'source_dir' means the same directory as the LaTeX file."
+   echo "- 'input_dir' means the same directory as the input files of your"
+   echo "  LaTeX file (e.g. images, included documents, etc.)."
+   echo "  This path should be specified in the source LaTeX document otherwise"
+   echo "  it is identical with the 'source_dir' option."
+   echo "- 'custom' means you want to specify your own directory where the"
+   echo "  generated document should be written."
+   chooseValue "Which output directory?" $PDFOUT source_dir input_dir custom 
+   PDFOUT=$RESPONSE
+   echo
+   
+   if [ "$PDFOUT" == "custom" ]
+   then
+      echo "You have choosen to specifiy a custom output directory."
+      input_dir "What custom directory should be used?" "$PDFCUSTOMDIR" "yes"
+      PDFCUSTOMDIR=$RESPONSE
+      echo
+   fi
 
    echo "The sed executable to use can be specified."
    echo "Leave blank in order to use the sed in the path."
@@ -543,24 +590,24 @@ configure() {
    echo "Possible values are: 'yes' (always run bibtex), 'no' (never run"
    echo "bibtex) and 'test' (scan tex file for a bibtex entry and run it"
    echo "if required)."
-   question "How should bibtex be used?"
+   chooseValue "How should bibtex be used?" $BIBTEX $POSSIBLE_BIBTEX
    BIBTEX=$RESPONSE
    echo
 
    echo "The maximal number of runs for pdflatex can be specified."
-   question "What should be the maximum number of runs for pdflatex?"
+   input_number "What should be the maximum number of runs for pdflatex?" $MAXRUNNO 1 9
    MAXRUNNO=$RESPONSE
    echo
 
    echo "The minimal number of runs for pdflatex can be specified."
    echo "Possible values are: 1 ... $MAXRUNNO."
-   question "What should be the minimum number of runs for pdflatex?"
+   input_number "What should be the minimum number of runs for pdflatex?" $MINRUNNO 1 $MAXRUNNO
    MINRUNNO=$RESPONSE
    echo
 
-   echo "The log file directory can be specified."
-   echo "A possible choice is '/tmp/tex2pdf-$USER'."
-   question "What should be the log file directory?"
+   echo "The log directory is used to store information about the generation"
+   echo "process for later review, e.g. for debugging."
+   input_dir "What log directory should be used?" "$LOGDIR" "yes"
    LOGDIR=$RESPONSE
    echo
 
@@ -578,8 +625,8 @@ configure() {
 
    echo "$MYNAME can use thumbpdf to include thumbnails of the document pages."
    echo "This requires Ghostscript 5.50 or higher."
-   questionYN "Should PNG thumbnails be created?" $THUMB
-   THUMB=$RESPONSE
+   questionYN "Should PNG thumbnails be created?" $THUMBNAILS
+   THUMBNAILS=$RESPONSE
    echo
 
    echo "$MYNAME can force the call of makeindex if pdftex fails to do this."
@@ -588,8 +635,8 @@ configure() {
    echo
 
    echo "Additional options for pdflatex can be specified."
-   echo "You can leave this blank."
-   question "What additional options for pdflatex should be used."
+   echo "Normally, you can leave this blank."
+   question "What additional options for pdflatex should be used? :"
    PDFTEXOPTS="$RESPONSE"
    echo
 }
@@ -599,53 +646,23 @@ configure() {
 write_configuration() {
    if ! echo "# Configuration file for $MYNAME V$MYRELEASE" > $RC_FILE
    then
-      abort Couldn\'t write confguration file $RC_FILE
+      abort "Couldn't write confguration file '$RC_FILE'"
    fi
    echo "# Generated `date` by $USER on $HOSTNAME" >> $RC_FILE
-   echo PAPERSIZE=$PAPERSIZE >> $RC_FILE
-   echo COLORLINKS=$COLORLINKS >> $RC_FILE
-   echo URLCOLOR=$URLCOLOR >> $RC_FILE
-   echo CITECOLOR=$CITECOLOR >> $RC_FILE
-   echo TITLE=$TITLE >> $RC_FILE
-   echo AUTHOR=$AUTHOR >> $RC_FILE
-   echo PDFOUTDIR=$PDFOUTDIR >> $RC_FILE
-   echo SEDEXE=$SEDEXE >> $RC_FILE
-   echo BIBTEX=$BIBTEX >> $RC_FILE
-   echo MAXRUNNO=$MAXRUNNO >> $RC_FILE
-   echo MINRUNNO=$MINRUNNO >> $RC_FILE
-   echo LOGDIR=$LOGDIR >> $RC_FILE
-   echo CLEANLOGS=$CLEANLOGS >> $RC_FILE
-   echo PDFTEXOPTS=$PDFTEXOPTS >> $RC_FILE
-   echo COMMANDCHECK=$COMMANDCHECK >> $RC_FILE
-   echo THUMB=$THUMB >> $RC_FILE
-   echo TMPBASESUFFIX=$TMPBASESUFFIX >> $RC_FILE
-   echo MAKEINDEX=$MAKEINDEX >> $RC_FILE
-   echo INSERTCOMMAND=$INSERTCOMMAND >> $RC_FILE
+   for i in $RC_VARIABLES
+   do
+      echo $i=${!i} >> $RC_FILE
+   done
    echo "# EOF" >> $RC_FILE
 }
 
 ### print the configuration parameters
 print_configuration() {
    echo "Configuration for $MYNAME V$MYRELEASE"
-   echo PAPERSIZE=$PAPERSIZE
-   echo COLORLINKS=$COLORLINKS
-   echo URLCOLOR=$URLCOLOR
-   echo CITECOLOR=$CITECOLOR
-   echo TITLE=$TITLE
-   echo AUTHOR=$AUTHOR
-   echo PDFOUTDIR=$PDFOUTDIR
-   echo SEDEXE=$SEDEXE
-   echo BIBTEX=$BIBTEX
-   echo MAXRUNNO=$MAXRUNNO
-   echo MINRUNNO=$MINRUNNO
-   echo LOGDIR=$LOGDIR
-   echo CLEANLOGS=$CLEANLOGS
-   echo PDFTEXOPTS=$PDFTEXOPTS
-   echo COMMANDCHECK=$COMMANDCHECK
-   echo THUMB=$THUMB
-   echo TMPBASESUFFIX=$TMPBASESUFFIX
-   echo MAKEINDEX=$MAKEINDEX
-   echo INSERTCOMMAND=$INSERTCOMMAND
+   for i in $RC_VARIABLES
+   do
+      echo $i=${!i}
+   done
    echo
 }
 
@@ -654,16 +671,16 @@ print_configuration() {
 read_configuration() {
    if [ ! -r $RC_FILE ]
    then
-      echo $MYNAME: $RC_FILE doesn\'t exist or is not readable
-      abort Couldn\'t read configuration file
+      echo "$MYNAME: '$RC_FILE' does not exist or is not readable"
+      abort "Couldn't read configuration file"
    fi
 
-   for i in PAPERSIZE COLORLINKS URLCOLOR CITECOLOR TITLE AUTHOR PDFOUTDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS COMMANDCHECK THUMB TMPBASESUFFIX MAKEINDEX INSERTCOMMAND
+   for i in $RC_VARIABLES
    do
       TEMPVAR=`sed -n "s/^\($i=[[:print:]]*\)$/\1/1p" $RC_FILE`
       if [ -n "$TEMPVAR" ]
       then
-        export $i=`echo $TEMPVAR | cut -d = -f 2-`
+        export $i="`echo $TEMPVAR | cut -d = -f 2-`"
       fi
    done
 }
@@ -677,7 +694,7 @@ check_commands() {
 
    ### sed executable
    # GNU sed version 3.02 or higher is recommended
-   # Download: ftp://ftp.gnu.org/pub/gnu/sed"
+   # Download: ftp://ftp.gnu.org/pub/gnu/sed
    if [ "$SEDEXE" = "sed" ]
    then
       checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed"
@@ -688,9 +705,9 @@ check_commands() {
    checkCommand pdflatex "See pdftex homepage for details: http://tug.org/applications/pdftex"
    checkCommand epstopdf "See pdftex homepage for details: http://tug.org/applications/pdftex"
 
-   if [ "$THUMB" = "yes" ]
+   if [ "$THUMBNAILS" = "yes" ]
    then
-      checkCommand thumbpdf "You can switch off thumbpdf support by setting THUMB=no in the parameter section of $MYNAME."
+      checkCommand thumbpdf "You can switch off thumbpdf support by setting THUMBNAILS=no in the parameter section of $MYNAME."
    fi
 
    ### bibtex executable
@@ -880,7 +897,7 @@ prepare_document() {
    \\makeatother' \
    $1 > $TARGETFILE
 
-   if [ "$THUMB" = "yes" ]
+   if [ "$THUMBNAILS" = "yes" ]
    then
       ${SEDEXE} -e "$INSERTCOMMAND"' \
       \\usepackage{thumbpdf}' $TARGETFILE > ${TARGETFILE}2
@@ -900,11 +917,13 @@ prepare_document() {
 
 ### run pdflatex
 # parameter $1: LaTeX file without extension
+# parameter $2: log-file where the full out put is stored
 # return value: 0 - no errors (no rerun); 1 - errors (rerun required)
 
 run_pdflatex() {
    local TEXFILE=$1
    local errors=0
+   local PDFLOGFILE=$2
    echo "Pdflatex is running. Please wait."
    echo
    pdflatex --interaction nonstopmode ${PDFTEXOPTS} ${TEXFILE} > $PDFLOGFILE
@@ -1000,6 +1019,8 @@ run_thumbpdf() {
 MYNAME=`basename $0`
 TMPBASE=
 TMPFILES=
+TITLE=
+AUTHOR=
 
 echo
 echo "$MYNAME: Script starts (Release $MYRELEASE)"
@@ -1010,66 +1031,75 @@ echo "$MYNAME: Processing given parameters and arguments."
 check_arguments $@
 
 ##### command line options and private configuration files handling
-if [ "$USE_EXTENDED_OPTIONS" = yes ]
+CONFIGURE_REQ=no
+
+### scan parameters (1st level)
+OPTIND=1
+while getopts hvorb:c:p:i:t:a:l:n:d: OPTION
+do
+   case "$OPTION" in
+      h) help; exit 0 ;;
+      v) print_version; exit 0 ;;
+      o) PRINT_ONLY=yes ;;
+      r) CONFIGURE_REQ=yes;;
+	 b|c|p|i|t|a|l|n|d) ;;
+      *) usage; exit 1 ;;
+   esac
+done
+
+### set parameters from rc file
+if [ -f "$RC_FILE" ]
 then
-
-   CONFIGURE_REQ=no
-
-   ### scan parameters (1st level)
-
-   OPTIND=1
-   while getopts hvpc OPTION
-   do
-      case "$OPTION" in
-         h) help; exit 0 ;;
-         v) print_version; exit 0 ;;
-         p) PRINT_ONLY=yes ;;
-         c) CONFIGURE_REQ=yes;;
-         *) usage; exit 1 ;;
-      esac
-   done
-
-   ### set parameters from rc file
-   if [ -f "$RC_FILE" ]
-   then
-     read_configuration
-   else
-     if [ "$PRINT_ONLY" != yes ]
-     then
-        CONFIGURE_REQ=yes
-     fi
-   fi
-
-   ### configure parameters
-   if [ "$CONFIGURE_REQ" = "yes" ]
-   then
-     configure
-     write_configuration
-   fi
-
-   ### scan parameters (2nd level)
-   ### second level scan should be put here !!!
-   while getopts itlr OPTION
-   do
-     case "$OPTION" in
-       i) MAKEINDEX=yes ;;
-       t) THUMB=yes ;;
-       r) COMMANDCHECK=yes ;;
-       l) CLEANLOGS=yes ;;
-     esac
-   done
-
-   ### print configuration parameters
-
-   if [ "$PRINT_ONLY" = "yes" ]
-   then
-      print_configuration
-      exit 0
-   fi
-
-   #### remove all command line options, leave the document argument as $1
-   shift $(($OPTIND - 1))
+  read_configuration
+else
+  if [ "$PRINT_ONLY" != "yes" -a "$CONFIGURE_REQ" != "yes" ]
+  then
+     abort "Script is not configured. Please run $MYNAME -r."
+  fi
 fi
+
+### configure parameters
+if [ "$CONFIGURE_REQ" = "yes" ]
+then
+  configure
+  write_configuration
+  print_configuration
+  exit 0
+fi
+
+### scan parameters (2nd level)
+OPTIND=1
+while getopts b:p:i:t:a:l:c:n:d: OPTION
+do
+  case "$OPTION" in
+    i) setYNValue MAKEINDEX $OPTARG i ;;
+    t) TITLE=$OPTARG ;;
+    a) AUTHOR=$OPTARG ;;
+    b) setValue BIBTEX $OPTARG b "$POSSIBLE_BIBTEX" ;;
+    p) setValue PAPERSIZE $OPTARG p "$POSSIBLE_PAPER" ;;
+    c) setYNValue COMMANDCHECK $OPTARG r ;;
+    n) setYNValue THUMBNAILS $OPTARG n ;;
+    l) setYNValue CLEANLOGS $OPTARG l ;;
+    d) if check_dir $OPTARG
+       then
+	     PDFCUSTOMDIR="$OPTARG"
+	     PDFOUT=custom
+	  else
+	     abort "Please, choose a VALID path."
+	  fi ;;
+  esac
+done
+
+### print configuration parameters
+
+if [ "$PRINT_ONLY" = "yes" ]
+then
+   print_configuration
+   exit 0
+fi
+
+#### remove all command line options, leave the document argument as $1
+shift $(($OPTIND - 1))
 
 ##### Preparing the LOGDIR
 if ! mkdir -p ${LOGDIR}
@@ -1090,19 +1120,12 @@ else
    echo "All log files will be stored in ($LOGDIR)."
 fi
 
-# setting the log files for the output of pdflatex, bibtex and thumbpdf
-PDFLOGFILE=${LOGDIR}pdflatex-$$.log
-BIBTEXLOG=${LOGDIR}bibtex-$$.log
-THUMBPDFLOG=${LOGDIR}thumbpdf-$$.log
-
 ### make sure that TMPBASESUFFIX is not empty
 if [ -z "$TMPBASESUFFIX" ]
 then
    echo
    echo "$MYNAME: CAUTION: Parameter TMPBASESUFFIX is not set."
-   echo "Running $MYNAME with this settings would destroy the original files!"
-   echo "Aborting ..."
-   exit 1
+   abort "Using these settings would destroy the original files!"
 fi
 
 ##### check for required commands
@@ -1162,6 +1185,21 @@ fi
 PASSEDTEXDOC=${DOCPATH}${DOCBASE}.tex
 TMPBASE=${DOCBASE}${TMPBASESUFFIX}
 
+### set some more variables
+
+# setting the log files for the output of pdflatex, bibtex and thumbpdf
+PDFLOGBASE=${LOGDIR}pdflatex-$$-
+BIBTEXLOG=${LOGDIR}bibtex-$$.log
+THUMBPDFLOG=${LOGDIR}thumbpdf-$$.log
+
+# translate COLORLINKS to real value (see prepare_document)
+if [ "$COLORLINKS" == "yes" ]
+then
+   COLORLINKS=true
+else
+   COLORLINKS=false
+fi
+
 ##### Get title and author from main LaTeX document
 echo
 echo $MYNAME: Parsing LaTeX file
@@ -1171,11 +1209,17 @@ then
    if [ -z "$TITLE" ]
    then
       echo
-      echo "$MYNAME: WARNING: Could not identify the document's title correctly."
-      echo "Title field will be empty."
+      echo "$MYNAME: WARNING: Could not identify document's title correctly."
       echo "Maybe you have used a LaTeX Tag inside the title which confuses me."
-      echo "You can either set a title in the parameter section of $MYNAME or"
-      echo "change the title of the LaTeX file."
+      echo "You can either set a title on the command line using option -t or"
+      echo "change the title of the LaTeX file in order to avoid the problem."
+      if [ -n "$DEFAULT_TITLE" ]
+      then
+         echo "Using default title: $DEFAULT_TITLE"
+	 TITLE="$DEFAULT_TITLE"
+      else
+         echo "Title field will be empty."
+      fi
    fi
 fi
 
@@ -1185,11 +1229,17 @@ then
    if [ -z "$AUTHOR" ]
    then
       echo
-      echo "$MYNAME: WARNING: Could not identify the document's author correctly."
-      echo "Author field will be empty."
-      echo "Maybe you have used a LaTeX Tag inside the author's name which confuses me."
-      echo "You can either set an author in the parameter section of $MYNAME or"
-      echo "change the author of the LaTeX file."
+      echo "$MYNAME: WARNING: Could not identify document's author correctly."
+      echo "Maybe you have used a LaTeX Tag inside the author field which confuses me."
+      echo "You can either set an author on the command line using option -a or"
+      echo "change the author of the LaTeX file in order to avoid the problem."
+      if [ -n "$DEFAULT_AUTHOR" ]
+      then
+         echo "Using default title: $DEFAULT_AUTHOR"
+	 AUTHOR="$DEFAULT_AUTHOR"
+      else
+         echo "Author field will be empty."
+      fi
    fi
 fi
 
@@ -1203,7 +1253,32 @@ echo "Document's author: $AUTHOR"
 # This is useful when the calling application (e.g. LyX) generates a temporary
 # TeX file and calls the tex2pdf with it instead of the original file.
 INPUTPATH=`sed -n "s|^[\]def[\]input@path{\+\([^{}]*\)}\+|\1|1p" $PASSEDTEXDOC`
-[ -n "$INPUTPATH" ] && cd $INPUTPATH
+
+## check if INPUTPATH is ok
+if [ -n "$INPUTPATH" ]
+then
+   echo "$MYNAME: Found an input path in the latex document: $INPUTPATH"
+   if [ -d "$INPUTPATH" -a -r "$INPUTPATH" ]
+   then
+      echo "Change working directory to input path."
+      cd $INPUTPATH
+   else
+       abort "The retrieved input@path seems not to be valid."
+   fi
+else
+   echo "$MYNAME: No input path in the latex document found."
+   echo "Resources are expected to be relative to document's location: $DOCPATH"
+fi
+
+# set the directory where the final pdf will be stored
+PDFOUTDIR=
+case $PDFOUT in
+   custom) PDFOUTDIR=$PDFCUSTOMDIR ;;
+   input_dir) PDFOUTDIR=$INPUTPATH ;;
+   source_dir) PDFOUTDIR=$DOCPATH ;;
+esac
+
+[ -z "$PDFOUTDIR" ] && PDFOUTDIR=$DOCPATH
 
 ##### Get the list of imported files from the tex file
 FILES=
@@ -1245,7 +1320,7 @@ while [ $rerun -ne 0 -a $runno -le $MAXRUNNO ]
 do
    echo
    echo "************ Pdflatex run no. $runno *************"
-   if run_pdflatex ${TMPBASE} && [ $MINRUNNO -le $runno ]
+   if run_pdflatex ${TMPBASE} "${PDFLOGBASE}${runno}.log" && [ $MINRUNNO -le $runno ]
    then
       # no errors detected and MINRUNNO is processed
       rerun=0
@@ -1265,8 +1340,8 @@ done
 
 rerun=0
 
-### if the THUMB option is switched on then make thumbnails
-if [ "$THUMB" = "yes" ]
+### if the THUMBNAILS option is switched on then make thumbnails
+if [ "$THUMBNAILS" = "yes" ]
 then
    run_thumbpdf ${TMPBASE}
    rerun=1
@@ -1287,7 +1362,7 @@ if [ $rerun -ne 0 ]
 then
    echo
    echo "************ One final pdflatex run no. $runno *************"
-   run_pdflatex ${TMPBASE}
+   run_pdflatex ${TMPBASE} "${PDFLOGBASE}${runno}.log"
 fi
 
 ##### Clean up
