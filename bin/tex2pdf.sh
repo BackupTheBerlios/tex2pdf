@@ -44,7 +44,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.3"
+MYRELEASE="2.2.4"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -1131,13 +1131,13 @@ run_thumbpdf() {
       echo "I will continue, but maybe there will not be thumbs in the PDF doc."
    fi
 
-   echo
-   echo "Cleaning up (thumbpdf) ..."
-   echo
-   [ -f "$THUMBPDFLOG" ] && mv thumbpdf.log $THUMBPDFLOG
+   if [ -f thumbpdf.log ]
+   then 
+      mv thumbpdf.log $THUMBPDFLOG
+      echo
+      echo "$MYNAME: See $THUMBPDFLOG for details."
+   fi
 
-   echo
-   echo "$MYNAME: See $THUMBPDFLOG for details."
    echo
    echo "Cleaning up (thumbpdf) ..."
    echo
