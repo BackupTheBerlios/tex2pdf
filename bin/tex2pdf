@@ -52,7 +52,7 @@ use Cwd;
 
 ####### Release version
 
-$MYRELEASE="2.2.8pl";
+$MYRELEASE="2.2.8pl1";
 $MYNAME="tex2pdf.pl";
 @TMPFILES=();
 $NUM_PARAM_MIN=0;
@@ -1124,6 +1124,7 @@ sub convert_tex2tmp {
    my $hyperref_params_ref = $_[2];
    my $adjust_preamble = defined($hyperref_params_ref) ? $YES : $NO;
    my $tmp_base_suffix = &param_value('tmp_base_suffix');
+   my $regexp_append=&param_value('regexp_append');
    my $read_err_msg = "Could not read original TeX document to generate temporary document";
    
    ### open source and target file
@@ -1148,14 +1149,14 @@ sub convert_tex2tmp {
          print $_;
    
          # append our extra TeX commands after the matching line
-         if ( /&param_value('regexp_append')/ ) {
+         if ( /$regexp_append/ ) {
             print '\usepackage{pslatex}' . "\n";
             
-   	 if ( &param_value('thumbpdf') eq $YES ) {
+   	    if ( &param_value('thumbpdf') eq $YES ) {
                print '\usepackage{thumbpdf}' . "\n";
-   	 } else {
-   	    print "% no thumbpdf support\n";
-   	 }
+   	    } else {
+   	       print "% no thumbpdf support\n";
+   	    }
    	 
             print '\makeatletter' . "\n";
             print '\usepackage['. join(',', @$hyperref_params_ref) . ']{hyperref}' . "\n";
