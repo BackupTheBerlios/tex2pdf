@@ -29,7 +29,8 @@
 # (see the changelog for details):
 # Matej Cepl, Herbert Voss, Nicolas Marsgui, Bruce Foster, Mark van Rossum,
 # Matt Bandy, Garrick Chien Welsh, Stacy J. Prowell, Pavel Sedivy,
-# Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke
+# Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke,
+# Rainer Dorsch & friends, Jean-Pierre Chretien
 #
 # Project Homepage: http://tex2pdf.berlios.de
 # Developer Homepage: http://developer.berlios.de/projects/tex2pdf
@@ -53,7 +54,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0alpha1";
+my $MYRELEASE="3.0beta1";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -92,13 +93,10 @@ my $OPT_ALIAS=1;
 my $OPT_SPEC=2;
 my $DEF_VALUE=3;
 my $DESCRIPTION=4;
-my $EXPLANATION=5;
-my $QUESTION=6;
+my $QUESTION=5;
+my $EXPLANATION=6;
 
-$QUESTION=6;
 $DEF_VALUE=3;
-$DESCRIPTION=4;
-$EXPLANATION=5;
 
 &add_param_type('paper',
    [ ['a4paper' , 'a4 paper' ],
@@ -125,38 +123,191 @@ $EXPLANATION=5;
      [ 'custom', 'custom directory as specified' ]
    ] );
 
-# $key, $type, $def_value, $opt_alias, $opt_spec, $description, $explanation, $question
-&add_param('help', 'action', undef, '|h', '', 'print a short help text and exit');
-&add_param('version', 'action', undef, '|v', '', 'print the version of this script and exit');
-&add_param('print_config', 'action', undef, '|o', '', 'print the current configuration and exit');
-&add_param('configure', 'action', undef, '|r', '', 'configure all parameters interactivly, store them and exit');
-&add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s', 'set directory for saving log files');
-&add_param('lyxrc_path', 'directory', "$ENV{'HOME'}/.lyx/", '', '=s', 'set the configuration directory of LyX');
-&add_param('clean_on_abort', 'bool', $NO, '', '!', 'also delete temporary files after abort');
-&add_param('overwrite', 'bool', $NO, '', '!', 'ignore existence of files with same basename as temporary TeX files');
-&add_param('clean_logs', 'bool', $YES, '|l', '!', 'delete all log files in log directory before execution');
-&add_param('check_commands', 'bool', $YES, '|c', '!', 'make sure that required shell commands does exist before start');
-&add_param('destination', 'destination', 'source', '', '=s', 'specifiy final location of generated PDF document');
-&add_param('custom_path', 'directory', $ENV{'HOME'}.'/', '|d', '=s', "specify  custom path for 'destination' parameter");
-&add_param('tmp_base_suffix', 'text', '-pdf', '', '=s', 'specify the extension of the basename for temporary TeX files');
-&add_param('colorlinks', 'three', $YES, '', '!','activate colored links in PDF doc (hyperref)');
-&add_param('paper', 'paper', 'a4paper', '|p', '=s', 'specify papersize of the PDF doc (hyperref)');
-&add_param('citecolor', 'color', 'red', '', '=s','specify color of citations in PDF doc (hyperref)');
-&add_param('urlcolor', 'color', 'blue', '', '=s', 'specify color of URLs in PDF doc (hyperref)');
-&add_param('linkcolor', 'color', 'green', '', '=s', 'specify color of internal links in PDF doc (hyperref)');
-&add_param('pagecolor', 'color', 'magenta', '', '=s','specify color of links to other pages in PDF doc (hyperref)');
-&add_param('link_toc_page', 'bool', $YES, '', '!', 'link table of contents to pages instead of sections (hyperref)');
-&add_param('default_title', 'text', $NIL, '', '=s', 'set default PDF info title');
-&add_param('title', 'text', undef, '|t', '=s', 'set PDF info title for specified document');
-&add_param('default_author', 'text', $NIL, '', '=s','set default PDF info author');
-&add_param('author', 'text', undef, '|a', '=s', 'set PDF info author for specified document');
-&add_param('force_index', 'bool', $NO, '|i', '!', 'force extra inclusion of (existing) index in PDF doc');
-&add_param('bibtex', 'three', $NIL, '|b', '!', 'set bibtex behavior');
-&add_param('thumbpdf', 'bool', $NO, '|n', '!', 'generate thumbnails for PDF document');
-&add_param('maxrun', 'integer', 6, '', '=i', 'specify maximal number of pdflatex runs if problems are detected');
-&add_param('minrun', 'integer', 2, '', '=i','specify minimal number of pdflatex runs if no problems are detected');
-&add_param('pdftex_opts', 'text', $NIL, '', '=s','specify extra options for shell execution of pdflatex');
-&add_param('hyperref_args', 'text', $NIL, '', '=s','specify extra arguments for the hyperref package');
+# $key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation
+### Option parameters: these parameters have no default value and can not
+### be configured interactively, but only as a command line option
+### an option parameter is not allowed to have a question and is not allowed
+### to be of type action
+&add_param('help', 'action', undef, '|h', '',
+   'print a short help text and exit');
+
+&add_param('version', 'action', undef, '|v', '',
+   'print the version of this script and exit');
+
+&add_param('print_config', 'action', undef, '|o', '',
+   'print the current configuration and exit');
+
+&add_param('configure', 'action', undef, '|r', '',
+   'configure all parameters interactivly, store them and exit');
+
+&add_param('title', 'text', undef, '|t', '=s',
+   'set PDF info title for specified document');
+
+&add_param('author', 'text', undef, '|a', '=s',
+   'set PDF info author for specified document');
+
+### Full parameters
+&add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s',
+   'set directory for saving log files',
+   'What log directory should be used?',
+   "The log directory is used to store information about the generation\n"
+   ."process for later review, e.g. for debugging.");
+
+&add_param('lyxrc_path', 'directory', "$ENV{'HOME'}/.lyx/", '', '=s',
+   'set the configuration directory of LyX',
+   'What is the directory for your LyX configuration data?',
+   "If I have to generate a LateX file from a LyX file I need to clear two "
+   ."temporary\nfiles in your LyX configuration directory. They will "
+   ."be backuped and normally\ndo not contain any valuable data anyway. If "
+   ."you do not use LyX, simply leave\nthe default.");
+
+&add_param('clean_on_abort', 'bool', $NO, '', '!',
+   'also delete temporary files after abort',
+   'Should temporary files be deleted when aborting?',
+   "When the generation of the PDF file fails for some reason you might still "
+   ."want\nto keep already generated temporary files for some reason, e.g. "
+   ."debugging.\nIf you do not want to keep them set this parameter to 'yes'.");
+
+&add_param('tmp_base_suffix', 'text', '-pdf', '', '=s',
+   'specify the extension of the basename for temporary TeX files',
+   'What string should be used as basename suffix for temporary files?',
+   "I have to find names for my temporary files. Therefore I construct a new "
+   ."name\nfrom the original filename and this string. Me and various called "
+   ."applications\nwill then create several files with this constructed "
+   ."basename and different\nextensions. When cleaning up I will simple "
+   ."delete all files with the\nconstructed basenames I have used.");
+
+&add_param('overwrite', 'bool', $NO, '', '!',
+   'ignore existence of files with same basename as temporary TeX files',
+   'Should I overwrite existing (temporary) files?',
+   "In spite of the precaution with the appended base suffix, there still "
+   ."might\nexist files with an identical basename. If you set this option I "
+   ."will consider\nsuch files as old temporary files and overwrite them "
+   ."during generation.\nHowever, I will not remove any files with this "
+   ."constructed basename on the\nclean up. You have to remove them manually.");
+
+&add_param('clean_logs', 'bool', $YES, '|l', '!',
+   'delete all log files in log directory before execution',
+   'Should the old log files be removed before execution?',
+   "I can remove old log files prior to execution. However, you might "
+   ."experience\nproblems if you run the script on several documents at the "
+   ."same time. If you\nwant to be on the safe side, answer '$NO'. Than you "
+   ."have to remove the logs\nmanually from time to time.");
+
+&add_param('check_commands', 'bool', $YES, '|c', '!',
+   'make sure that required shell commands does exist before start',
+   'Should I look for required executables?',
+   "As I use several different applications for PDF generation you might want "
+   ."to \nmake sure that they are available before the real work starts.");
+
+&add_param('destination', 'destination', 'source', '', '=s',
+   'specifiy final location of generated PDF document',
+   'Where should I store the resulting PDF document?',
+   "Depending on the application that starts this script (or you if you call "
+   ."it\ndirectly) you might want to have the resulting PDF document located "
+   ."at\ndifferent places.");
+
+&add_param('custom_path', 'directory', $ENV{'HOME'}.'/', '|d', '=s',
+   "specify custom path for 'destination' parameter",
+   'What custom directory should be used?',
+   "When ever you specifiy to store the generated PDF document (command line "
+   ."or\nconfiguration) in a custom directory I will put it here.");
+
+&add_param('colorlinks', 'three', $YES, '', '!',
+   'activate colored links in PDF doc (hyperref)',
+   'Should colors be used for links?',
+   "I can use different colors for links inside the PDF document.\nYou can "
+   ."use '$UNDEF' to tell me that you would like to leave this up to\n"
+   ."independent hyperref configuration.");
+
+&add_param('paper', 'paper', 'a4paper', '|p', '=s',
+   'specify papersize of the PDF doc (hyperref)',
+   'What papersize should be used?',
+   "I can set the papersize of the resulting PDF document");
+
+&add_param('citecolor', 'color', 'red', '', '=s',
+   'specify color of citations in PDF doc (hyperref)',
+   'What color should be used for citation?', "");
+
+&add_param('urlcolor', 'color', 'blue', '', '=s',
+   'specify color of URLs in PDF doc (hyperref)',
+   'What color should be used for URLs?', "");
+
+&add_param('linkcolor', 'color', 'green', '', '=s',
+   'specify color of internal links in PDF doc (hyperref)',
+   'What color should be used for normal internal links?', "");
+
+&add_param('pagecolor', 'color', 'magenta', '', '=s',
+   'specify color of links to other pages in PDF doc (hyperref)',
+   'What color should be used for page links?', "");
+
+&add_param('link_toc_page', 'bool', $YES, '', '!',
+   'link table of contents to pages instead of sections (hyperref)',
+   'Should TOC be linked to pages?',
+   "The table of contents of the resulting PDF document is normally linked to "
+   ."the\ncorresponding section. However, you can also link it to the "
+   ."corresponding page\ninstead.");
+
+&add_param('default_title', 'text', $NIL, '', '=s',
+   'set default PDF info title',
+   'What is the default title?',
+   "A PDF document contains meta data about itself: the document info.\nOne "
+   ."of the info fields is the document title. You can set a default value\n"
+   ."which will be used in the case the script cannot determine a proper "
+   ."title from\nthe LaTeX document and you have not set one on the command "
+   ."line.\nYou can use '$NIL' to tell me that you would like to leave this "
+   ."up to\nindependent hyperref configuration.");
+
+&add_param('default_author', 'text', $NIL, '', '=s',
+   'set default PDF info author',
+   'What is the default author?',
+   "A PDF document contains meta data about itself: the document info.\nOne "
+   ."of the info fields is the document author. You can set a default value\n"
+   ."which will be used in the case the script cannot determine a proper "
+   ."author\nfrom the LaTeX document and you have not set one on the command "
+   ."line.\nYou can use '$NIL' to tell me that you would like to leave this "
+   ."up to\nindependent hyperref configuration.");
+
+&add_param('force_index', 'bool', $NO, '|i', '!',
+   'force explicit inclusion of (existing) index in PDF doc',
+   'Should the call of makeindex be forced?',
+   "Older versions of pdflatex have not included the index of a document\n"
+   ."automatically. If you are missing the index in your document you can "
+   ."force the\ncall of makeindex on the condition that an index file was "
+   ."generated.");
+
+&add_param('bibtex', 'three', $NIL, '|b', '!',
+   'set bibtex behavior',
+   'How should bibtex be used?',
+   "The bibtex usage can be specified.\nPossible values are: '$YES' (always "
+   ."run bibtex), '$NO' (never run bibtex)\nand '$UNDEF' (scan tex file for "
+   ."a bibtex entry and run it if required).");
+
+&add_param('thumbpdf', 'bool', $NO, '|n', '!',
+   'generate thumbnails for PDF document',
+   'Should PNG thumbnails be created?',
+   "I can use thumbpdf to include thumbnails of the document pages in the PDF "
+   ."file.\nThis requires Ghostscript 5.50 or higher.");
+
+&add_param('maxrun', 'integer', 6, '', '=i',
+   'specify maximal number of pdflatex runs if problems are detected',
+   'What should be the maximum number of runs for pdflatex?', "");
+
+&add_param('minrun', 'integer', 2, '', '=i',
+   'specify minimal number of pdflatex runs if no problems are detected',
+   'What should be the minimum number of runs for pdflatex?', "");
+
+&add_param('pdftex_opts', 'text', '', '', '=s',
+   'specify extra options for shell execution of pdflatex',
+   'What additional options for pdflatex should be used?',
+   "Sometimes, people would like to pass some extra options over to pdflatex. "
+   ."This\nis the right place to do that. Everyone else can leave this empty.");
+
+&add_param('hyperref_args', 'text', '', '', '=s',
+   'specify extra arguments for the hyperref package',
+   'What additional arguments should be passed to the hyperref package?',
+   "Sometimes, people would like to pass some extra options over to hyperref. "
+   ."This\nis the right place to do that. Everyone else can leave this empty.");
 
 # the following parameter types should be set now:
 #  'color' => \@VALUES,
@@ -576,17 +727,17 @@ sub add_param_type {
 # parameter 4: alias for command line options
 # parameter 5: specification for command line options
 # parameter 6: short description for help
-# parameter 7: explanation
-# parameter 8: question
+# parameter 7: question
+# parameter 8: explanation
 # return value: none
 
 sub add_param {
  
-   my ($key, $type, $def_value, $opt_alias, $opt_spec, $description, $explanation, $question) = @_;
+   my ($key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation) = @_;
  
    $CONFIGURATION{$key} = $def_value;
 
-   $PARAMETER_LIST{$key} = [ $type, $opt_alias, $opt_spec, $def_value, $description, $explanation, $question ];
+   $PARAMETER_LIST{$key} = [ $type, $opt_alias, $opt_spec, $def_value, $description, $question, $explanation ];
    
    push(@PARAMETER_ORDER, $key);
 
@@ -632,7 +783,7 @@ sub param_value {
    return $current_value;
 }
 
-### get the value of an existing parameter
+### get the type of an existing parameter
 # parameter 1: a parameter key
 # return value: parameter value
 
@@ -650,6 +801,46 @@ sub param_type {
       or &abort("parameter has unknown type: $key (type: $type)");
 
    return $type;
+}
+
+### determine if the given parameter is a full one (instead of option only)
+# parameter 1: a parameter key
+# return value: $TRUE - full parameter; $FALSE otherwise
+
+sub full_param {
+   my $key = $_[0];
+   my @param_def;
+
+   exists($PARAMETER_LIST{$key})
+      or &abort("unknown parameter: $key");
+   @param_def = @{$PARAMETER_LIST{$key}};
+
+   if ($param_def[$TYPE] ne 'action' and defined ($param_def[$QUESTION])) {
+      return $TRUE;
+   } else {
+      return $FALSE;
+   }
+}
+
+### get the output needed for configuration of this parameter 
+# parameter 1: a parameter key
+# return value: array - (description, explanation, question) 
+
+sub param_config_output {
+   my $key = $_[0];
+   my @param_def;
+   my $description; 
+   my $explanation; 
+   my $question; 
+
+   exists($PARAMETER_LIST{$key})
+      or &abort("unknown parameter: $key");
+   @param_def = @{$PARAMETER_LIST{$key}};
+   $description = $param_def[$DESCRIPTION];
+   $explanation = $param_def[$EXPLANATION];
+   $question = $param_def[$QUESTION];
+   
+   return ($description, $explanation, $question);
 }
 
 ### set the value of an existing parameter
@@ -723,7 +914,7 @@ sub handle_action_opt {
    my $value = $_[1];
 
    if ($key eq 'help') {
-      &help;
+      &print_help;
       
    } elsif ($key eq 'version') {
       &print_version;
@@ -743,7 +934,7 @@ sub handle_action_opt {
       &print_configuration;
 
    } else {
-      &usage; 
+      &print_usage; 
       exit 1;
    }
    exit 0;
@@ -784,20 +975,29 @@ sub set_enum_value {
 }
 
 ### configure an existing parameter interactively
-# parameter 1: question
-# parameter 2: a parameter key
+# parameter 1: a parameter key
 # return value: none
 
 sub config_param {
-   my $question = $_[0];
-   my $key = $_[1];
+   my $key = $_[0];
    my $type; 
    my $new_value;
    my $current_value;
+   my $description;
+   my $explanation;
+   my $question;
 
+   ### get required information about this parameter
    $type = &param_type($key); 
    $current_value = &param_value($key);
+   ($description, $explanation, $question) = &param_config_output($key);
 
+   ### tell the user the facts
+   print "\n\n----------------\n";
+   print "*** ".$description."\n\n";
+   print $explanation."\n\n" if($explanation ne "");
+   
+   ### ask him what he wants
    if ($type eq 'bool') {
       $new_value=&question_ynu($question, $current_value, $NO);
    } elsif ($type eq 'three') {
@@ -820,6 +1020,7 @@ sub config_param {
       $new_value=&choose_value($question,$current_value,$enum_array_ref);
    } 
 
+   ### store his choice
    &set_param_value($key, $new_value);
 }
 
@@ -843,7 +1044,7 @@ sub write_configuration {
    
    foreach my $key (@PARAMETER_ORDER) {
       my $value = $CONFIGURATION{$key};
-      if(&param_type($key) ne 'action' and defined($value)) {
+      if(&full_param($key)) {
          print $key.'='.$value."\n";
       }
    }
@@ -860,7 +1061,7 @@ sub print_configuration {
    
    foreach my $key (@PARAMETER_ORDER) {
       my $value = $CONFIGURATION{$key};
-      if(&param_type($key) ne 'action' and defined($value)) {
+      if(&full_param($key)) {
          print $key.'='.$value."\n";
       }
    }
@@ -891,38 +1092,42 @@ sub read_configuration {
 ### print script version
 
 sub print_version {
-   print "\n$MYNAME Version $MYRELEASE\n\n";
+   print "\n$MYNAME Version $MYRELEASE\n";
 }
 
 ###################### Specific functions (for use with this script only)
 
 ### print usage of command
 
-sub usage {
+sub print_usage {
    print "\nUsage: $MYNAME [OPTIONS] DOCUMENT.lyx\n";
-   print "       $MYNAME [OPTIONS] DOCUMENT.tex\n";
+   print "       $MYNAME [OPTIONS] DOCUMENT[.tex]\n";
    print "       $MYNAME [-h|-v|-o|-r]\n\n";
 }
 
 ### print command help
 
-sub help {
-   print "\n$MYNAME Version $MYRELEASE\n";
-   &usage;
-   print " -h : print this message\n";
-   print " -v : print version information\n";
-   print " -o : print configuration parameters\n";
-   print " -r : run configure parameters\n";
+sub print_help {
+   &print_version;
+   &print_usage;
+
+   foreach my $key (@PARAMETER_ORDER) {
+      my @param_def = @{$PARAMETER_LIST{$key}};
+      my $description = $param_def[$DESCRIPTION];
+      my $takes_value = $param_def[$OPT_SPEC] =~ /[=:]/ ? $TRUE : $FALSE;
+      my $negation = $param_def[$OPT_SPEC] eq '!' ? $TRUE : $FALSE;
+      my $alias = $param_def[$OPT_ALIAS];
+      
+      $alias =~ s/\|(([a-zA-Z])(\||$))/ | -$1/g;
+      $alias =~ s/\|(([a-zA-Z][a-zA-Z0-9_]+)(\||$))/ | --$1/g;
+
+      print "--";
+      print "[no]" if($negation);
+      print $key.$alias;
+      print " VALUE" if ($takes_value);
+      print ":\n   ".$description."\n\n";
+   }
    print "\n";
-   print " -i        : force call of makeindex\n";
-   print " -l        : clean log files\n";
-   print " -c        : check for required commands\n";
-   print " -n        : generate thumbnails for PDF document\n";
-   print " -t TITLE  : specify title for PDF document info\n";
-   print " -a AUTHOR : specify author for PDF document info\n";
-   print " -p PAPER  : select papersize\n";
-   print " -b        : run bibtex\n";
-   print " -d PATH   : custom directory where the final PDF is stored\n\n";
 }
 
 ### configure all tex2pdf parameters interactively
@@ -930,137 +1135,27 @@ sub help {
 # return value: none
 
 sub configure {
-   my $maxrunno;
 
-   print "\nConfiguration for tex2pdf.\n";
-   print "The following answers are considered as defaults in later executions\n";
-   print "of $MYNAME. You can change these values by using option -r.\n";
-   print "The command-line options override these settings.\n";
-   print "Many parameters can be set to '$NIL'. This means that NO value at\n";
-   print "all (not even an empty value) is passed over to the called\n";
-   print "application (e.g. latex package hyperref).\n";
+   print "\n--------------------------------------------------------\n";
+   print "\n***** Configuration for $MYNAME *****\n\n";
+   print "The following answers are considered as defaults in later ";
+   print "executions\n";
+   print "of $MYNAME. You can change these values by using the option -r ";
+   print "again.\nAdditionally, all command-line options override these settings.\n";
+   print "Many parameters can be set to '$NIL' or '$UNDEF'. This means that NO";
+   print "\nvalue at all (not even an empty value) is passed over to the ";
+   print "called\napplication (e.g. latex package hyperref).\n";
 
-   print "\n----------------\n";
-   print "$MYNAME can set the papersize of the resulting PDF document.\n";
-   &config_param("What papersize should be used?", 'paper');
+   $NUM_PARAM_MIN=1;
+   $NUM_PARAM_MAX=9;  
 
-   print "\n----------------\n";
-   print "The table of contents of the resulting PDF document is normally linked\n";
-   print "to the corresponding section. However, you can also link it to the\n";
-   print "corresponding page instead.\n";
-   &config_param("Should TOC be linked to pages?",'link_toc_page');
-
-   print "\n----------------\n";
-   print "$MYNAME can use different colors for links inside the PDF document.\n";
-   &config_param("Should colors be used for links?",'colorlinks');
-
-   if ( &param_value('colorlinks') eq $YES ) {
-        print "\n----------------\n";
-        print "It is possible to specify the color for page links.\n";
-        &config_param("What color should be used for page links?",'pagecolor');
-
-        print "\n----------------\n";
-        print "It is possible to specify the color for normal internal links.\n";
-        &config_param("What color should be used for normal links?",'linkcolor');
-
-        print "\n----------------\n";
-        print "It is possible to specify the URL color.\n";
-        &config_param("What color should be used for URLs?",'urlcolor');
-
-        print "\n----------------\n";
-        print "It is possible to specify the citation color.\n";
-        &config_param("What color should be used for citation?",'citecolor');
+   foreach my $key (@PARAMETER_ORDER) {
+      if(&full_param($key)) {
+         &config_param($key);
+      }
    }
 
-   print "\n----------------\n";
-   print "A PDF document contains meta data about itself: the document info.\n";
-   print "Two of the info fields (title, author) can be set here as default\n";
-   print "value which will be used in the case that $MYNAME cannot determine\n";
-   print "proper settings from the LaTeX document.\n\n";
-
-   print "The default title for the document info of all generated documents.\n";
-   print "$NIL will be recognized and means pass no value at all than.\n\n";
-   &config_param("Default document title?",'default_title');
-
-   print "\n----------------\n";
-   print "The default author for the document info of all generated documents.\n";
-   print "$NIL will be recognized and means pass no value at all than.\n\n";
-   &config_param("Default document author?",'default_author');
-
-   print "\n----------------\n";
-   print "If you like you can make me pass additional parameters to hyperref.\n";
-   print "See the hyperref manual for possible values and details.\n";
-   print "These parameters should normally have the format:\n";
-   print "PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...\n";
-   print "Leave blank for no additional values.\n\n";
-   &config_param("Additional parameters ?",'hyperref_args');
-
-   print "\n----------------\n";
-   print "You can now specify in which directory the resulting document should\n";
-   print "be written by default:\n";
-   print "- 'source' means the same directory as the LaTeX file.\n";
-   print "- 'input' means the same directory as the input files of your\n";
-   print "  LaTeX file (e.g. images, included documents, etc.).\n";
-   print "  This path should be specified in the source LaTeX document otherwise\n";
-   print "  it is identical with the 'source' option.\n";
-   print "- 'custom' means you want to specify your own directory where the\n";
-   print "  generated document should be written.\n";
-   &config_param("Which should the resulting PDF be put?",'destination');
-
-   print "\n----------------\n";
-   print "The custom output directory for the result when 'custom' is set.\n";
-   &config_param("What custom directory should be used?",'custom_path');
-
-   print "\n----------------\n";
-   print "The bibtex usage can be specified.\n";
-   print "Possible values are: '$YES' (always run bibtex), '$NO' (never run\n";
-   print "bibtex) and '$UNDEF' (scan tex file for a bibtex entry and run it\n";
-   print "if required).\n";
-   &config_param("How should bibtex be used?",'bibtex');
-
-   print "\n----------------\n";
-   print "The maximal number of runs for pdflatex can be specified.\n";
-   $NUM_PARAM_MIN=1;
-   $NUM_PARAM_MAX=9;
-   &config_param("What should be the maximum number of runs for pdflatex?",'maxrun');
-
-   print "\n----------------\n";
-   $maxrunno = &param_value('maxrun');
-   print "The minimal number of runs for pdflatex can be specified.\n";
-   print "Possible values are: 1 ... $maxrunno.\n";
-   $NUM_PARAM_MIN=1;
-   $NUM_PARAM_MAX= $maxrunno;
-   &config_param("What should be the minimum number of runs for pdflatex?",'minrun');
-
-   print "\n----------------\n";
-   print "The log directory is used to store information about the generation\n";
-   print "process for later review, e.g. for debugging.\n";
-   &config_param("What log directory should be used?",'logdir');
-
-   print "\n----------------\n";
-   print "$MYNAME can clean the log files before execution.\n";
-   print "You might experience problems if you run $MYNAME on several documents\n";
-   print "the same time. If you want to be on the safe side, answer '$NO'.\n";
-   &config_param("Should the log files be cleaned before execution?",'clean_logs');
-
-   print "\n----------------\n";
-   print "$MYNAME can check for the required executables.\n";
-   &config_param("Should $MYNAME check for the required executables?",'check_commands');
-
-   print "\n----------------\n";
-   print "$MYNAME can use thumbpdf to include thumbnails of the document pages.\n";
-   print "This requires Ghostscript 5.50 or higher.\n";
-   &config_param("Should PNG thumbnails be created?",'thumbpdf');
-
-   print "\n----------------\n";
-   print "$MYNAME can force the call of makeindex if pdftex fails to do this.\n";
-   &config_param("Should the call of makeindex be forced?",'force_index');
-
-   print "\n----------------\n";
-   print "Additional options for pdflatex can be specified.\n";
-   print "Normally, you can leave this blank.\n\n";
-   &config_param("What additional options for pdflatex should be used?", 'pdftex_opts');
-   print "\n";
+   print "\nConfiguration for $MYNAME finished.\n\n";
 }
 
 ### check if the most important executables are installed on the system
@@ -1595,7 +1690,7 @@ sub adjust_configuration {
    ### Check number of arguments
    if ( @ARGV == 0 ) {
       print "\n$MYNAME: I need at least one argument!\n";
-      &usage;
+      &print_usage;
       exit 1;
    }
    
@@ -1637,7 +1732,7 @@ sub adjust_configuration {
    ### Check number of arguments
    if ( @ARGV != 1 ) {
       print "\n$MYNAME: Wrong number of arguments. I need exactly one file.\n";
-      &usage;
+      &print_usage;
       exit 1;
    }
    
@@ -1653,6 +1748,9 @@ sub prepare_logdir {
    if (! &check_dir($log_dir, "Could not create log directory", $YES)) {
       &abort("Please, set a different path and restart");
    }
+
+   # make sure there is a slash at the end of the path
+   $log_dir .= '/' if( ! $log_dir =~ m#/$# );
    
    if( <$log_dir/*.log> ne "" and &param_value('clean_logs') eq $YES ) { 
       print "\nRemoving old log files ($log_dir).\n";
@@ -1660,6 +1758,7 @@ sub prepare_logdir {
    } else {
       print "\nAll log files will be stored in ($log_dir).\n";
    }
+
 }
 
 ##### analyse document argument
@@ -1779,6 +1878,9 @@ sub get_target_name {
       $pdf_path=$doc_path;
    }
 
+   # make sure there is a slash at the end of the path
+   $pdf_path .= '/' if( ! $pdf_path =~ m#/$# );
+   
    return $pdf_path.$doc_base.'.pdf';
 }
 
