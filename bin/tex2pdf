@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.18";
+my $MYRELEASE="3.0.19";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1814,7 +1814,7 @@ sub convert_tex2tmp {
          }
    
          # if end of the preamble is reached stop loop
-         if ( /^\\begin\{document\}$/ ) { last; }
+         if ( /^\\begin\{document\} *?$/ ) { last; }
       }
    }
    
