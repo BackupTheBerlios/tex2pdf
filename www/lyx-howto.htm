@@ -5,13 +5,10 @@
    <body>
    <h2>HOWTO use tex2pdf with LyX</h2>
 The major task of tex2pdf is to provide an easy way to generate PDF
-from INSIDE and outside Lyx.
-<p>
+from INSIDE and outside Lyx.<br>
 It should handle all the stuff you have to do (e.g. EPS translation,
 insertation of extra TeX stuff for pdftex, ...).
 <br><br>
-What you have to do to make tex2pdf work from inside LyX:
-
 <h3>Install tex2pdf</h3>
 <ol>
    <li>Download tex2pdf (I suggest the Perl version, beta7 should be fine)
@@ -30,7 +27,6 @@ What you have to do to make tex2pdf work from inside LyX:
    <li>Have a look at possible command line options with '<code>tex2pdf --help
    </code>'
 </ol>
-
 <h3>Set up LyX to use tex2pdf</h3>
 <ol>
 <li>Choose in the following menu: <em>Edit->Preferences->Converters->Converters</em>
@@ -41,7 +37,7 @@ What you have to do to make tex2pdf work from inside LyX:
 <li>Report any problems to the tex2pdf list:
 <a href=mailto:tex2pdf-devel@lists.berlios.de>tex2pdf-devel@lists.berlios.de</a> and/or the lyx-users list.</li>
 </ol>
-
+<br>
 To use tex2pdf from outside LyX simply call it by
    '<code>tex2pdf [OPTIONS] DOCUMENT.lyx</code>'
    or '<code>tex2pdf [OPTIONS] DOCUMENT.tex</code>'
