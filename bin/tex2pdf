@@ -2162,7 +2162,7 @@ sub process_textags {
             # replace the suffix '.#' with '-mp.#'
             #s/(\\includegraphics(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1
             #$MTP_TMP_BASESUFFIX\.$3}/sg;
-            $contents .=~ $MTP_TMP_BASESUFFIX.'.'.$found_suffix;
+            $contents .= $MTP_TMP_BASESUFFIX.'.'.$found_suffix;
          }
       } elsif ($name eq "input" or $name eq "include") {
          my $found_file = undef;
