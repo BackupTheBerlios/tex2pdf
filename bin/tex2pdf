@@ -56,7 +56,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.7";
+my $MYRELEASE="3.0.8";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -399,6 +399,7 @@ sub file_tail {
    if($no_of_lines == 0) {
       # print entire file
       while(<TAIL_SOURCE>) {
+         if(!$_) { $_="\n"; }
          print $_;
       }
       return;
@@ -406,13 +407,15 @@ sub file_tail {
    
    # fill up cache
    while(@cache < $no_of_lines and <TAIL_SOURCE>) {
+      if(!$_) { $_="\n"; }
       push(@cache, $_);
    }
    
    # always cache the last N lines up to the end of the file
    while(<TAIL_SOURCE>) {
-     shift(@cache);
-     push(@cache, $_);
+      if(!$_) { $_="\n"; }
+      shift(@cache);
+      push(@cache, $_);
    }
    
    close TAIL_SOURCE;
