@@ -142,7 +142,7 @@
 #     (thanks to Steffen Macke for this great patch)
 #
 
-MYRELEASE="2.1.3"
+MYRELEASE="2.1.4"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -304,6 +304,60 @@ questionYN() {
          *) echo Please respond with y or n.
       esac
    done
+}
+
+### interactively input a positive integer number
+# $1 question
+# $2 default value
+# $3 min value
+# $4 max value
+# $RESPONSE: the input number
+
+input_number() {
+   local user_input
+   while true; do
+      echo -n "$1 [$2]: "
+      read user_input </dev/tty
+      if [ -z "$user_input" ]
+      then
+         RESPONSE=$2
+         return
+      else
+         RESPONSE=`echo $user_input | sed -n "s/^\([[:digit:]]\+\)$/\1/p"`
+         if [ -z "$RESPONSE" ] || [ $RESPONSE -lt $3 -o $RESPONSE -gt $4 ]
+         then
+            echo "Invalid input. Please enter a positve integer from $3 to $4."
+         else
+            return
+         fi
+      fi
+   done
+}
+
+### interactively choose between several given values
+# $1 question
+# $2 default value
+# $3 ... $x possible values
+# $RESPONSE chosen value
+
+chooseValue() {
+   local DEFAULT_VALUE=$2
+   local QUESTION=$1
+   local INDEX=1
+   local DEFAULT_NUMBER=1
+
+   shift 2
+
+   echo "$QUESTION"
+   while [ $INDEX -le $# ]
+   do
+      echo "$INDEX) ${!INDEX}"
+      [ "$DEFAULT_VALUE" = "${!INDEX}" ] && DEFAULT_NUMBER=$INDEX
+      INDEX=$(($INDEX+1))
+   done
+   
+   input_number "Please enter the corresponding number" $DEFAULT_NUMBER 1 $#
+   RESPONSE="${!RESPONSE}"
 }
 
 ### interactively answer a question
