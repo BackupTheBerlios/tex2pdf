@@ -2178,7 +2178,7 @@ sub adjust_filenames {
          # I assume that files with no extension are TeX files as well; correct?
          # s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#
          # $1$tmp_suffix$4#sg;
-         $contents =~ s#^\s*((.*?/)?[^/.]+?)(\.tex)?\s*$#$1$tmp_suffix$3#;
+         $contents =~ s#^\s*((.*?/)?[^/.]+?)((\.tex)?)\s*$#$1$tmp_suffix$3#;
       } elsif ($name eq "multiinclude") {
          if ($mtp_preamble eq $NO) {
             # cut off the suffix of mmp graphics
@@ -2218,7 +2218,7 @@ sub convert_tex2tmp {
    my $source = $_[0];
    my $target = $_[1];
    my $hyperref_params_ref = $_[2];
-   my $main_preamble = $_[3];
+   my $main_preamble = defined($_[3]) ? $_[3] : "";
    my $contents;
    my $preamble;
    my $body;
@@ -2256,7 +2256,7 @@ sub convert_tex2tmp {
       $preamble = "";
       $body = $contents;
       if ($main_preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
-	 &report(6, "Psfrag substitution detected in included document. Entering pdffrag process");
+         &report(6, "Psfrag substitution detected in included document. Entering pdffrag process");
          &pdffrag($main_preamble,$body);
       }
    }
