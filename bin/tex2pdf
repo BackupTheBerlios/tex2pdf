@@ -69,7 +69,7 @@ if (not $USER_HOME) { $USER_HOME = '/tmp'; }
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
 my $NUM_PARAM_MIN=0;
-my $NUM_PARAM_MAX=9;  
+my $NUM_PARAM_MAX=10;  
 my @REF_DOCS;
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
 my $MTP_TMP_BASESUFFIX="-mp";
@@ -81,7 +81,14 @@ my @BITMAP_SUFFIXES=( 'jpg', 'png', 'tif' );
 # this log file will be moved to the specified log_dir after configuration
 # and the variable will be updated to the new name
 my $MYLOGFILE="$USER_HOME/tex2pdf-$$.log";  
+# maximal supported level of verbosity
+my $MAX_VERBOSITY=10;  
+# verbosity for screen output when debugging; log file will be set to max
+my $DEBUG_VERBOSITY=9;
+# level of verbosity for log files in non-debug mode execution
 my $LOGFILE_VERBOSITY=9;
+# screen verbosity before configuration data active
+my $PRE_CONFIG_VERBOSITY=4;
 
 ### text token for no value
 my $NIL="NOVALUE";
@@ -99,13 +106,12 @@ my $TRUE=1;
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdf3rc
 my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
-my $MYRCFILE_VERSION=7;
+my $MYRCFILE_VERSION=8;
 my $RCVERSION_STRING="rcfile_version";
 
 ## set global variable configured to prevent access to configuration
 #  parameters before configuration process is finished
 my $CONFIGURED=$FALSE;
-my $PRE_CONFIG_VERBOSITY=4;
 
 ########################## NEW PERL CONFIGURATON
 
@@ -210,6 +216,16 @@ my $EXPLANATION=6;
    ."\nyou can give me the apropriate executable here (e.g. '/usr/bin/lyx')."
    ."\nIn most cases the default 'lyx' should be fine.");
 
+&add_param('pdftex_exec', 'text', "pdflatex", '', '=s',
+   'specify the actual executable for converting LaTeX to PDF',
+   'Which executable should I use for converting the LaTeX docs to PDF?',
+   "tex2pdf requires an application to generate a PDF file from the prepared "
+   ."LaTeX\ndocument. tex2pdf is optimized to use pdflatex. However, there are"
+   ." several\ndifferent versions of pdftex and you might prefer another one. "
+   ."So, you can\ngive me the apropriate executable here (e.g."
+   ."'/usr/bin/pdflatex')."
+   ."\nIn most cases the default 'pdflatex' should be fine.");
+
 &add_param('debug', 'bool', $NO, '', '!',
 'do not delete temporary files after execution and be as verbose as possible',
    'Do you want to debug this script?',
@@ -221,7 +237,7 @@ my $EXPLANATION=6;
 &add_param('delete_pdf_images', 'bool', $NO, '', '!',
    'delete generated PDF image files after execution',
    'Should generated PDF image files be deleted after execution?',
-   "Pdflatex cannot handle EPS images. Therefore all such images need to be\n"
+   "pdftex cannot handle EPS images. Therefore all such images need to be\n"
    ."translated to PDF in advance. After a successful generation of the final "
    ."PDF \ndocument or after encountering an error I could leave this PDF "
    ."images for\n later executions or simply delete them.");
@@ -344,7 +360,7 @@ my $EXPLANATION=6;
 &add_param('force_index', 'bool', $NO, '|i', '!',
    'force explicit inclusion of (existing) index in PDF doc',
    'Should the call of makeindex be forced?',
-   "Older versions of pdflatex have not included the index of a document\n"
+   "Older versions of pdftex have not included the index of a document\n"
    ."automatically. If you are missing the index in your document you can "
    ."force the\ncall of makeindex on the condition that an index file was "
    ."generated.");
@@ -395,25 +411,26 @@ my $EXPLANATION=6;
    ."files.\nThis requires an existing $MTP_PREAMBLE_FILENAME file.");
 
 &add_param('maxrun', 'integer', 6, '', '=i',
-   'specify maximal number of pdflatex runs if problems are detected',
-   'What should be the maximum number of runs for pdflatex (1-6)?', "");
+   'specify maximal number of pdftex runs if problems are detected',
+   'What should be the maximum number of runs for pdftex (1-6)?', "");
 
 &add_param('minrun', 'integer', 2, '', '=i',
-   'specify minimal number of pdflatex runs if no problems are detected',
-   'What should be the minimum number of runs for pdflatex (1-6)?', "");
+   'specify minimal number of pdftex runs if no problems are detected',
+   'What should be the minimum number of runs for pdftex (1-6)?', "");
 
 &add_param('verbosity', 'integer', 5, '', '=i',
    'set the level of verbosity',
-   'Which level of verbosity do you want (0-9)',
+   "Which level of verbosity do you want (0-$MAX_VERBOSITY)",
    "Different people want different amounts of information about what the "
    ."script\nactually does. Therefore you can adjust the verbosity to your "
-   ."personal needs\nby setting this parameter to a value from 0 to 9. 0 "
-   ."means no output at all\nand 9 means maximal output.");
+   ."personal needs\nby setting this parameter to a value from 0 to "
+   ."$MAX_VERBOSITY. 0 means no output at all\nand $MAX_VERBOSITY means "
+   ."maximal output.");
 
 &add_param('pdftex_opts', 'text', '', '', '=s',
-   'specify extra options for shell execution of pdflatex',
-   'What additional options for pdflatex should be used?',
-   "Sometimes, people would like to pass some extra options over to pdflatex. "
+   'specify extra options for shell execution of pdftex',
+   'What additional options for pdftex should be used?',
+   "Sometimes, people would like to pass some extra options over to pdftex. "
    ."This\nis the right place to do that. Everyone else can leave this empty.");
 
 &add_param('hyperref_args', 'text', '', '', '=s',
@@ -448,7 +465,8 @@ my $EXPLANATION=6;
 # 6: minor step of the process
 # 7: progress report of minor step
 # 8: long status report from called applications
-# 9: debug info
+# 9: general debug info
+# 10: detailed debug info
 #
 # parameter 1: priority level
 # parameter 2: list of output strings
@@ -462,7 +480,7 @@ sub report {
 
    if (@_ < 2 ) {
       @output = ( "Oppss! Report function got only 1 argument!" );
-      $level  = 9;
+      $level  = $MAX_VERBOSITY;
    } else {
       ($level, @output) = @_;
    }
@@ -472,8 +490,8 @@ sub report {
          $verbosity = &param_value('verbosity');
          $log_verbosity = $LOGFILE_VERBOSITY;
       } else {
-         $verbosity = 9;
-         $log_verbosity = 9;
+         $verbosity = $DEBUG_VERBOSITY;
+         $log_verbosity = $MAX_VERBOSITY;
       } 
    } else {
       $verbosity = $PRE_CONFIG_VERBOSITY;
@@ -1408,8 +1426,8 @@ sub configure {
    print "\nvalue at all (not even an empty value) is passed over to the ";
    print "called\napplication (e.g. latex package hyperref).\n";
 
-   $NUM_PARAM_MIN=1;
-   $NUM_PARAM_MAX=9;  
+   #$NUM_PARAM_MIN=1;
+   #$NUM_PARAM_MAX=9;  
 
    foreach my $key (@PARAMETER_ORDER) {
       if(&full_param($key)) {
@@ -1425,6 +1443,7 @@ sub configure {
 
 sub check_commands {
    my $exec_epstopdf;
+   
    ### check for which command
    &checkCommand("which","You can switch off all command checks to fix this.");
 
@@ -1432,7 +1451,8 @@ sub check_commands {
    # Homepage: http://tug.org/applications/pdftex
    &checkCommand("latex","See latex homepage for details: http://tug.org/");
    &checkCommand("dvips","See dvips homepage for details: http://www.radicaleye.com/dvips.html");
-   &checkCommand("pdflatex","See pdftex homepage for details: http://tug.org/applications/pdftex");
+   &checkCommand(&param_value('pdftex_exec'),
+         "See pdftex homepage for details: http://tug.org/applications/pdftex");
    &checkCommand("ps2eps","See ps2eps homepage for details: http://www.telematik.informatik.uni-karlsruhe.de/~bless/ps2eps.html");
    &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
    $exec_epstopdf = `which epstopdf`;
@@ -1709,7 +1729,7 @@ sub extract_tag {
       $result{name} = substr($matched_tag_name,1);
       $tag_prefix = substr($data, 0, $tag_pos - length($matched_tag_name));
       $tag_remainder = substr($data, pos($data));
-      &report(9, "Tag found (".$result{name}.") - plain contents: >".
+      &report(10, "Tag found (".$result{name}.") - plain contents: >".
                $result{contents}."<");
       
       return ($tag_prefix, $tag_remainder, %result);
@@ -2018,7 +2038,7 @@ sub adjust_preamble {
    }
    $cut_code .= "\n" if ($cut_code);
 
-   #### protect pdflatex execution mode
+   #### protect pdftex execution mode
    s/^(\\batchmode)$/% $1/m;
 
    # Comment out the use of psfrag package
@@ -2719,27 +2739,29 @@ sub run_dvips {
 
 
 
-### run pdflatex
+### run pdftex
 # parameter 1: LaTeX file without extension
 # parameter 2: log-file where the full out put is stored
 # return value: FALSE - no rerun (no errors); TRUE - rerun required (errors)
 
-sub run_pdflatex {
+sub run_pdftex {
    my $texfile=$_[0];
    my $logfile=$_[1];
    my @errors=();
    my $rerun = $FALSE;
    my $exit_status=0;
    my $extra_options=&param_value('pdftex_opts');
+   my $pdftex_exec=&param_value('pdftex_exec');
+   my $pdftex_exec_base=basename $pdftex_exec;
 
    if( !defined($extra_options) or $extra_options eq $NIL ) {
       $extra_options = "";
    }
    
-   &report(7, "Running pdflatex. This may take a while.\n");
-   system("pdflatex --interaction nonstopmode $extra_options $texfile > $logfile 2>&1");
+   &report(7, "Running $pdftex_exec_base. This may take a while.\n");
+   system("$pdftex_exec --interaction nonstopmode $extra_options $texfile > $logfile 2>&1");
    $exit_status=$?;
-   &report(7, "Pdflatex finished. Errors:");
+   &report(7, "$pdftex_exec_base finished. Errors:");
 
    ### extract all errors and warnings from the log file
    @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
@@ -3195,7 +3217,7 @@ sub prepare_logdir {
    
    if( <$log_dir/*.log> and &param_value('clean_logs') eq $YES ) { 
       &report(6, "\nRemoving old log files ($log_dir).");
-      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>,
+      unlink (<$log_dir/pdftex-*.log>, <$log_dir/bibtex-*.log>,
          <$log_dir/gloss-*.log>, <$log_dir/thumbpdf-*.log>,
          <$log_dir/ppower-*.log>, <$log_dir/authorindex-*.log>,
          <$log_dir/tex2pdf-*.log>);
@@ -3476,10 +3498,11 @@ sub generate_pdf_doc {
    my $log_dir= &param_value('logdir');
    $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
    my $makeindex_options=&param_value('makeindex_opts');
+   my $pdftex_base=basename &param_value('pdftex_exec');
    
-   # setting the log files for the output of pdflatex, bibtex, gloss,
+   # setting the log files for the output of pdftex, bibtex, gloss,
    # thumbpdf, ppower and authorindex
-   my $pdflog_base = $log_dir."pdflatex-$$-";
+   my $pdflog_base = $log_dir."pdftex-$$-";
    my $bibtex_log = $log_dir."bibtex-$$.log";
    my $gloss_log = $log_dir."gloss-$$.log";
    my $thumbpdf_log = $log_dir."thumbpdf-$$.log";
@@ -3491,11 +3514,11 @@ sub generate_pdf_doc {
    $doc = $path.$base;
    $pdf_doc = $base.'.pdf';
 
-   ### run pdflatex until no more errors are reported (max MAXRUNNO)
+   ### run pdftex until no more errors are reported (max MAXRUNNO)
    while ( $rerun and $runno <= $max_run_no )
    {
-      &report(6, "\n************ Pdflatex run no. $runno *************");
-      if ( &run_pdflatex($doc, $pdflog_base.$runno.'.log') == $FALSE
+      &report(6, "\n************ $pdftex_base run no. $runno *************");
+      if ( &run_pdftex($doc, $pdflog_base.$runno.'.log') == $FALSE
          and ( $min_run_no <= $runno )) {
          # no errors detected and min. no. of runs are done
          $rerun=$FALSE;
@@ -3561,10 +3584,10 @@ sub generate_pdf_doc {
       $rerun=$TRUE;
    }
 
-   ### One final pdflatex run if requested
+   ### One final pdftex run if requested
    if ( $rerun ) {
-      &report(6, "\n************ One final pdflatex run no. $runno *************");
-      &run_pdflatex($doc, $pdflog_base.$runno.'.log');
+      &report(6, "\n************ One final $pdftex_base run no. $runno *************");
+      &run_pdftex($doc, $pdflog_base.$runno.'.log');
    }
 
    ### if the ppower option is switched on then run ppower
