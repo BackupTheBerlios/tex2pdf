@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.17";
+my $MYRELEASE="3.0.18";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1674,7 +1674,7 @@ sub identify_files {
       # assume that this reference is of a different type and skip it
       # quietly   
       if (!$kpse_result) {
-         &report(9, " Ignoring '$tag_contents'.");
+         &report(9, "No suitable file found. Ignoring '$tag_contents'.");
          next;
       }
 
