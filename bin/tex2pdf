@@ -1679,7 +1679,8 @@ sub extract_tag {
          #print "Valid tag found!\n";
       }
 
-      ($params,$remainder,$params_prefix) = extract_bracketed($data, '[]');
+      ($params,$remainder,$params_prefix) = extract_bracketed($data, '[]',
+       '(\s|%.*\n)*');
 
       if ( defined($params) and $params ne "" ) {
          #print "Tag parameters found\n";
@@ -1692,7 +1693,8 @@ sub extract_tag {
          pos($data) = $tag_pos;
       }
 
-      ($contents, $remainder, $contents_prefix)=extract_bracketed($data, "{}");
+      ($contents, $remainder, $contents_prefix) = extract_bracketed($data, "{}",
+       '(\s|%.*\n)*');
       
       if ( not defined($contents)  or $contents eq "" ) {
          #print "No tag contents found\n";
