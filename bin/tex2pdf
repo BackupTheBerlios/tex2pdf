@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.12";
+my $MYRELEASE="3.0.13";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my @TMPFILES=();
@@ -69,7 +69,7 @@ my $MTP_PREAMBLE_FILENAME="preamble.cfg";
 my $MTP_TMP_BASESUFFIX="-mp";
 my @EPS_SUFFIXES=('eps','ps','ps.gz','eps.gz' );
 my $PDF_ORIG_SUFFIX='pdf.orig';
-my @BITMAP_SUFFIXES=( 'jpg', 'png' );
+my @BITMAP_SUFFIXES=( 'jpg', 'png', 'tif' );
 
 # (initial) log file of this script
 # this log file will be moved to the specified log_dir after configuration
@@ -452,7 +452,7 @@ sub array_index {
    my ($text, @list) = @_;
 
    if(!defined($text)) {
-      warn "Oppss! Cannot compare nothing.";
+      &report(9, "Oppss! Cannot compare nothing.");
       return -1;
    }
 
@@ -535,7 +535,7 @@ sub grep_file {
 ### Removing all temporary files
 
 sub clean_up {
-   print "$MYNAME: Removing temporary files ...\n";
+   &report(6, "Removing temporary files ...");
    foreach (@TMPFILES) {
       unlink($_) if(-f $_); 
    }
@@ -546,7 +546,7 @@ sub clean_up {
       if( $_ ne "" and -f $_.'.tex' ) {
          unlink glob($_.".???"); 
       } else {
-         print "$MYNAME: Bad file in temp tex files list: $_\n";
+         &report(3, "Bad file in temp tex files list: $_");
       }
    }
 }
@@ -586,14 +586,14 @@ sub print_temp_files {
 ###  exit with an error message
 
 sub abort {
-   print "$MYNAME: @_\n";
+   &report(1, @_);
    if ( $CONFIGURED and &param_value('clean_on_abort') eq $YES 
        and &param_value('debug') eq $NO) {
       &clean_up;
    } else {
       &print_temp_files;
    }
-   print "Aborting ...\n";
+   &report(2, "Aborting ...");
    exit 1;
 }
 
@@ -1414,19 +1414,18 @@ sub reserve_tmp_texname {
    # make sure no file with this base exists in this directory
    @existing_files = glob "$pathed_tmp_base.*";
    if (@existing_files != 0) {
-      print "$MYNAME: Problems detected while reserving temporay file name!\n";
-      print "In this directory are already files with this basename.\n";
-      print "A list of the conflicting, existing files:\n";
-      print join("\n", @existing_files);
-      print "\n\n";
+      &report(3, "Problems detected while reserving temporay file name!\n",
+         "In this directory are already files with this basename.\n",
+         "A list of the conflicting, existing files:\n",
+         join("\n", @existing_files), "\n");
       if ($overwrite eq $YES) {
-         print "As you have activated the parameter 'overwrite' I will "
-	       ."continue.\n";
-	 print "However, in order to protect the existing files I will not\n";
-	 print "delete any files with this basename at the final clean-up.\n";
+         &report(4, "As you have activated the parameter 'overwrite' I will "
+	         ."continue.\n",
+	         "However, in order to protect the existing files I will not\n",
+	         "delete any files with this basename at the final clean-up.");
       } else {
-         print "You could activate the parameter 'overwrite' or remove the\n";
-         print "listed files in order to avoid these problems\n"; 
+         &report(2, "You could activate the parameter 'overwrite' or remove ",
+         "the\n corresponding files in order to avoid these problems."); 
          &abort("No temporary name found for $original_name.");
       }
    } else {
@@ -1451,13 +1450,13 @@ sub generate_tex_file {
 
    ### Check if LaTeX file exists and is newer than the LyX file
    if ( -f $tex_doc and -M $tex_doc < -M $lyx_doc ) {
-      print "\n$MYNAME: LaTeX file is newer than LyX document ($lyx_doc).\n";
-      print "Using existing TeX file: $tex_doc\n";
-      print "Remove it to force its new generation.\n";
+      &report(4, "\nLaTeX file is newer than LyX document ($lyx_doc).\n",
+      "Using existing TeX file: $tex_doc\n",
+      "Remove it to force its new generation.");
    } else {
       ### export LaTeX file with LyX (needs a display!)
       &checkCommand("lyx","Cannot generate LaTeX document without LyX!");
-      print "\n$MYNAME: Exporting LaTeX file\n";
+      &report(6, "\nExporting LaTeX file");
       
       ### move some files out of the way that stop LyX from exporting
       foreach my $file ($lyx_dir."lyxpipe.out",$lyx_dir."lyxpipe.in",$tex_doc) {
@@ -1574,8 +1573,8 @@ sub identify_files {
          $kpse_result=`kpsewhich $tag_contents`;
          # print warning and skip this tag if kpsewhich could not find it  
          if (!$kpse_result) {
-            print "$MYNAME: WARNING - Could not identify referenced file:\n";
-            print " Ignoring '$tag_contents'.\n";
+            &report(4, "WARNING - Could not identify referenced file:\n",
+            " Ignoring '$tag_contents'.");
             next;
          }
       } else {
@@ -1620,10 +1619,10 @@ sub identify_files {
 
 ### Build a list of all files which are included from the root file.
 # This function recurses, and is maybe smart enough to detect cycles.
-# Be sure to set FILES to the empty string prior to calling this.
+# Be sure to set REF_DOCS to the empty string prior to calling this.
 # parameter 1: tex file to start with
 # no return value
-# result is appended to global variable FILES
+# result is appended to global variable @REF_DOCS
 
 sub get_file_list {
    my $source = $_[0];
@@ -1802,13 +1801,13 @@ sub convert_eps2pdf {
 
    ### return if image directory is not writeable
    if (! -w $image_path) {
-      print "$MYNAME: WARNING - Image directory not writable: $image_path\n";
-      print " Skipping '$image_name', assume you have converted it manually.\n";
+      &report(4, "WARNING - Image directory not writable: $image_path\n",
+      " Skipping '$image_name', assume you have converted it manually.");
       return;
    }
 
    if ( ! -f $image_target or -M $image_target > -M $image ) {
-      print "Converting image $image_name to $image_target ...\n";
+      &report(7, "Converting image $image_name to $image_target ...\n");
       if ($zipped > 0) {
     	   system("gunzip -c $image | epstopdf -f -outfile=$image_target")
         	   and &abort("epstopdf failed on $image_name: $!");
@@ -1820,7 +1819,7 @@ sub convert_eps2pdf {
          push(@TMPFILES, $image_target);
       }
    } else {
-      print "$image_base.pdf newer than $image_name, conversion skipped...\n";
+      &report(7, "$image_base.pdf newer than $image_name, conversion skipped...");
    }
 }
 
@@ -1846,13 +1845,13 @@ sub convert_pstex2pdf {
 
    ### return if directory is not writeable
    if (! -w $pstex_path) {
-      print "$MYNAME: WARNING - Directory not writable: $pstex_path\n";
-      print " Skipping '$pstex_name', assume you have converted it manually.\n";
+      &report(4, "WARNING - Directory not writable: $pstex_path\n",
+      " Skipping '$pstex_name', assume you have converted it manually.");
       return;
    }
 
    # descend into file
-   print "Converting file $pstex_name ...\n";
+   &report(7, "Converting file $pstex_name ...\n");
 
    # find included EPS image(s)
    @eps_images=&identify_files($pstex_file, 'includegraphics',
@@ -1905,8 +1904,8 @@ sub convert_mp2pdf {
 
    ### return if image directory is not writeable
    if (! -w $image_path) {
-      print "$MYNAME: WARNING - Image directory not writable: $image_path\n";
-      print " Skipping '$image_name', assume you have converted it manually.\n";
+      &report(4, "$MYNAME: WARNING - Image directory not writable: $image_path\n",
+         " Skipping '$image_name', assume you have converted it manually.");
       return;
    }
 
@@ -1914,7 +1913,7 @@ sub convert_mp2pdf {
       or  (-M $image_target > -M $image_src)
       or  ( ( &param_value('mtp_preamble') eq $YES)
       and (-M $image_target > -M $image_path.$MTP_PREAMBLE_FILENAME) ) ) {
-      print "Converting image $image_name ...\n";
+      &report(7, "Converting image $image_name ...\n");
       my $working_dir = cwd."/";
       chdir("$image_path") or &abort("cannot cd to $image_path($!)");
       if ( &param_value('mtp_preamble') eq $YES ) {
@@ -1928,9 +1927,9 @@ sub convert_mp2pdf {
       }
    } else {
       if ( &param_value('mtp_preamble') eq $YES ) {
-        print "$image_base$MTP_TMP_BASESUFFIX.$mp_fig newer than $image_base$suffix, conversion skipped...\n";
+        &report(7, "$image_base$MTP_TMP_BASESUFFIX.$mp_fig newer than $image_base$suffix, conversion skipped...");
       } else {
-        print "$image_base.$mp_fig newer than $image_base$suffix, conversion skipped...\n";
+        &report(7, "$image_base.$mp_fig newer than $image_base$suffix, conversion skipped...");
       }
    }
 }
@@ -2008,29 +2007,27 @@ sub convert_images {
    $ignore_regexp = '.('.join('|',@EPS_SUFFIXES).')';
    $ignore_regexp =~ s/\./\\./g;
 
-   print "\nScanning for major image types (".join(', ',@major_suffixes)."):\n";
+   &report(6, "\nScanning for major image types (".join(', ',@major_suffixes)."):");
    @image_list = &identify_files($tex_source,'includegraphics',
       \@major_suffixes, $ignore_regexp );
 
    if ( @image_list > 0 ) {
-      print join("\n", @image_list);
-      print "\n";
+      &report(7, join("\n", @image_list));
    } else {
-      print "None.\n";
+      &report(7, "None.");
    }
 
    ##### Get PSTEX_T files from the source file
-   print "\nScanning for PSTEX_T files (.pstex_t):\n";
+   &report(6, "\nScanning for PSTEX_T files (.pstex_t):");
    @pstex_file_list=&identify_files($tex_source, 'input', ['pstex_t']);
    if ( @pstex_file_list > 0 ) {
-      print join('\n', @pstex_file_list);
-      print "\n";
+      &report(7, join("\n", @pstex_file_list));
    } else {
-      print "None.\n";
+      &report(7, "None.");
    }
 
    ##### Get MP images from the source file
-   print "\nScanning for MP images (.mp):\n";
+   &report(6, "\nScanning for MP images (.mp):");
    @mp_image_list=&identify_files($tex_source,
       'convertMPtoPDF|includegraphics',['mp','(\d+)'],'\.(\d+)');
    # FIXME
@@ -2042,20 +2039,18 @@ sub convert_images {
    # of ignore_suffixes
  
    if ( @mp_image_list > 0 ) {
-      print join("\n", @mp_image_list);
-      print "\n";
+      &report(7, join("\n", @mp_image_list));
    } else {
-      print "None.\n";
+      &report(7, "None.");
    }
 
    ##### Get MMP images from the source file
-   print "\nScanning for MMP images (.mmp):\n";
+   &report(6, "\nScanning for MMP images (.mmp):");
    @mmp_image_list=&identify_files($tex_source,'multiinclude',['mmp']);
    if ( @mmp_image_list > 0 ) {
-      print join("\n", @mmp_image_list);
-      print "\n";
+      &report(7, join("\n", @mmp_image_list));
    } else {
-      print "None.\n";
+      &report(7, "None.");
    }
 
    ### Convert EPS images to PDF, copy pdf.orig image files to pdf,
@@ -2063,7 +2058,7 @@ sub convert_images {
    if ( @image_list > 0) {
       my $handled_suffixes;
 
-      print "\n$MYNAME: Proccessing images of major types:\n";
+      &report(6, "\nProcessing images of major types:");
    
       # create one large regexp from suffixes and escape dots in them
       $handled_suffixes = '.('.join('|',(@EPS_SUFFIXES, $PDF_ORIG_SUFFIX)).')';
@@ -2075,19 +2070,19 @@ sub convert_images {
          my $suffix;
          ($base,$path,$suffix) = fileparse($image, $handled_suffixes);
          if (not $suffix) {
-            print "No special handling required for image: $base$suffix\n";
+            &report(7, "No special handling required for image: $base$suffix");
          } elsif ($suffix eq ('.'.$PDF_ORIG_SUFFIX) ) {
             my $image_target = $path.$base.'.pdf';
                
             if ( ! -f $image_target or -M $image_target > -M $image ) {
-               print "Create temporary PDF file from original: $base$suffix\n";
+               &report(7, "Create temporary PDF file from original: $base$suffix");
                copy($image, $image_target)
-                  or &abort("Could not create tmp file: $!\n");
+                  or &abort("Could not create tmp file: $!");
                if (&param_value('delete_pdf_images') eq $YES) {
                   push(@TMPFILES, $image_target);
                }
             } else {
-               print "$base.pdf newer than $base$suffix, copy skipped ...\n";
+               &report(7, "$base.pdf newer than $base$suffix, copy skipped ...");
             }
          } else {
             &convert_eps2pdf($image);
@@ -2097,7 +2092,7 @@ sub convert_images {
 
    ### Convert all PSTEX_T files to PDF_T
    if ( @pstex_file_list > 0 ) { 
-      print "\n$MYNAME: Converting pstex_t docs to pdf_t docs\n";
+      &report(6, "\nConverting pstex_t docs to pdf_t docs");
       foreach my $image (@pstex_file_list) {
          &convert_pstex2pdf($image);
       }
@@ -2105,7 +2100,7 @@ sub convert_images {
 
    ### Convert all MP images to PDF
    if ( @mp_image_list > 0) {
-      print "\n$MYNAME: Converting MP images to PDF\n";
+      &report(6, "\nConverting MP images to PDF");
       foreach my $image (@mp_image_list) {
          &convert_mp2pdf($image);
       }
@@ -2113,13 +2108,13 @@ sub convert_images {
 
    ### Convert all MMP images to PDF
    if ( @mmp_image_list > 0) {
-      print "\n$MYNAME: Converting MMP images to PDF\n";
+      &report(6, "\nConverting MMP images to PDF");
       foreach my $image (@mmp_image_list) {
          &convert_mp2pdf($image);
       }
    }
 
-   print "\nFinished converting for ${tex_source}.\n";
+   &report(6, "\nFinished converting for ${tex_source}.");
 }
 
 ### run pdflatex
@@ -2486,7 +2481,7 @@ sub prepare_logdir {
    if ( move($MYLOGFILE, $my_new_log) ) {
       $MYLOGFILE = $my_new_log;
    } else {
-      warn("Could not move '$MYLOGFILE' to logdir: $!");
+      &report(3, "Could not move '$MYLOGFILE' to logdir: $!");
    }
 }
 
@@ -2863,7 +2858,7 @@ my @hyperref_params;
 my $new_pdf_doc;
 my $tmp_tex_doc;
 
-print "\n$MYNAME: Script starts (Release $MYRELEASE)\n";
+&report(5, "\nScript starts ($MYRELEASE)");
 
 ##### read and analyse configuration and options and adjust basic variables
 ##### accordingly
@@ -2871,19 +2866,19 @@ print "\n$MYNAME: Script starts (Release $MYRELEASE)\n";
 #### use the finished configuration to get all further settings before we
 #### actually start doing something
 
-print "\n$MYNAME: Processing given parameters and arguments.\n";
+&report(5, "\nProcessing given parameters and arguments.");
 $doc_argument = &adjust_configuration;
 
 #### prepare the script to write some information to specified log files
 
-print "\n$MYNAME: Preparing directory for log files.\n";
+&report(5, "\nPreparing directory for log files.");
 &prepare_logdir;
 
 #### process the one and only argument (besides the options) which specifies
 #### which LaTeX document the user wants to translate to PDF
 #### a lyx file will be translated to LaTeX first
 
-print "\n$MYNAME: Analysing your document argument.\n";
+&report(5, "\nAnalysing your document argument.");
 $texdoc = &process_doc_argument($doc_argument);
 
 #### we would like to get some more information from the actual
@@ -2892,17 +2887,17 @@ $texdoc = &process_doc_argument($doc_argument);
 
 ## translate hyperref settings to the actual package parameters 
    
-print "\n$MYNAME: Setting up parameters for hyperref.\n";
+&report(5, "\nSetting up parameters for hyperref.");
 @hyperref_params = &generate_hyperref_params($texdoc);
 
 ## set the working dir to the input path if the document has one and
 
-print "\n$MYNAME: Processing input path for main tex document.\n";
+&report(5, "\nProcessing input path for main tex document.");
 $input_path = &process_inputpath($texdoc);
 
 ## determine the name for the result
 
-print "\n$MYNAME: Setting the correct name for the result.\n";
+&report(5, "\nSetting the correct name for the result.");
 $target_name = &get_target_name($texdoc, $input_path);
 
 ## as much as possible is prepared in advance at this point
@@ -2912,23 +2907,22 @@ $target_name = &get_target_name($texdoc, $input_path);
 
 ##### Generate adjusted temp tex files and convert all their images
 
-print "\n$MYNAME: Preparing all documents and images.\n";
+&report(5, "\nPreparing all documents and images.");
 $tmp_tex_doc = &prepare_documents($texdoc, $input_path, @hyperref_params);
 
 ##### Generate the final PDF document
 
-print "\n$MYNAME: Processing the actual generation of the PDF document.\n";
+&report(5, "\nProcessing the actual generation of the PDF document.");
 $new_pdf_doc = &generate_pdf_doc($tmp_tex_doc);
 
 ##### Finalize
 move($new_pdf_doc, $target_name) or &abort("Could not move PDF file to final destination: $!");
 
-print "\n";
 if ( &param_value('debug') eq $NO ) {
    &clean_up;
 } else {
    &print_temp_files;
 }
 
-print "\nThe new pdf file is: $target_name\n\n";
+&report(5, "\nThe new pdf file is: $target_name\n");
 
