@@ -30,7 +30,7 @@
 # Matej Cepl, Herbert Voss, Nicolas Marsgui, Bruce Foster, Mark van Rossum,
 # Matt Bandy, Garrick Chien Welsh, Stacy J. Prowell, Pavel Sedivy,
 # Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke,
-# Rainer Dorsch & friends, Jean-Pierre Chretien
+# Rainer Dorsch & friends, Jean-Pierre Chretien, Fernando Perez
 #
 # Project Homepage: http://tex2pdf.berlios.de
 # Developer Homepage: http://developer.berlios.de/projects/tex2pdf
@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0beta5";
+my $MYRELEASE="3.0beta6";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -177,6 +177,14 @@ $DEF_VALUE=3;
    ."second\nexecution as I might refuse to overwrite these files for security "
    ."reasons.\nYou have to remove them manually in this case. Additionally, I "
    ."will provide\nas much information during execution as possible.");
+
+&add_param('delete_pdf_images', 'bool', $NO, '', '!',
+   'delete generated PDF image files after execution',
+   'Should generated PDF image files be deleted after execution?',
+   "Pdflatex cannot handle EPS images. Therefore all such images need to be\n"
+   ."translated to PDF in advance. After a successful generation of the final "
+   ."PDF \ndocument or after encountering an error I could leave this PDF "
+   ."images for\n later executions or simply delete them.");
 
 &add_param('clean_on_abort', 'bool', $YES, '', '!',
    'also delete temporary files after abort',
@@ -1070,7 +1078,7 @@ sub config_param {
 
       $enum_array_ref=&type_enum_array($type); 
       if (! defined($enum_array_ref)) {
-         &abort("do not know how to configure this parameter: $key (type: $type)");
+         &abort("Do not know how to configure this parameter: $key (type: $type)");
       }
 
       $new_value=&choose_value($question,$current_value,$enum_array_ref);
@@ -1369,6 +1377,81 @@ sub extract_tag_contents {
 ### skip all comments and duplicates while parsing
 # parameter 1: file to parse
 # parameter 2: full TeX tag name
+# parameter 3: reference to a list of possible filename suffixes (without '.')
+# return value: list of identified files
+
+sub identify_files {
+   my $source=$_[0];
+   my $tag_name=$_[1];
+   my @suffixes=@{$_[2]};
+   my @matched_tags;
+   my @found_files=();
+   my $regexp_suffixes= '\.('.join('|', @suffixes).')';
+
+   @matched_tags = &extract_tag_contents($source, $tag_name);
+   
+   foreach my $tag_contents (@matched_tags) {
+      my $path;
+      my $base;
+      my $suffix;
+      my $kpse_result;
+      my $working_dir = cwd."/";
+
+      ($base,$path,$suffix) = fileparse($tag_contents, $regexp_suffixes);
+
+      # if a suffix is specified reduce list of relevant suffixes to this one
+      if($suffix) {
+         $kpse_result=`kpsewhich $tag_contents`;
+         # print warning and skip this tag if kpsewhich could not find it  
+         if (!$kpse_result) {
+            print "$MYNAME: WARNING - Could not identify referenced file:\n";
+            print " Ignoring '$tag_contents'.\n";
+            next;
+         }
+      } else {
+         # if there is a '.' in the basename assume that this is a reference
+         # to a file of another type and skip it
+         if( $base =~ /\./ ) {
+            next;
+         }
+
+         # search for all possible files with allowed suffixes
+         foreach my $allowed_suffix (@suffixes) {
+            my $possible_file= $path.$base.'.'.$allowed_suffix;
+            $kpse_result=`kpsewhich $possible_file`;
+            if ($kpse_result) {
+               last;
+            }
+         }
+      } 
+      
+      # if kpsewhich could not find any file with an allowed suffix
+      # assume that this reference is of a different type and skip it
+      # quietly   
+      if (!$kpse_result) {
+         print " Ignoring '$tag_contents'.\n"; #FIXME
+         next;
+      }
+
+      # expand '.' in kpsewhich output to the current path
+      $kpse_result =~ s#^\./#$working_dir#;
+      
+      # remove trailing newline
+      chomp($kpse_result);
+
+      # add file to the found file list if it is not already on it
+      if( &array_index($kpse_result, @found_files) < 0 ) {
+         push(@found_files, $kpse_result);
+      }
+   }
+   
+   return @found_files;
+}
+
+#### search for filenames in given TeX Tag in entire document
+### skip all comments and duplicates while parsing
+# parameter 1: file to parse
+# parameter 2: full TeX tag name
 # parameter 3: regular expression for the filname suffix (including '.')
 # parameter 4: different path for referenced material (default: docpath)
 # return value: list of found files
@@ -1422,7 +1505,7 @@ sub get_file_list {
       push(@REF_DOCS, $source);
 
       # Get the list of files included by the argument.
-      @imports=&extract_files($source, 'include|input', '(\.tex)?',$input_path);
+      @imports=&identify_files($source, 'include|input', ['tex']);
 
       # Recurse.
       foreach my $file (@imports) {
@@ -1531,7 +1614,9 @@ sub convert_eps2pdf {
          print "Converting image $image_name ...\n";
          system('epstopdf', '-outfile='.$image_target, $image)
 	    and &abort("epstopdf failed on $image_name: $!");
-         push(@TMPFILES, $image_target);
+         if (&param_value('delete_pdf_images') eq $YES) {
+            push(@TMPFILES, $image_target);
+	 }
       } else {
          print "$image_base.pdf newer than $image_name, conversion skipped...\n";
       }
@@ -1563,7 +1648,7 @@ sub convert_pstex2pdf {
       print "Converting file $pstex_name ...\n";
 
       # find included EPS image(s)
-      @eps_images=&extract_files($pstex_file, 'includegraphics', '\.pstex');
+      @eps_images=&identify_files($pstex_file, 'includegraphics', ['pstex']);
 
       # create .pdf_t file
       &convert_tex2tmp($pstex_file, $pstex_target, undef); 
@@ -1590,8 +1675,7 @@ sub convert_images {
 
    ##### Get EPS images from the source file
    print "\nScanning for EPS images (.eps/.ps):\n";
-   @eps_image_list=&extract_files($tex_source, 'includegraphics', '\.e?ps',
-      $input_path);
+   @eps_image_list=&identify_files($tex_source,'includegraphics',['eps','ps']);
    if ( @eps_image_list > 0 ) {
       print join("\n", @eps_image_list);
       print "\n";
@@ -1601,7 +1685,7 @@ sub convert_images {
 
    ##### Get PSTEX_T files from the source file
    print "\nScanning for PSTEX_T files (.pstex_t):\n";
-   @pstex_file_list=&extract_files($tex_source, 'input', '\.pstex_t');
+   @pstex_file_list=&identify_files($tex_source, 'input', ['pstex_t']);
    if ( @pstex_file_list > 0 ) {
       print join('\n', @pstex_file_list);
       print "\n";
@@ -1611,7 +1695,7 @@ sub convert_images {
 
    ### Convert all EPS images to PDF
    if ( @eps_image_list > 0) {
-      print "\n$MYNAME: Converting EPS images to pdf\n";
+      print "\n$MYNAME: Converting EPS images to PDF\n";
       &convert_eps2pdf(@eps_image_list);
    }
 
