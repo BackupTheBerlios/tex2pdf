@@ -1450,12 +1450,15 @@ sub extract_tag_contents {
 # parameter 1: file to parse
 # parameter 2: full TeX tag name
 # parameter 3: reference to a list of possible filename suffixes (without '.')
+# parameter 4: regexp for suffix to ignore when specified in TeX file
+#              (undef if not used)
 # return value: list of identified files
 
 sub identify_files {
    my $source=$_[0];
    my $tag_name=$_[1];
    my @suffixes=@{$_[2]};
+   my $ignore_suffix=$_[3];
    my @matched_tags;
    my @found_files=();
    my $regexp_suffixes= '\.('.join('|', @suffixes).')';
@@ -1472,7 +1475,22 @@ sub identify_files {
       ($base,$path,$suffix) = fileparse($tag_contents, $regexp_suffixes);
 
       # if a suffix is specified reduce list of relevant suffixes to this one
-      if($suffix) {
+      # $suffix: TRUE if $suffix is defined and not of zero length
+      #   means: it has been found a suffix in the filename
+      # $ignore_suffix: TRUE if $ignore_suffix is defined and not of zero length
+      #   means: it has been specified a parameter3 to ignore suffix
+      # $suffix =~ /$ignore_suffix/: TRUE if $suffix matches the regexp
+      #   means: it is wanted to ignore this suffix
+      # The if statement will be executed when:
+      # a suffix has been specified and there is not a ignore_suffix
+      # or
+      # a suffix and ignore_suffix have been specified and ,$ignore_suffix is
+      # not wanted to be ignored
+      # The stuff that is executed if the entire if statement is true does the
+      # following: accept the found suffix and cxonsider it as the only possible
+      # file name.
+     if($suffix and not (defined($ignore_suffix) and $suffix =~ /$ignore_suffix/) ){
+#     if($suffix and not ($ignore_suffix and $suffix =~ /$ignore_suffix/) ) {
          $kpse_result=`kpsewhich $tag_contents`;
          # print warning and skip this tag if kpsewhich could not find it  
          if (!$kpse_result) {
@@ -1516,7 +1534,7 @@ sub identify_files {
          push(@found_files, $kpse_result);
       }
    }
-   
+
    return @found_files;
 }
 
@@ -1651,17 +1669,16 @@ sub convert_tex2tmp {
       s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
 
       if ( &param_value('mtp_preamble') eq $NO ) {
-         # replace the suffix 'mp' with '.0'
-         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.mp\}/$1\.0}/g;
-
          # cut off the suffix of mmp graphics
-         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.mmp\}/$1}/g;
+         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.(mmp)\}/$1}/g;
       } else {
-         # replace the suffix 'mp' with '-mp.0'
-         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.mp\}/$1$MTP_TMP_BASESUFFIX\.0}/g;
+         # replace the suffix '.#' with '-mp.#'
+         s/((\\includegraphics)(\[[^]]*\])?(\{[^}]+))\.(\d+)\}/$1$MTP_TMP_BASESUFFIX\.$5}/g;
+         # replace the suffix '.#' with '-mp.#'
+         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.(\d+)\}/$1$MTP_TMP_BASESUFFIX\.$5}/g;
 
-         # replace the suffix 'mp' with '-mp'
-         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.mmp\}/$1$MTP_TMP_BASESUFFIX}/g;
+         # replace the suffix '.mmp' with '-mp'
+         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))(\.(mmp))?\}/$1$MTP_TMP_BASESUFFIX}/g;
       }
 
       # insert the tmp_suffix in tex filenames
@@ -1783,14 +1800,25 @@ sub convert_mp2pdf {
    my $image_name;
    my $suffix;
    my $image_target;
+   my $image_src;
+   my @mps_fig=();
+   my $mp_fig;
 
    ($image_base,$image_path,$suffix) = fileparse($image, '\.mp|\.mmp');
    $image_name = $image_base . $suffix;
-   #### dirty hack: it is only valid for metapost files created via xfig
-   # '.0' must be extracted from the mp file 
-   # it is the number in the tagname beginfig(#)
-   $image_target = $image_path . $image_base . '.0';
-   
+   $image_src=$image_path . $image_base . $suffix;
+
+   @mps_fig= &grep_file($image_path.$image_name,'beginfig',$TRUE);
+   $_=$mps_fig[0];
+   /(\d)/;
+   $mp_fig=$1;
+   if (&param_value('mtp_preamble') eq $YES) {
+     $image_target = $image_path . $image_base . $MTP_TMP_BASESUFFIX . '.' . $mp_fig;
+     $image_name=$image_base.$MTP_TMP_BASESUFFIX.$suffix;
+   } else {
+     $image_target = $image_path . $image_base . '.' . $mp_fig;
+   }
+
    #### check if image file really exists
    #&check_file($image, "Could not convert referenced image.");
 
@@ -1801,22 +1829,25 @@ sub convert_mp2pdf {
       return;
    }
 
-   if ( ! -f $image_target or -M $image_target > -M $image ) {
+   if ( ! -f $image_target or -M $image_target > -M $image_src ) {
       print "Converting image $image_name ...\n";
       my $working_dir = cwd."/";
       chdir("$image_path") or &abort("cannot cd to $image_path($!)");
       if ( &param_value('mtp_preamble') eq $YES ) {
          &modify_mp_file($image_base,$suffix);
-         $image=$image_base.$MTP_TMP_BASESUFFIX.$suffix;
       }
-      system('mpost', $image)
+      system('mpost', $image_name)
           and &abort("mpost failed on $image_name: $!");
       chdir("$working_dir") or &abort("cannot cd to $working_dir($!)");
       if (&param_value('delete_pdf_images') eq $YES) {
          push(@TMPFILES, $image_target);
       }
    } else {
-      print "$image_base.0 newer than $image_name, conversion skipped...\n";
+      if ( &param_value('mtp_preamble') eq $YES ) {
+        print "$image_base$MTP_TMP_BASESUFFIX.$mp_fig newer than $image_base$suffix, conversion skipped...\n";
+      } else {
+        print "$image_base.$mp_fig newer than $image_base$suffix, conversion skipped...\n";
+      }
    }
 }
 
@@ -1909,7 +1940,9 @@ sub convert_images {
 
    ##### Get MP images from the source file
    print "\nScanning for MP images (.mp):\n";
-   @mp_image_list=&identify_files($tex_source,'convertMPtoPDF',['mp']);
+   @mp_image_list=&identify_files($tex_source,
+#      'convertMPtoPDF|includegraphics',['mp','0'],'0');
+      'convertMPtoPDF|includegraphics',['mp','(\d+)'],'(\d+)');
    if ( @mp_image_list > 0 ) {
       print join("\n", @mp_image_list);
       print "\n";
@@ -2040,8 +2073,8 @@ sub handle_bibtex {
                }
             }
          } else {
-           print "No bibliography detected.\n";	
- 	}
+           print "No bibliography detected.\n";
+        }
       }
    }
 
@@ -2082,7 +2115,7 @@ sub handle_gloss {
       $run_gloss=$TRUE;
       print "Gloss parameter set to '$YES':\n";
    } else {
-      print "Checking for Gloss bibliography in document: ";
+      print "Checking for Gloss bibliography in main document: ";
       if( &grep_file($auxfile.'.tex', '^[^%]*\\\\printgloss{') != 0) {
          $run_gloss=$TRUE;
 	 print "Gloss bibliography detected.\n";
