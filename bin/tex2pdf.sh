@@ -126,10 +126,10 @@
 # ?????????????? -- Version 2.1
 #  * bugfix: included graphics haven't been recognised with [...] parameter
 #     (thanks to Ahmet Sekercioglu for this bug report)
-   * introduced parameters MINRUNNO and CLEANLOGS
+#  * introduced parameters MINRUNNO and CLEANLOGS
 #
 
-MYVERSION="2.0.3"
+MYVERSION="2.0.4"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
