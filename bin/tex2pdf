@@ -90,7 +90,7 @@ my $CONFIGURED=$FALSE;
 
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.14";
+my $MYRELEASE="3.1.15";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -1834,80 +1834,71 @@ sub identify_file {
 }
 
 ### create the pdf files corresponding to eps files with psfrag substitutions
-# parameter 1: original preamble from the source file
-#              lines before \begin{document} tag (without this tag)
-# parameter 2: the body of the document
+# parameter 1: eps file to be processed
 # return value: none
 
-sub pdffrag {
-   my $preamble = $MAIN_PREAMBLE;
-   my $body     = $_[0];
-   my $eps_file;
+sub convert_epsfrag2pdf {
+   my $text;
+   my $item;
+   my $eps_file     = $_[0];
    my ($tex_target,$tex_src,$pdf_target,$frg_target,$tmp_target);
    my ($eps_base,$eps_path,$suffix);
    my $dvi_log;
    my $tex_log; 
-   
+
    &checkCommand("ps2eps","See ps2eps homepage for details: http://www.telematik.informatik.uni-karlsruhe.de/~bless/ps2eps.html");
 
    my $latex_code .= "\n" . '\begin{document}' . "\n" . '\thispagestyle{empty}' . "\n";
    my $latex_end = "\n".'\end{document}';
 
-   # It is assumed that every psfrag block is between the first psfrag tag
-   # and the last line related with includegraphics
-   # Therefore, we look for every paragraph starting with \psfrag and ending with an includegraphics.The chunk between 
-   # them and themselves is considered the psfrag code that applies to the corresponding eps graphic.
-   while ($body =~ m/\\psfrag(.*?)((\\includegraphics)(\[[^]]*?\])?(\{([^}]*?(\.(e?ps|pstex|e?ps\.gz))?)\})?)/msg){
-       if (defined($7)) {
-	  $eps_file = $6;
-	  $suffix = $7;
-       } else {
-	  $eps_file = $6."\.eps";
-	  $suffix = "\.eps";
-       }
-       &report(7, "Psfrag: detecting $eps_file\n");
-       # Getting the path, base and suffix of every graphic under the psfrag substitution
-       ($eps_base,$eps_path,$suffix) = fileparse($eps_file,$suffix);
-       $tex_src   =  $eps_path.$eps_base;
-       $tex_target = $tex_src."\.tex";
-       $pdf_target = $tex_src."\.pdf";
-       $frg_target = $tex_src.'-frg.eps';
-       $tmp_target = $frg_target.'.eps';
+   # Getting the path, base and suffix of every graphic under the psfrag substitution
+   ($eps_base,$eps_path,$suffix) = fileparse($eps_file, '\.eps', '\.ps');
+   $tex_src   =  $eps_path.$eps_base;
+   $tex_target = $tex_src."\.tex";
+   $pdf_target = $tex_src."\.pdf";
+   $frg_target = $tex_src.'-frg.eps';
+   $tmp_target = $frg_target.'.eps';
 
-       if ( ! -f $pdf_target or -M $pdf_target > -M $eps_file ) {
-	  &report(7, "Converting image $eps_file to $pdf_target ...\n");
-	  # Writing the simplified latex files with the psfrag substitution
-	  open(TARGET_FILE, ">$tex_target") or
-	     &abort("Could not write to temporary LaTeX document for psfrag ($tex_target).");
+   # It should be desirable taht the time check condition to process psfrag
+   # substitutions could be based on latex source too. (latex document as global !)
+   if ( ! -f $pdf_target or -M $pdf_target > -M $eps_file ) {
+      foreach $item (@PSFRAG_TAGS){
+        my %psfrag = %$item;
+        $text .= '\\'.$psfrag{name}."{".$psfrag{contents}."}".$psfrag{extra_code}."\n";
+      }
+      $text .= "\n\\includegraphics{$eps_file}\n\n";
 
-	  print TARGET_FILE $preamble.$latex_code.$&.$latex_end;
-	  close TARGET_FILE;
+      &report(7, "Converting image $eps_file to $pdf_target ...\n");
+      # Writing the simplified latex files with the psfrag substitution
+      open(TARGET_FILE, ">$tex_target") or
+	 &abort("Could not write to temporary LaTeX document for psfrag ($tex_target).");
 
-	  # Setting up the log files for the latex and dvips runs
-	  $dvi_log = $tex_src."-dvi.log";
-	  $tex_log = $tex_src."-tex.log";
-	  &run_latex($tex_target,$tex_log);
-	  &run_dvips($eps_base.'.dvi',$dvi_log,$frg_target,'-Pcmz');
+      print TARGET_FILE $MAIN_PREAMBLE.$latex_code.$text.$latex_end;
+      close TARGET_FILE;
 
-	  # Adjusting the bounding box size, this is taken from eps2bb
-	  &system_command("ps2eps -l -f $frg_target",$TRUE, 8, "ps2eps failed on $frg_target");
-	  rename($tmp_target,$frg_target) or &abort("Can't move $tmp_target to $frg_target: $!");
-	  # Here we take advantage of the fact that the pdf output file is newer that the original eps file and 
-	  # the conversion image eps2pdf process will skip the conversion, leaving the psfrag figure just 
-	  # converted to pdf. 
-	  &system_command("epstopdf -outfile=$pdf_target $frg_target ",$TRUE, 8, "epstopdf failed on $frg_target");
-	  if (&param_value('delete_pdf_images') eq $YES) {
-             push(@TMPFILES, $pdf_target);
-	  }
-          # Some cleaning up if tex2pdf is not in debug mode
-          push(@TMPFILES, $tex_target); # This could be a little bit excessive !!
+      # Setting up the log files for the latex and dvips runs
+      $dvi_log = $tex_src."-dvi.log";
+      $tex_log = $tex_src."-tex.log";
+      &run_latex($tex_target,$tex_log);
+      &run_dvips($eps_base.'.dvi',$dvi_log,$frg_target,'-Pcmz');
+
+      # Adjusting the bounding box size, this is taken from eps2bb
+      &system_command("ps2eps -l -f $frg_target",$TRUE, 8, "ps2eps failed on $frg_target");
+      rename($tmp_target,$frg_target) or &abort("Can't move $tmp_target to $frg_target: $!");
+      # Here we take advantage of the fact that the pdf output file is newer that the original eps file and 
+      # the conversion image eps2pdf process will skip the conversion, leaving the psfrag figure just 
+      # converted to pdf. 
+      &system_command("epstopdf -outfile=$pdf_target $frg_target ",$TRUE, 8, "epstopdf failed on $frg_target");
+      if (&param_value('delete_pdf_images') eq $YES) {
+         push(@TMPFILES, $pdf_target);
+      }
+      # Some cleaning up if tex2pdf is not in debug mode
+#          push(@TMPFILES, $tex_target); # This could be a little bit excessive !!
           push(@TMPFILES, $frg_target);
           push(@TMPFILES, $dvi_log);
           push(@TMPFILES, $tex_log);
-       } else {
-	  &report(7, "$pdf_target newer than $eps_file, conversion skipped...");
-       }
-
+   } else {
+      &report(7, "$pdf_target newer than $eps_file, conversion skipped...");
    }
 }
 
@@ -2120,7 +2111,7 @@ sub process_textags {
                if (@PSFRAG_TAGS != 0) {
                   report(7, "EPS graphic identified (psfrag tags present): "
                      .$found_file);
-                  ### generated PDFFRAG graphics using @PSFRAG_TAGS
+                  &convert_epsfrag2pdf($found_file);
                } else {
                   report(7, "EPS graphic identified: $found_file");
                   &convert_eps2pdf($found_file);
@@ -2282,19 +2273,8 @@ sub convert_tex2tmp {
       # to the included documents
       $MAIN_PREAMBLE = $preamble;
       $body = $&.$';
-      if ($preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
-	 &report(6, "Psfrag substitution detected. Entering pdffrag process");
-         &pdffrag($body);
-      }
       $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
       $preamble = &process_textags($preamble);
-   } else {
-      $preamble = "";
-      $body = $contents;
-      if ($body =~ /\\psfrag/) {
-         &report(6, "Psfrag substitution detected in included document. Entering pdffrag process");
-         &pdffrag($body);
-      }
    }
    
    $body = &process_textags($body);
