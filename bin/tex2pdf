@@ -1612,7 +1612,6 @@ sub extract_tag_contents {
    # add contents of all occurences of this tag in a line to result list
    while ( /\\($tag_name)(\[[^]]*?\])*?{+([^{}]*?)}/s ) {
       my $text = $3;
-      print "$text\n";
       $_ = $';
       # remove newlines
       $text =~ s/\n//g;
