@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#      lyx2pdf - script for converting lyx docs to pdf
+#      lyx2pdf - script for translating lyx docs to pdf
 #
 #      Copyright (C) 2000 by Steffen Evers (tron@cs.tu-berlin.de)
 #
@@ -23,9 +23,13 @@
 #
 # Version History:
 #
-# Aug 13th, 2000 -- Version 1.0
+# Aug 13th, 2000 -- Version 1.2
 #   initial version
 #
+
+##### You will need pdftex and epstopdf for the translation!
+##### See pdftex homepage for details: http://tug.org/applications/pdftex/
+##### Have fun!!!
 
 
 echo $MYNAME: Setting environment variables
