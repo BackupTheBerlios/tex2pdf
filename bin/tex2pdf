@@ -65,6 +65,7 @@ $MYNAME="tex2pdf.pl";
 
 ### text token for no value
 $NIL="NOVALUE";
+$UNDEF="undefined";
 
 ### token for boolean 'false', 'no' 
 $NO="no";
@@ -228,7 +229,93 @@ $RC_VARIABLES= [ qw< PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR
    PDFTEXOPTS COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERT_REGEXP
    > ];
 
+########################## NEW PERL CONFIGURATON
+
+%CONFIGURATION = ();
+%PARAMETER_LIST = ();
+%PARAMETER_TYPES = ();
+ 
+%PAPER_VALUES = ( 'a4paper' => 'a4 paper',
+                  'letterpaper' => 'letter paper',
+                  'legalpaper' => 'legal paper',
+		  'executivepaper' => 'executive paper',
+                  $NIL => $NIL );
+		  
+%COLOR_VALUES = ( 'yellow' => 'LaTeX color yellow',
+                  'red' => 'LaTeX color red',
+                  'green' => 'LaTeX color green',
+		  'cyan' => 'LaTeX color cyan',
+		  'blue' => 'LaTeX color blue',
+		  'magenta' => 'LaTeX color magenta',
+		  'black' => 'LaTeX color black',
+		  $NIL => $NIL );
+
+%DESTINATON_VALUES = ( 'source' => 'directory of the LaTeX source document' ,
+                       'input' => 'root directory of referenced material',
+                       'custom' => 'custom directory as specified');
+
+%VALUE_TYPES = ( 'color' => \%COLOR_VALUES,
+		 'destination' => \%DESTINATON_VALUES,
+		 'paper' => \%PAPER_VALUES,
+                 'three' => undef,
+                 'bool' => undef,
+		 'integer' => undef,
+		 'text' => undef,
+		 'directory' => undef );
+
+%PARAMETER_TYPES = ( 'logdir' => 'directory',
+	'cleanlogs' => 'bool',
+	'clean-on-abort' => 'bool',
+	'check-commands' => 'bool',
+	'append-regexp' => 'text',
+	'destination' => 'destination',
+	'custom-path' => 'directory',
+	'tmp-base-suffix' => 'text',
+        'colorlinks' => 'three',
+	'paper' => 'paper',
+	'citecolor' => 'color',
+	'urlcolor' => 'color',
+	'linkcolor' => 'color',
+	'pagecolor' => 'color',
+	'linktocpage' => 'three',
+	'title' => 'text',
+	'author' => 'text',
+	'forceindex' => 'bool',
+        'bibtex' => 'three',
+	'thumbpdf' => 'bool',
+	'maxrun' => 'integer',
+	'minrun' => 'integer',
+	'pdftex-opts' => 'text',
+	'hyperref-opts' => 'text' );
+ 
+%CONFIGURATON = ( 'logdir' => "/tmp/tex2pdf-$ENV{'USER'}/",
+	'cleanlogs' => $YES,
+	'clean-on-abort' => $NO,
+	'check-commands' => $YES,
+	'append-regexp' => '^\\documentclass(\[[^]]*\])?\{.*\}',
+	'destination' => $DESTINATON_VALUES{'source'},
+	'custom-path' => $ENV{'HOME'},
+	'tmp-base-suffix' => '-pdf',
+        'colorlinks' => $YES,
+	'paper' => $PAPER_VALUES{'a4'},
+	'citecolor' => $COLOR_VALUES{'red'},
+	'urlcolor' => $COLOR_VALUES{'blue'},
+	'linkcolor' => $COLOR_VALUES{'green'},
+	'pagecolor' => $COLOR_VALUES{'magenta'},
+	'linktocpage' => $YES,
+	'title' => $NIL,
+	'author' => $NIL,
+	'forceindex' => $NO,
+        'bibtex' => $NIL,
+	'thumbpdf' => $NO,
+	'maxrun' => 2,
+	'minrun' => 6,
+	'pdftex-opts' => $NIL,
+	'hyperref-opts' => $NIL );
+
 ##### Functions ###########################################
+
+###################### Generic functions (for use with any script)
 
 ### Index of the first occurence of a string in an array
 # parameter 1: list
@@ -346,21 +433,20 @@ sub input_number {
 ### interactively choose between several given values
 # parameter 1: question
 # parameter 2: default value
-# parameter 3: reference to a list of possible values
+# parameter 3: reference to hash list of possible values
 # return value: the chosen value
 
 sub choose_value {
-   my $question=$_[0];
-   my $default=$_[1];
-   my @possible_values=@$_[2];
+   my ($question, $default, $values_hash_ref)=@_;
    my $list_index=1;
    my $default_no=1;
    my $chosen_no;
+   my @possible_values = keys %$values_hash_ref;
 
    print "$question\n";
    foreach (@possible_values)
    {
-      print "$list_index) $_\n";
+      print '$list_index) ' . ${$values_hash_ref}{$_} . "\n";
       if ( $default eq $_ ) { $default_no=$list_index; }
       $list_index = $list_index + 1;
    }
@@ -401,12 +487,10 @@ sub check_file {
    my $message = defined($_[1]) ? $_[1] : "Required file cannot be accessed!";
 
    if ( ! -f $file ) {
-      print "\n";
-      print "$MYNAME: Sorry. I cannot find '$file'.\n";
+      print "\n$MYNAME: Sorry. I cannot find '$file'.\n";
       &abort($message);
    } elsif ( ! -r $file ) {
-      print "\n";
-      print "$MYNAME: Sorry. File '$file' exists, but is not readable.\n";
+      print "\n$MYNAME: Sorry. File '$file' exists, but is not readable.\n";
       &abort($message);
    }
 }
@@ -423,8 +507,7 @@ sub check_dir {
    my $allow_creation = defined($_[2]) ? $_[2] : $NO;
 
    if ( index($directory, "/") != 0 ) {
-      print "\n";
-      print "$MYNAME: Sorry. '$directory' is not an absolute path.\n";
+      print "\n$MYNAME: Sorry. '$directory' is not an absolute path.\n";
       print "$message\n";
       return $FALSE;
    } elsif ( ! -d $directory ) {
@@ -449,15 +532,14 @@ sub check_dir {
       }
    } elsif ( ! -w $directory ) {
       # dir not writable
-      print "\n";
-      print "$MYNAME: Sorry. Directory '$directory' exists, but is not writable.\n";
+      print "\n$MYNAME: Sorry. Directory '$directory' exists, but is not writable.\n";
       print "$message\n";
       return $FALSE;
    }
    return $TRUE;
 }
 
-### interactively input an directory for data storage (absolute path)
+### interactively input a directory for data storage (absolute path)
 # parameter 1: question
 # parameter 2: default dir
 # parameter 3: if 'yes' allow creation of directory
@@ -564,8 +646,7 @@ sub checkCommand {
    if ( $_ ne $command ) {
       print "\n";
       system "which", $command;
-      print "\n";
-      print "$MYNAME: Required command '$command' seems not to be in your path.\n";
+      print "\n$MYNAME: Required command '$command' seems not to be in your path.\n";
       if ( defined($message) ) {
          print "$message\n";
       }
@@ -574,12 +655,114 @@ sub checkCommand {
    }
 }
 
+#### add a new parameter to the adminstrated parameters
+####
+# parameter 1: key
+# parameter 2: type
+# parameter 3: default value
+# parameter 4: alias for command line options
+# parameter 5: short description for help
+# return value: none
+
+sub add_param {
+ 
+   my ($key, $type, $value, $alias, $description) = @_;
+ 
+   $CONFIGURATION{$key} = $value;
+   $PARAMETER_LIST{$key} = [ $type, $alias, $description, $value ];
+   if (! exists $PARAMETER_TYPES{$type}) {
+      $PARAMETER_TYPES{$type} = undef;
+   }
+}
+
+### get the value of an existing parameter
+# parameter 1: a parameter key
+# return value: parameter value
+
+sub param_value {
+   my $key = $_[0];
+   my $current_value;
+
+   exists(%CONFIGURATION{$key})
+      or &abort "unknown parameter: $key";
+   $current_value = %CONFIGURATION{$key};
+
+   return $current_value;
+}
+
+### set the value of an existing parameter
+# parameter 1: a parameter key
+# parameter 2: the new value
+# return value: none
+
+sub set_param {
+   my $key = $_[0];
+   my $new_value = $_[1];
+
+   exists(%CONFIGURATION{$key})
+      or &abort "unknown parameter: $key";
+   %CONFIGURATION{$key}=$new_value;
+}
+
+### configure an existing parameter interactively
+# parameter 1: question
+# parameter 2: a parameter key
+# return value: none
+
+sub config_param {
+   my $question = $_[0];
+   my $key = $_[1];
+   my $type; 
+   my $new_value;
+   my $current_value;
+
+   exists(%PARAMETER_TYPES{$key})
+      or &abort "unknown parameter: $key";
+   $type = %PARAMETER_TYPES{$key}; 
+
+   $current_value = &param_value($key);
+
+   exists(%TYPE_VALUES{$type})
+      or &abort "unknown parameter type: $key";
+
+   if ($type eq 'bool') {
+      $new_value=&question_ynu($question, $current_value, $NO);
+   } elsif ($type eq 'three') {
+      $new_value=&question_ynu($question, $current_value, $YES);
+   } elsif ($type eq 'directory') {
+      $new_value=&input_dir($question, $current_value, $YES);  
+   } elsif ($type eq 'text') {
+      $new_value=&input_text($question, $current_value);  
+   } elsif ($type eq 'integer') {
+      $new_value=&input_number($question, $current_value,
+      $NUM_PARAM_MIN, $NUM_PARAM_MAX);  
+   } else {
+      my @possible_values; 
+      my $values_hash_ref; 
+
+      $values_hash_ref=%TYPE_VALUES{$type}; 
+      if (! defined($values_hash_ref)) {
+         &abort "do not know how to configure this parameter: $key (type: $type)";
+      }
+
+      $new_value=&choose_value($question,$current_value,$values_hash_ref);
+   } 
+
+   %CONFIGURATION{$key} = $new_value;
+}
+
 ### save configuration in rc file
+# parameter 1: file name
+# return value: none
 
 sub write_configuration {
+   my $file_name = $_[0];
    my $date;
-   open(RCFILE, ">$RC_FILENAME") or
-      &abort("Could not open configuration file for writing ($RC_FILENAME)");
+   my $key;
+   my $value;
+
+   open(RCFILE, ">$file_name") or
+      &abort("Could not open configuration file for writing ($file_name)");
    select RCFILE;
 
    $date = `date`;
@@ -588,8 +771,8 @@ sub write_configuration {
    print "# Configuration file for $MYNAME V$MYRELEASE\n";
    print "# Generated $date by $ENV{'USER'} on $ENV{'HOSTNAME'}\n";
    
-   foreach my $variable (@$RC_VARIABLES) {
-      print "$variable".'='."$$variable\n";
+   while (($key, $value) = each %CONFIGURATION ) {
+      print "$key".'='."$value\n";
    }
    
    print "# EOF\n";
@@ -599,34 +782,45 @@ sub write_configuration {
 
 ### print the configuration parameters
 sub print_configuration {
+   my $key;
+   my $value;
+
    print "Configuration for $MYNAME V$MYRELEASE\n";
    
-   foreach my $variable (@$RC_VARIABLES) {
-      print "$variable".'='."$$variable\n";
+   while (($key, $value) = each %CONFIGURATION ) {
+      print "$key".'='."$value\n";
    }
    
    print "\n";
 }
 
 ### load parameters from rc file
+# parameter 1: file name
+# return value: none
 
 sub read_configuration {
-   my $line;
+   my $file_name = $_[0];
 
-   &check_file($RC_FILENAME, "Could not access configuration file");
-   open(RCFILE, "<$RC_FILENAME") or
-      &abort("Could not open configuration file for reading ($RC_FILENAME)");
+   &check_file($file_name, "Could not access configuration file");
+   open(RCFILE, "<$file_name") or
+      &abort("Could not open configuration file for reading ($file_name)");
 
-   while (defined($line = <RCFILE>)) {
-      foreach my $parameter (@$RC_VARIABLES) {
-         $_ = $line;
+   while (<RCFILE>) {
          chomp;
-         if( s/^$parameter=([[:print:]]*)$/$1/ ) {
-            $$parameter = $_; 
+         if( /^([^#=]+)=([[:print:]]*)$/ and exists $CONFIGURATION{$1} ) {
+            $CONFIGURATION{$1} = $2; 
          }
       }
    }
    close RCFILE;
+}
+
+### print script version
+
+sub print_version {
+   print "\n";
+   print "$MYNAME Version $MYRELEASE\n";
+   print "\n";
 }
 
 ###################### Specific functions (for use with this script only)
@@ -634,19 +828,16 @@ sub read_configuration {
 ### print usage of command
 
 sub usage {
-   print "\n";
-   print "Usage: $MYNAME [OPTIONS] DOCUMENT.lyx\n";
+   print "\nUsage: $MYNAME [OPTIONS] DOCUMENT.lyx\n";
    print "       $MYNAME [OPTIONS] DOCUMENT.tex\n";
-   print "       $MYNAME [-h|-v|-o|-r]\n";
-   print "\n";
+   print "       $MYNAME [-h|-v|-o|-r]\n\n";
 }
 
 ### print command help
 
 sub help {
-   print "\n";
-   print "$MYNAME Version $MYRELEASE\n";
-   @usage;
+   print "\n$MYNAME Version $MYRELEASE\n";
+   &usage;
    print " -h : print this message\n";
    print " -v : print version information\n";
    print " -o : print configuration parameters\n";
@@ -660,22 +851,14 @@ sub help {
    print " -a AUTHOR : specify author for PDF document info\n";
    print " -p SELECT : select papersize: @$POSSIBLE_PAPER\n";
    print " -b SELECT : select bibtex handling: @$POSSIBLE_BIBTEX\n";
-   print " -d PATH   : custom directory where the final PDF is stored\n";
-   print "\n";
+   print " -d PATH   : custom directory where the final PDF is stored\n\n";
 }
 
-### print script version
+### configure all tex2pdf parameters interactively
+# parameters: none
+# return value: none
 
-sub print_version   {
-   print "\n";
-   print "$MYNAME Version $MYRELEASE\n";
-   print "\n";
-}
-
-
-### configure tex2pdf parameters interactively
-
-sub configure  {
+sub configure {
    print "\nConfiguration for tex2pdf.\n";
    print "The following answers are considered as defaults in later executions\n";
    print "of $MYNAME. You can change these values by using option -r.\n";
@@ -686,34 +869,34 @@ sub configure  {
 
    print "\n----------------\n";
    print "$MYNAME can set the papersize of the resulting PDF document.\n";
-   $PAPERSIZE=&choose_value("What papersize should be used?",$PAPERSIZE,$POSSIBLE_PAPER);
+   &config_param("What papersize should be used?", 'paper');
 
    print "\n----------------\n";
    print "The table of contents of the resulting PDF document is normally linked\n";
    print "to the corresponding section. However, you can also link it to the\n";
    print "corresponding page instead.\n";
-   $LINKTOCPAGE=&question_ynu("Should TOC be linked to pages?",$LINKTOCPAGE);
+   &config_param("Should TOC be linked to pages?",'linktocpage');
 
    print "\n----------------\n";
    print "$MYNAME can use different colors for links inside the PDF document.\n";
-   $COLORLINKS=&question_ynu("Should colors be used for links?",$COLORLINKS);
+   &config_param("Should colors be used for links?",'colorlinks');
 
-   if ( $COLORLINKS eq $YES ) {
+   if ( &param_value('colorlinks') eq $YES ) {
         print "\n----------------\n";
         print "It is possible to specify the color for page links.\n";
-        $PAGECOLOR=&choose_value("What color should be used for page links?",$PAGECOLOR,@LINK_COLORS);
+        &config_param("What color should be used for page links?",'pagecolor');
 
         print "\n----------------\n";
         print "It is possible to specify the color for normal internal links.\n";
-        $LINKCOLOR=&choose_value("What color should be used for normal links?",$LINKCOLOR,@LINK_COLORS);
+        &config_param("What color should be used for normal links?",'linkcolor');
 
         print "\n----------------\n";
         print "It is possible to specify the URL color.\n";
-        $URLCOLOR=&choose_value("What color should be used for URLs?",$URLCOLOR,@LINK_COLORS);
+        &config_param("What color should be used for URLs?",'urlcolor');
 
         print "\n----------------\n";
         print "It is possible to specify the citation color.\n";
-        $CITECOLOR=&choose_value("What color should be used for citation?",$CITECOLOR,@LINK_COLORS);
+        &config_param("What color should be used for citation?",'citecolor');
    }
 
    print "\n----------------\n";
@@ -724,12 +907,12 @@ sub configure  {
 
    print "The default title for the document info of all generated documents.\n";
    print "$NIL will be recognized.\n\n";
-   $DEFAULT_TITLE=&input_text("Default document title?",$DEFAULT_TITLE);
+   &config_param("Default document title?",'title');
 
    print "\n----------------\n";
    print "The default author for the document info of all generated documents.\n";
    print "$NIL will be recognized.\n\n";
-   $DEFAULT_AUTHOR=&input_text("Default document author?",$DEFAULT_AUTHOR);
+   &config_param("Default document author?",'author');
 
    print "\n----------------\n";
    print "If you like you can make me pass additional parameters to hyperref.\n";
@@ -737,7 +920,7 @@ sub configure  {
    print "These parameters should normally have the format:\n";
    print "PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...\n";
    print "Leave blank for no additional values.\n\n";
-   $ADDITIONAL_PARAMETERS=&input_text("Additional parameters ?",$ADDITIONAL_PARAMETERS);
+   &config_param("Additional parameters ?",'hyperref-opts');
 
    print "\n----------------\n";
    print "You can now specify in which directory the resulting document should\n";
@@ -749,63 +932,62 @@ sub configure  {
    print "  it is identical with the '@$POSSIBLE_PDFOUT[0]' option.\n";
    print "- '@$POSSIBLE_PDFOUT[2]' means you want to specify your own directory where the\n";
    print "  generated document should be written.\n";
-   $PDFOUT=&choose_value("Which output directory?",$PDFOUT,$POSSIBLE_PDFOUT);
+   &config_param("Which output directory?",'destination');
 
    if ( $PDFOUT eq @$POSSIBLE_PDFOUT[2] ) {
       print "\n----------------\n";
       print "You have choosen to specifiy a custom output directory.\n";
-      $PDFCUSTOMDIR=&input_dir("What custom directory should be used?",$PDFCUSTOMDIR,$YES);
+      &config_param("What custom directory should be used?",'custom-path');
    }
 
    print "\n----------------\n";
-   print "The sed executable to use can be specified.\n";
-   print "Type 'sed' in order to use the sed in your path.\n\n";
-   $SEDEXE=&input_text("What sed executable should be used?",$SEDEXE);
-
-   print "\n----------------\n";
    print "The bibtex usage can be specified.\n";
-   print "Possible values are: '@$POSSIBLE_BIBTEX[0]' (always run bibtex), '@$POSSIBLE_BIBTEX[1]' (never run\n";
-   print "bibtex) and '@$POSSIBLE_BIBTEX[3]' (scan tex file for a bibtex entry and run it\n";
+   print "Possible values are: '$YES' (always run bibtex), '$NO' (never run\n";
+   print "bibtex) and '$UNDEF' (scan tex file for a bibtex entry and run it\n";
    print "if required).\n";
-   $BIBTEX=&choose_value("How should bibtex be used?",$BIBTEX,$POSSIBLE_BIBTEX);
+   &config_param("How should bibtex be used?",'bibtex');
 
    print "\n----------------\n";
    print "The maximal number of runs for pdflatex can be specified.\n";
-   $MAXRUNNO=&input_number("What should be the maximum number of runs for pdflatex?",$MAXRUNNO 1 9);
+   $NUM_PARAM_MIN=1;
+   $NUM_PARAM_MAX=9;
+   &config_param("What should be the maximum number of runs for pdflatex?",'maxrun');
 
    print "\n----------------\n";
    print "The minimal number of runs for pdflatex can be specified.\n";
    print "Possible values are: 1 ... $MAXRUNNO.\n";
-   $MINRUNNO=&input_number("What should be the minimum number of runs for pdflatex?",$MINRUNNO,1,$MAXRUNNO);
+   $NUM_PARAM_MIN=1;
+   $NUM_PARAM_MAX=$MAXRUNNO;
+   &config_param("What should be the minimum number of runs for pdflatex?",'minrun');
 
    print "\n----------------\n";
    print "The log directory is used to store information about the generation\n";
    print "process for later review, e.g. for debugging.\n";
-   $LOGDIR=&input_dir("What log directory should be used?",$LOGDIR,$YES);
+   &config_param("What log directory should be used?",'logdir');
 
    print "\n----------------\n";
    print "$MYNAME can clean the log files before execution.\n";
    print "You might experience problems if you run $MYNAME on several documents\n";
    print "the same time. If you want to be on the safe side, answer '$NO'.\n";
-   $CLEANLOGS=&question_ynu("Should the log files be cleaned before execution?",$CLEANLOGS);
+   &config_param("Should the log files be cleaned before execution?",'cleanlogs');
 
    print "\n----------------\n";
    print "$MYNAME can check for the required executables.\n";
-   $COMMANDCHECK=&question_ynu("Should $MYNAME check for the required executables?",$COMMANDCHECK);
+   &config_param("Should $MYNAME check for the required executables?",'commandcheck');
 
    print "\n----------------\n";
    print "$MYNAME can use thumbpdf to include thumbnails of the document pages.\n";
    print "This requires Ghostscript 5.50 or higher.\n";
-   $THUMBNAILS=&question_ynu("Should PNG thumbnails be created?",$THUMBNAILS);
+   &config_param("Should PNG thumbnails be created?",'thumbpdf');
 
    print "\n----------------\n";
    print "$MYNAME can force the call of makeindex if pdftex fails to do this.\n";
-   $MAKEINDEX=&question_ynu("Should the call of makeindex be forced?",$MAKEINDEX);
+   &config_param("Should the call of makeindex be forced?",'forceindex');
 
    print "\n----------------\n";
    print "Additional options for pdflatex can be specified.\n";
    print "Normally, you can leave this blank.\n\n";
-   $PDFTEXOPTS=&input_text("What additional options for pdflatex should be used? :", $PDFTEXOPTS);
+   &config_param("What additional options for pdflatex should be used?", 'pdftex-opts');
    print "\n";
 }
 
@@ -989,7 +1171,7 @@ sub adjust_configuration {
    
    ### set parameters from rc file
    if ( -f $RC_FILENAME ) {
-     &read_configuration;
+     &read_configuration $RC_FILENAME;
      #### compatibilty with old RC files where SEDEXE could be ""
      if ( $SEDEXE eq "" ) { $SEDEXE=sed; }
    } else {
@@ -1001,7 +1183,7 @@ sub adjust_configuration {
    ### configure parameters
    if ( $config_request eq $YES ) {
      &configure;
-     &write_configuration;
+     &write_configuration $RC_FILENAME;
      &print_configuration;
      exit 0;
    }
