@@ -29,7 +29,8 @@
 # (see the changelog for details):
 # Matej Cepl, Herbert Voss, Nicolas Marsgui, Bruce Foster, Mark van Rossum,
 # Matt Bandy, Garrick Chien Welsh, Stacy J. Prowell, Pavel Sedivy,
-# Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke
+# Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke,
+# Rainer Dorsch & friends, Jean-Pierre Chrétien
 #
 # Project Homepage: http://tex2pdf.berlios.de
 # Developer Homepage: http://developer.berlios.de/projects/tex2pdf
@@ -44,7 +45,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.8"
+MYRELEASE="2.2.9"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -143,6 +144,13 @@ MINRUNNO=2
 # directory for log files
 LOGDIR=/tmp/tex2pdf-$USER/
 
+# leave created pdf images in directory
+# for further reuse if pdf newer than eps or pstex
+REUSEPDF="no"
+
+# use original bitmaps instead of creating pdf from eps
+ORIGINALBITMAP="no"
+
 # clean log files before execution
 # You might get problems with this when you run tex2pdf on several documents
 # at the same time. So, if you want to be on the safe side set "no" and clean
@@ -205,7 +213,7 @@ RC_FILE=$HOME/.tex2pdfrc
 # variables for the rc file
 # list of all variables that should be stored/read in/from the rc file
 # this list MUST have the syntax "VARIABLE1 VARIABLE2 ..."
-RC_VARIABLES="PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR DEFAULT_TITLE DEFAULT_AUTHOR LINKTOCPAGE ADDITIONAL_PARAMETERS PDFOUT PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERTCOMMAND"
+RC_VARIABLES="PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR DEFAULT_TITLE DEFAULT_AUTHOR LINKTOCPAGE ADDITIONAL_PARAMETERS PDFOUT PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERTCOMMAND REUSEPDF ORIGINALBITMAP"
 
 ##### Functions ###########################################
 
@@ -732,6 +740,24 @@ configure() {
    echo
 
    echo ----------------
+   echo "You may reuse the pdf files created from eps or pstex, with a check"
+   echo "of time stamps in case of update of PS files; pdf files will remain in the"
+   echo "working directory."
+   questionYN "Do you want to reuse pdf files?" $REUSEPDF
+   REUSEPDF=$RESPONSE
+   echo
+
+   echo ----------------
+   echo "You may avoid backconversion of eps files to bitmap jpg, pdf or png formats"
+   echo "when original files exist and have been converted to eps for"
+   echo "lyx or latex runs; original pdf files must be named with extension foo.pdf.orig"
+   echo "(and will be temporarily copied to foo.pdf) to avoid conflict with REUSEPDF"
+   echo "functionality."
+   questionYN "Do you want to use original png, jpg and pdf.orig files?" $ORIGINALBITMAP
+   ORIGINALBITMAP=$RESPONSE
+   echo
+
+   echo ----------------
    echo "The maximal number of runs for pdflatex can be specified."
    input_number "What should be the maximum number of runs for pdflatex?" $MAXRUNNO 1 9
    MAXRUNNO=$RESPONSE
@@ -866,7 +892,7 @@ extract_files() {
    local FILES=
    FOUND_FILES=
 
-   FOUND_FILES=`sed -n -e "s/\(^\|[^\]\)%.*$/\1/" \
+   FOUND_FILES=`${SEDEXE} -n -e "s/\(^\|[^\]\)%.*$/\1/" \
      -e "s/^.*[\]\($TAGNAME\)\(\[[^{]*\]\)\?{\(\([^}]*\/\)\?[^}/.]\+\($SUFFIX\)\)}.*$/\3/p" $SOURCE`
 
    if [ -n "$FILES" ]
@@ -886,6 +912,7 @@ extract_files() {
 
 getFileList() {
    local IMPORTS=
+   local file=
 
    # This is the cycle avoidance logic.
    flag=`echo $FILES | ${SEDEXE} -n "\| $1|p"`
@@ -898,12 +925,19 @@ getFileList() {
       FILES="$FILES $1"
 
       # Get the list of files included by the argument.
-      extract_files "$1" "include\|input" ""
+      extract_files "$1" "include\|input" "\(\.tex\)\?"
       IMPORTS="$FOUND_FILES"
 
       # Recurse.
       for file in $IMPORTS ; do
-         getFileList $file.tex
+         if [ -z "`echo $file | ${SEDEXE} -n "/\.tex$/p"`" ]
+	 then
+	    # tag without the .tex extension
+            getFileList "$file.tex"
+	 else
+	    # tag with the .tex extension
+	    getFileList "$file"
+	 fi
       done
    fi
 }
@@ -925,13 +959,35 @@ convert_eps2pdf() {
       #### check if image file really exists
       check_file ${IMAGEPATH}${IMAGENAME} "Could not convert included image."
 
-      if [ ${IMAGEPATH}${IMAGEBASE}.pdf -ot ${IMAGEPATH}${IMAGENAME} ]
+      #### check for existence of original bitmap image to avoid
+      #### reconversion from eps towards jpg, png or pdf
+      #### (assuming that a true pdf original has a .orig suffix, to
+      #### make a difference with the case of time stamp check)
+      if [ "$ORIGINALBITMAP" = "yes" ] && [ -r ${IMAGEPATH}${IMAGEBASE}.jpg ]
       then
-         echo Converting image ${IMAGENAME} ...
-         epstopdf -outfile=${IMAGEPATH}${IMAGEBASE}.pdf ${IMAGEPATH}${IMAGENAME}
-         TMPFILES="$TMPFILES ${IMAGEPATH}${IMAGEBASE}.pdf"
+         echo Using original ${IMAGEPATH}${IMAGEBASE}.jpg file...
+      elif [ "$ORIGINALBITMAP" = "yes" ] && [ -r ${IMAGEPATH}${IMAGEBASE}.png ]
+      then
+         echo Using original ${IMAGEPATH}${IMAGEBASE}.png file...
+      elif [ "$ORIGINALBITMAP" = "yes" ] && [ -r ${IMAGEPATH}${IMAGEBASE}.pdf.orig ]
+      then
+         echo Using original ${IMAGEBASE}.pdf file...
+         cp ${IMAGEPATH}${IMAGEBASE}.pdf.orig ${IMAGEPATH}${IMAGEBASE}.pdf
+         TMPFILES="$TMPFILES ${IMAGEPATH}${IMAGEBASE}.pdf" 
       else
-         echo ${IMAGEBASE}.pdf newer than ${IMAGENAME}, conversion skipped...
+         #### check time stamp to skip conversion if eps is older than pdf
+         if [ "$REUSEPDF" = "no" ] || [ ! -e ${IMAGEPATH}${IMAGEBASE}.pdf ] \
+	     || [ ${IMAGEPATH}${IMAGEBASE}.pdf -ot ${IMAGEPATH}${IMAGENAME} ]
+	 then
+            echo Converting image ${IMAGEPATH}${IMAGENAME} ...
+            epstopdf -outfile=${IMAGEPATH}${IMAGEBASE}.pdf ${IMAGEPATH}${IMAGENAME}
+            if [ "$REUSEPDF" = "no" ]
+	    then
+               TMPFILES="$TMPFILES ${IMAGEPATH}${IMAGEBASE}.pdf"
+            fi
+         else
+            echo ${IMAGEPATH}${IMAGEBASE}.pdf newer than ${IMAGEPATH}${IMAGENAME}, conversion skipped...
+         fi
       fi
    done
 }
@@ -956,17 +1012,30 @@ convert_pstex2pdf() {
       echo Converting file ${PSTEXNAME} ...
 
       # create .pdf_t file
-      $SEDEXE -e "s/\(^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{.*\.\)pstex\(.*$\)/\2pdf\3/g" ${PSTEXPATH}${PSTEXNAME} > "${PSTEXPATH}${PSTEXBASE}.pdf_t"
+      # wipe out the pdf extension in translated pdf_t file
+      ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^]]*\]\)\?\({[^}]\+\)\.pstex}/\1\2\3}/g" ${PSTEXPATH}${PSTEXNAME} > "${PSTEXPATH}${PSTEXBASE}.pdf_t"
 
       # find included EPS image
       EPSIMAGE=`${SEDEXE} -n "s/^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{\([^}]\+\)}.*$/\2/pg" ${PSTEXPATH}${PSTEXNAME}`
       EPSBASE=`basename $EPSIMAGE .pstex`
 
       # convert image to pdf
-      epstopdf -outfile=${PSTEXPATH}${EPSBASE}.pdf ${PSTEXPATH}${EPSIMAGE}
-      PDFIMAGES="$PDFIMAGES ${PSTEXPATH}${PSTEXBASE}.pdf"
+      # check time stamp to skip conversion if eps is older than pdf
+      if [ "$REUSEPDF" = "no" || [ ! -e ${PSTEXPATH}${EPSBASE}.pdf ] \
+         || [ ${PSTEXPATH}${EPSBASE}.pdf -ot ${PSTEXPATH}${EPSIMAGE} ]
+      then 
+         echo Converting image ${PSTEXPATH}${EPSIMAGE} ...
+         epstopdf -outfile=${PSTEXPATH}${EPSBASE}.pdf ${PSTEXPATH}${EPSIMAGE}
+         PDFIMAGES="$PDFIMAGES ${PSTEXPATH}${PSTEXBASE}.pdf"
 
-      TMPFILES="$TMPFILES ${PSTEXPATH}${PSTEXBASE}.pdf_t ${PSTEXPATH}${PSTEXBASE}.pdf"
+         TMPFILES="$TMPFILES ${PSTEXPATH}${PSTEXBASE}.pdf_t"
+         if [ "$REUSEPDF" = "no" ]
+	 then
+            TMPFILES="$TMPFILES ${PSTEXPATH}${PSTEXBASE}.pdf"
+         fi
+      else
+         echo ${PSTEXBASE}.pdf newer than ${EPSIMAGE}, conversion skipped
+      fi
    done
 }
 
@@ -1046,9 +1115,11 @@ prepare_document() {
    echo
    echo $MYNAME: Generating temporary LaTeX document
 
-   ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^]]*\]\)\?\({[^}]\+\.\)\(e\)*ps}/\1\2\3pdf}/g" \
-   -e "s/\([\]input{[^}]\+\.\)pstex_t}/\1pdf_t}/g" \
-   -e "s/\([\]include{[^}]\+\)}/\1${TMPBASESUFFIX}}/g" \
+   # wipe out pdf extension \includegraphics
+   ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^]]*\]\)\?\({[^}]\+\)\.\(e\)*ps}/\1\2\3}/g" \
+   -e "s/\([\]input{[^}.]\+\.\)pstex_t}/\1pdf_t}/g" \
+   -e "s/\([\]input{[^}.]\+\)\(\.tex\)\?}/\1${TMPBASESUFFIX}\2}/g" \
+   -e "s/\([\]include{[^}.]\+\)\(\.tex\)\?}/\1${TMPBASESUFFIX}\2}/g" \
    -e "1,/^[\]begin{document}$/s/^[\]batchmode$//" \
    -e "$INSERTCOMMAND"' \
    \\usepackage{pslatex}' \
@@ -1094,6 +1165,7 @@ run_pdflatex() {
       then
          cat $PDFLOGFILE
 	 echo
+         echo "$MYNAME: Log file is: $PDFLOGFILE."
 	 abort "Fatal error occured. I am lost."
       fi
       if [ $errors -ne 0 ]
@@ -1280,9 +1352,7 @@ shift $(($OPTIND - 1))
 if ! mkdir -p ${LOGDIR}
 then
    echo
-   echo "$MYNAME: Could not create log directory ($LOGDIR)."
-   echo "Aborting ..."
-   exit 1
+   abort "Could not create log directory ($LOGDIR)."
 fi
 
 if [ -n "$LOGFILES" -a -n "`ls ${LOGDIR}`" -a "$CLEANLOGS" = "yes" ]
@@ -1419,7 +1489,7 @@ generate_parameters
 # relative to another directory than the PASSED document's directory.
 # This is useful when the calling application (e.g. LyX) generates a temporary
 # TeX file and calls the tex2pdf with it instead of the original file.
-INPUTPATH=`$SEDEXE -n "s|^[\]def[\]input@path{\+\([^{}]*\)}\+|\1|1p" $PASSEDTEXDOC`
+INPUTPATH=`${SEDEXE} -n "s|^[\]def[\]input@path{\+\([^{}]*\)}\+|\1|1p" $PASSEDTEXDOC`
 
 ## check if INPUTPATH is ok
 if [ -n "$INPUTPATH" ]
@@ -1538,10 +1608,7 @@ then
    mv ${TMPBASE}.pdf ${PDFOUTDIR}${DOCBASE}.pdf
 else
    echo
-   echo "$MYNAME: The PDF file ${TMPBASE}.pdf was not generated."
-   clean_up
-   echo "Aborting ..."
-   exit 1
+   abort "The PDF file ${TMPBASE}.pdf was not generated."
 fi
 
 echo
