@@ -56,13 +56,15 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.4";
+my $MYRELEASE="3.0.5";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=9;  
 my @REF_DOCS;
+my $MTP_PREAMBLE_FILENAME="preamble.cfg";
+my $MTP_TMP_BASESUFFIX="-mp";
 
 ### text token for no value
 my $NIL="NOVALUE";
@@ -321,11 +323,11 @@ $DEF_VALUE=3;
    "I can use ppower to postprocess the PDF "
    ."file.\nThis requires ppower 4.0 or higher.");
 
-&add_param('preamble', 'bool', $NO, '|r', '!',
-   'add the file preamble.cfg at the current dir to metapost files',
-   'Should the preamble.cfg file be added to the metapost files?',
-   "I can add preamble.cfg to metapost "
-   ."files.\nThis requires an existing preamble.cfg file.");
+&add_param('mtp_preamble', 'bool', $NO, '|r', '!',
+   "add the file $MTP_PREAMBLE_FILENAME at the current dir to metapost files",
+   "Should the $MTP_PREAMBLE_FILENAME file be added to the metapost files?",
+   "I can add $MTP_PREAMBLE_FILENAME to metapost "
+   ."files.\nThis requires an existing $MTP_PREAMBLE_FILENAME file.");
 
 &add_param('maxrun', 'integer', 6, '', '=i',
    'specify maximal number of pdflatex runs if problems are detected',
@@ -1614,18 +1616,18 @@ sub convert_tex2tmp {
       # replace the suffix 'pstex_t' with 'pdf_t'
       s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
 
-      if ( &param_value('preamble') eq $NO ) {
+      if ( &param_value('mtp_preamble') eq $NO ) {
          # replace the suffix 'mp' with '.0'
-         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.(mp)\}/$1\.0}/g;
+         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.mp\}/$1\.0}/g;
 
          # cut off the suffix of mmp graphics
-         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.(mmp)\}/$1}/g;
+         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.mmp\}/$1}/g;
       } else {
          # replace the suffix 'mp' with '-mp.0'
-         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.(mp)\}/$1-mp\.0}/g;
+         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.mp\}/$1$MTP_TMP_BASESUFFIX\.0}/g;
 
-         # replace the suffix 'mp' with '-mp.0'
-         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.(mmp)\}/$1-mp}/g;
+         # replace the suffix 'mp' with '-mp'
+         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.mmp\}/$1$MTP_TMP_BASESUFFIX}/g;
       }
 
       # insert the tmp_suffix in tex filenames
@@ -1768,14 +1770,14 @@ sub convert_mp2pdf {
    if ( ! -f $image_target or -M $image_target > -M $image ) {
       print "Converting image $image_name ...\n";
       my $working_dir = cwd."/";
-      chdir("$image_path") || die "cannot cd to $image_path($!)";
-      if ( &param_value('preamble') eq $YES ) {
+      chdir("$image_path") or &abort("cannot cd to $image_path($!)");
+      if ( &param_value('mtp_preamble') eq $YES ) {
          &modify_mp_file($image_base,$suffix);
-         $image=$image_base."-mp".$suffix;
+         $image=$image_base.$MTP_TMP_BASESUFFIX.$suffix;
       }
       system('mpost', $image)
           and &abort("mpost failed on $image_name: $!");
-      chdir("$working_dir") || die "cannot cd to $working_dir($!)";
+      chdir("$working_dir") or &abort("cannot cd to $working_dir($!)");
       if (&param_value('delete_pdf_images') eq $YES) {
          push(@TMPFILES, $image_target);
       }
@@ -1791,10 +1793,10 @@ sub convert_mp2pdf {
 sub modify_mp_file {
    my $base=$_[0];
    my $suffix=$_[1];
-   my $preamble_file="preamble.cfg";
+   my $preamble_file=$MTP_PREAMBLE_FILENAME;
 
    my $mp_source=$base.$suffix;
-   my $mp_target=$base.'-mp'.$suffix;
+   my $mp_target=$base.$MTP_TMP_BASESUFFIX.$suffix;
 
    ### open source and target file
    open(SOURCE_FILE, "<$mp_source") or
@@ -2208,7 +2210,7 @@ sub process_doc_argument {
    return $doc_path.$doc_base.'.tex';
 }
 
-#### hanlde the dir of the input path if the document has one and
+#### handle the dir of the input path if the document has one and
 # parameter 1: main tex doc
 # return value: absolute input path
 
