@@ -18,21 +18,21 @@
 #      along with this program; if not, write to the Free Software
 #      Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-# Version History:
+# Release History:
 #
-# Aug 13th, 2000 -- Version 1.2
+# Aug 13th, 2000 -- Release 1.2
 #  * initial public version
 #     (thanks to Matej Cepl helping me with the pdflatex stuff)
 #     (thanks to Herbert Voss for helping me with the latex stuff)
 #     (thanks to all the people who supported me with their feedback)
 #
-# Aug 14th, 2000 -- Version 1.3
+# Aug 14th, 2000 -- Release 1.3
 #  * added command to rename ~/.lyx/lyxpipe.out and ~/.lyx/lyxpipe.in 
 #     (thanks to Herbert Voss for this hint)
 #  * converted the sed command to be suitable for a single line
 #  * added check for number of command line arguments
 #
-# Sep 15th, 2000 -- Version 1.4
+# Sep 15th, 2000 -- Release 1.4
 #  * added some reports while execution
 #  * stopped rerunning pdflatex when there are no more warnings/errors
 #     (thanks to Nicolas Marsgui for the idea and his patch)
@@ -46,13 +46,13 @@
 #  * added existence check for images and tex document
 #  * reduced output of pdflatex to warnings and errors
 #
-# Sep 20th, 2000 -- Version 1.5
+# Sep 20th, 2000 -- Release 1.5
 #  * made command checking work on more systems and give advice
 #  * stopped pdflatex to prompt for input (output redirection=> invisible!)
 #  * some more status messages for pdflatex
 #  * minor changes
 #
-# Oct 14th, 2000 -- Version 1.6
+# Oct 14th, 2000 -- Release 1.6
 #  * added bibtex support
 #     (thanks to Mark van Rossum for hinting to the problem)
 #     (thanks to Matt Bandy for his patch)
@@ -67,15 +67,15 @@
 #     (thanks to Matt Bandy for this patch)
 #  * minor changes
 #
-# Oct 15th, 2000 -- Version 1.7
+# Oct 15th, 2000 -- Release 1.7
 #  * fixed checkCommand function - buggy output redirection generated file '1'
 #     (thanks to Nicolas Marsgui for this patch)
 #
-# Oct 20th, 2000 -- Version 1.8 beta 1
+# Oct 20th, 2000 -- Release 1.8 beta 1
 #  * fixed permission problems with multiple users (log-files)
 #     (thanks to Garrick Chien Welsh for this patch)
 #
-# Jan 14th, 2001 -- Version 1.8 beta 2 
+# Jan 14th, 2001 -- Release 1.8 beta 2 
 #  * added conversation of pictures in included TeX files
 #     (thanks to Stacy J. Prowell <sprowell@cs.utk.edu> for his patch)
 #  * corrected sed expressions to check for backslash 
@@ -86,22 +86,22 @@
 #     (thanks to Pavel Sedivy for this idea)
 #  * minor changes
 #
-# Jan 21st, 2001 -- Version 1.8 beta 3 
+# Jan 21st, 2001 -- Release 1.8 beta 3 
 #  * modified LyX export command to work with LyX 1.1.6
 #     (thanks to Stacy J. Prowell <sprowell@cs.utk.edu> for this hint)
 #
-# Mar 02nd, 2001 -- Version 1.8 beta 4 
+# Mar 02nd, 2001 -- Release 1.8 beta 4 
 #  * modified image searching to cover not only first image in a line
 #     (thanks to Holger Daszler for this hint)
 #
-# Mar 09th, 2001 -- Version 1.8 
+# Mar 09th, 2001 -- Release 1.8 
 #  * included convert_pstex2pdf tmp files in clean up
 #  * added support for PDF thumbnails
 #     (thanks to Olaf Gabler for his patch)
 #  * better code structure (more functions)
 #  * minor changes
 #
-# Mar 11th, 2001 -- Version 2.0 beta 2
+# Mar 11th, 2001 -- Release 2.0 beta 2
 #  * renamed lyx2pdf script to tex2pdf to reflect change of functionality
 #  * accept both: lyx and tex files
 #     (thanks to Olaf Gabler for his patch)
@@ -110,7 +110,7 @@
 #  * changed WHICHON in COMMANDCHECK
 #  * minor changes
 #
-# Mar 14th, 2001 -- Version 2.0 beta 3
+# Mar 14th, 2001 -- Release 2.0 beta 3
 #  * bugfix: if the specified sed executable did not exist tex2pdf failed
 #  * improved title and author handling: ignore text with included TeX tags
 #  * scan for an input@path in the document and make it the working directory
@@ -120,17 +120,21 @@
 #  * introduced directory for log files that is cleaned up before execution
 #  * cleaned up the code and other minor changes
 #
-# Mar 14th, 2001 -- Version 2.0
-#  * Version 2.0 beta 3 becomes Release 2.0
+# Mar 14th, 2001 -- Release 2.0
+#  * Release 2.0 beta 3 becomes Release 2.0
 #
-# ?????????????? -- Version 2.1
+# ?????????????? -- Release 2.1
 #  * bugfix: included graphics haven't been recognised with [...] parameter
-#     (thanks to Ahmet Sekercioglu for this bug report)
+#     (thanks to Ahmet Sekercioglu for the bug report)
 #  * introduced parameters MINRUNNO, INSERTCOMMAND and CLEANLOGS
 #  * bugfix: env variable in single quotes (handling of included TeX files)
+#  * bugfix: TOC was not created as pdflatex has been running only once
+#     (thanks to Richard for the bug report)
+#  * bugfix: commented out \include and \bibliography have been processed
+#     (thanks to Ahmet Sekercioglu for the bug report)
 #
 
-MYVERSION="2.0.5"
+MYRELEASE="2.0.6"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -188,7 +192,7 @@ MAXRUNNO=6
 # when tex2pdf cannot detect any more warnings or errors.
 # This might help if there is no table of contents or other things are missing.
 # possible values: 1 ... MAXRUNNO
-MINRUNNO=1
+MINRUNNO=3
 
 # directory for log files
 # CAUTION: All files in this directory will be deleted if you set CLEANLOGS=yes!
@@ -391,7 +395,7 @@ getFileList() {
       FILES="$FILES $1"
 
       # Get the list of files included by the argument.
-      local IMPORTS=`${SEDEXE} -n "s/^.*[\]include{\([^}]\+\)}.*$/\1.tex /p" $1`
+      local IMPORTS=`${SEDEXE} -n "s/^[^%]*[\]include{\([^}]\+\)}.*$/\1.tex /p" $1`
 
       # Recurse.
       for file in $IMPORTS ; do
@@ -578,7 +582,7 @@ handle_bibtex() {
       echo "$MYNAME: BibTeX paramter set to 'yes'; running BibTeX."
    else
       echo "$MYNAME: Checking for BibTeX bibliography in document."
-      BIBLIO=`grep "[\]bibliography{" ${AUXFILE}.tex | wc -l`
+      BIBLIO=`grep "^[^%]*[\]bibliography{" ${AUXFILE}.tex | wc -l`
       if [ $BIBLIO -ne 0 ]
       then
          echo "Bibliography detected; running BibTeX."
@@ -640,7 +644,7 @@ TMPBASE=
 TMPFILES=
 
 echo
-echo "$MYNAME: Script starts (Version $MYVERSION)"
+echo "$MYNAME: Script starts (Release $MYRELEASE)"
 
 ##### Preparing the LOGDIR
 if ! mkdir -p ${LOGDIR}
