@@ -56,21 +56,11 @@ use Cwd;
 use Text::Balanced extract_bracketed;
 use strict;
 
-####### global variables
+####### HARD CODED PARAMETERS
 
 my $MYRELEASE="3.1.8";
-my $MYHOSTNAME=hostname;
-my $MYNAME=basename $0;
-my $MYUSER=$ENV{'USER'};
-my $USER_HOME=$ENV{'HOME'};
-if (not $MYUSER) { $MYUSER = 'nobody'; }
-if (not $USER_HOME) { $USER_HOME = '/tmp'; }
-
-my @TMPFILES=();
-my @TMP_TEX_FILES=(); 
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
-my @REF_DOCS;
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
 my $MTP_TMP_BASESUFFIX="-mp";
 my @EPS_SUFFIXES=('eps','ps','ps.gz','eps.gz' );
@@ -90,6 +80,26 @@ my $LOGFILE_VERBOSITY=9;
 # screen verbosity before configuration data active
 my $PRE_CONFIG_VERBOSITY=4;
 
+### file to store private parameters
+# If you only want to change your private parameters change them there
+# default: $HOME/.tex2pdf3rc
+my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
+my $MYRCFILE_VERSION=8;
+my $RCVERSION_STRING="rcfile_version";
+
+
+############### INITIALAZATION OF GLOVAL VARAIABLES
+my $MYHOSTNAME=hostname;
+my $MYNAME=basename $0;
+my $MYUSER=$ENV{'USER'};
+my $USER_HOME=$ENV{'HOME'};
+if (not $MYUSER) { $MYUSER = 'nobody'; }
+if (not $USER_HOME) { $USER_HOME = '/tmp'; }
+
+my @TMPFILES=();
+my @TMP_TEX_FILES=(); 
+my @REF_DOCS=();
+
 ### text token for no value
 my $NIL="NOVALUE";
 my $UNDEF="undefined";
@@ -101,13 +111,6 @@ my $FALSE=0;
 ### token for boolean 'true', 'yes' 
 my $YES="yes";
 my $TRUE=1;
-
-### file to store private parameters
-# If you only want to change your private parameters change them there
-# default: $HOME/.tex2pdf3rc
-my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
-my $MYRCFILE_VERSION=8;
-my $RCVERSION_STRING="rcfile_version";
 
 ## set global variable configured to prevent access to configuration
 #  parameters before configuration process is finished
