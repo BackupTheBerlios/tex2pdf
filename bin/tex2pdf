@@ -2133,8 +2133,8 @@ sub process_textags {
                report(7, "Bitmap graphic identified: $found_file");
             }
             $params .= "," if ($params ne "");
-            #$tag{params} = $params."type=$file_suffix,ext=.$file_suffix,"
-            #   ."read=.$file_suffix";
+            $tag{params} = $params."type=$file_suffix,ext=.$file_suffix,"
+               ."read=.$file_suffix";
 
          } elsif ($found_file) {
             report(4, "Included graphic of unknown type, ignoring it:"
