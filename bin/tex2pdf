@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1b";
+my $MYRELEASE="3.1.1";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1761,11 +1761,20 @@ sub adjust_preamble {
    my $preamble = $_[0];
    my $hyperref_params_ref = $_[1];
    my $extra_code;
+   my $hyperref_code;
+   my $cut_code = '';
    my $result;
    
    $_ = $preamble;
 
-   # protect pdflatex execution mode
+   #### cut out all code that must stand behind hyperref inclusion
+   
+   while ( s/\\usepackage(\[[^]]*?\])*?{cite}//s ) {
+      $cut_code .= "\n". $&;
+   }
+   $cut_code .= "\n" if ($cut_code);
+
+   #### protect pdflatex execution mode
    s/^(\\batchmode)$/% $1/m;
 
    # insert a4paper in the documentclass when a4wide is used 
@@ -1776,19 +1785,17 @@ sub adjust_preamble {
          s/^\\documentclass/$&\[a4paper\]/m;
       }
    }
-
+   
    ### collect additional LaTeX code
    #   first we load the font substitution
    if ( &param_value('font_substitution') eq 'pslatex' ) {
-     $extra_code = "\n" . '\usepackage{pslatex}' . "\n";
+      $extra_code = "\n" . '\usepackage{pslatex}' . "\n";
+   } elsif ( &param_value('font_substitution') eq 'helvetica' ) {
+      $extra_code = "\n" . '\usepackage{mathptmx}' . "\n";
+      $extra_code .= '\usepackage[scaled=0.9]{helvet}' . "\n";
    } else {
-      if ( &param_value('font_substitution') eq 'helvetica' ) {
-         $extra_code = "\n" . '\usepackage{mathptmx}' . "\n";
-         $extra_code .= '\usepackage[scaled=0.9]{helvet}' . "\n";
-      } else {
-         $extra_code = "\n" . '\usepackage{mathpazo}' . "\n";
-         $extra_code .= '\usepackage{palatino}' . "\n";
-      }
+      $extra_code = "\n" . '\usepackage{mathpazo}' . "\n";
+      $extra_code .= '\usepackage{palatino}' . "\n";
    }
 
    if ( &param_value('thumbpdf') eq $YES ) {
@@ -1810,14 +1817,14 @@ sub adjust_preamble {
       $extra_code .= "% no authorindex support\n";
    }
 
-   $extra_code .= '\makeatletter' . "\n";
-   $extra_code .= '\usepackage[' . join(',', @$hyperref_params_ref)
+   $hyperref_code = "\n" . '\makeatletter' . "\n";
+   $hyperref_code .= '\usepackage[' . join(',', @$hyperref_params_ref)
                   . ']{hyperref}' . "\n";
-   $extra_code .= '\makeatother' . "\n";
+   $hyperref_code .= '\makeatother' . "\n";
    
    ### insert the extra LaTeX code directly after documentclass
    m/^(\\documentclass)(\[[^]]*\])?(\{.*\})/m;
-   return $` . $& . $extra_code . $';
+   return $` . $& . $extra_code . $' . $hyperref_code . $cut_code;
 }
 
 ### adjust all filenames in the LaTeX code to the tmp files
