@@ -86,7 +86,7 @@ my $CONFIGURED=$FALSE;
 
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.9";
+my $MYRELEASE="3.1.10";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -106,7 +106,7 @@ my $MAX_VERBOSITY=10;
 # verbosity for screen output when debugging; log file will be set to max
 my $DEBUG_VERBOSITY=9;
 # level of verbosity for log files in non-debug mode execution
-my $LOGFILE_VERBOSITY=10;
+my $LOGFILE_VERBOSITY=9;
 # screen verbosity before configuration data active
 my $PRE_CONFIG_VERBOSITY=4;
 
@@ -1670,7 +1670,7 @@ sub extract_tag {
    my $data=$_[0];
    my $tag_name=$_[1];
 
-   while( $data =~ /\n(.*)(\\($tag_name))/g ) {
+   while( $data =~ /^(.*?)(\\($tag_name))/gm ) {
       my $line_prefix = $1;
       my $matched_tag_name = $2;
       my $tag_pos = pos($data);
@@ -2881,11 +2881,13 @@ sub run_dvips {
 ### run pdftex
 # parameter 1: LaTeX file without extension
 # parameter 2: log-file where the full out put is stored
+# parameter 3: verbosity level for errors and warnings (undef =7)
 # return value: FALSE - no rerun (no errors); TRUE - rerun required (errors)
 
 sub run_pdftex {
    my $texfile=$_[0];
    my $logfile=$_[1];
+   my $errors_verbosity = defined($_[2]) ? $_[2] : 7;
    my @errors=();
    my $rerun = $FALSE;
    my $exit_status=0;
@@ -2897,7 +2899,7 @@ sub run_pdftex {
       $extra_options = "";
    }
    
-   &report(7, "Running $pdftex_exec_base. This may take a while.\n");
+   &report(7, "Running $pdftex_exec_base. This may take a while.");
    system("$pdftex_exec --interaction nonstopmode $extra_options $texfile > $logfile 2>&1");
    $exit_status=$?;
    &report(7, "$pdftex_exec_base finished. Errors:");
@@ -2906,17 +2908,19 @@ sub run_pdftex {
    @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
 
    if ( @errors != 0) {
-     
+      my $errors_string = ">".join(">", @errors);
+      chomp($errors_string); 
       ### Abort if an emergency stop occured
       if ( grep(/Emergency stop/, @errors) != 0 ) {
-         &report(2, &file_tail($logfile,15));
-         &report(2, "\nSee $logfile for details.");
-         &abort("Fatal error occured. I am lost.");
+         &report(2, "\n$pdftex_exec_base returned with fatal error :");
+         &report(2, &file_tail($logfile, 15));
+         &abort("\nI am lost. See $logfile for details.");
       }
       
       ### report detected errors
-      &report(8, @errors);
-      &report(7, "\nSee $logfile for details.");
+      &report($errors_verbosity, "\n$pdftex_exec_base reported errors:");
+      &report($errors_verbosity+1, $errors_string);
+      &report($errors_verbosity, "See $logfile for details.");
       
       ### ignore errors and warnings which do not require a rerun
       my @rerun_errors = grep {
@@ -2925,11 +2929,13 @@ sub run_pdftex {
       $rerun = (@rerun_errors != 0); 
    } else {
       if($exit_status != 0) {
-         &report(8, &file_tail($logfile, 15));
-         &report(7, "\nSee $logfile for details.");
+         &report($errors_verbosity, "\n$pdftex_exec_base finished with exit status $exit_status :");
+         &report($errors_verbosity+1, &file_tail($logfile, 15));
+         &report($errors_verbosity, "\nSee $logfile for details.");
          $rerun = $TRUE;
       } else {
-         &report(7, "None detected (log file: $logfile).");
+         &report(7, "$pdftex_exec_base finished without detected errors."
+            ."(log file: $logfile).");
          $rerun = $FALSE;
       }
    }
@@ -3654,7 +3660,7 @@ sub generate_pdf_doc {
    $pdf_doc = $base.'.pdf';
 
    ### run pdftex until no more errors are reported (max MAXRUNNO)
-   while ( $rerun and $runno <= $max_run_no )
+   while ( $rerun and $runno < $max_run_no )
    {
       &report(6, "\n************ $pdftex_base run no. $runno *************");
       if ( &run_pdftex($doc, $pdflog_base.$runno.'.log') == $FALSE
@@ -3695,8 +3701,6 @@ sub generate_pdf_doc {
       $runno += 1;
    }
 
-   $rerun = $FALSE;
-
    ### if the authorindex option is switched on then run authorindex
    if ( &param_value('authorindex') eq $YES ) {
       &report(6, "\n****************** authorindex generation *****************");
@@ -3726,7 +3730,7 @@ sub generate_pdf_doc {
    ### One final pdftex run if requested
    if ( $rerun ) {
       &report(6, "\n************ One final $pdftex_base run no. $runno *************");
-      &run_pdftex($doc, $pdflog_base.$runno.'.log');
+      &run_pdftex($doc, $pdflog_base.$runno.'.log', 4);
    }
 
    ### if the ppower option is switched on then run ppower
