@@ -33,12 +33,23 @@ workarounds for known problems with called applications are already integrated.<
    <li><a href="http://www.perl.org/">Perl</a>: As tex2pdf is a Perl script it
        requires Perl of course. ;-)
    <li><a href="http://tug.org/applications/pdftex">pdftex</a>: generates PDF
-   documents from LaTeX. Unfortunately, it cannot handle EPS graphics. This
-   missing feature is the main reason why the tex2pdf project has started ...
+     documents from LaTeX. Unfortunately, it cannot handle EPS graphics. This
+     missing feature is the main reason why the tex2pdf project has started ...
    <li><a href="http://tug.org/applications/pdftex">epstopdf</a>: translates
-   EPS images in PDF ones.
+     EPS images in PDF ones.
    <li><a href="http://www.tug.org/applications/hyperref">hyperref</a>: LaTeX
-   package to integrate (colored) links in your PDF doc. It's great!
+     package to integrate (colored) links in your PDF doc. It's great!
+   <li><a href="http://search.cpan.org/dist/Text-Balanced/">
+     Perl Modul Text::Balanced</a>: This modul is used by tex2pdf for parsing
+     the LaTeX code. Version 3.1.11 (CVS 1.90) or higher will not work without
+     it! In the various GNU/Linux distribution the corresponding package could
+     have different names. Debian:
+     <a href="http://packages.debian.org/stable/interpreters/libparse-recdescent-perl.html">
+     libparse-recdescent-perl</a>, Suse:
+     <a href="ftp://ftp.suse.com/pub/suse/i386/current/suse/i586/perl-Parse-RecDescent-1.80-68.i586.rpm">
+     perl-Parse-RecDescent</a>, Red Hat:
+     <a href="http://ftp.redhat.com/pub/redhat/linux/9/en/os/i386/RedHat/RPMS/perl-Parse-RecDescent-1.80-12.noarch.rpm">
+     perl-Parse-RecDescent</>.
 </ul>
 
 <h2>Other dependencies</h2>
