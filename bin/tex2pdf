@@ -1910,7 +1910,10 @@ sub convert_mp2pdf {
       return;
    }
 
-   if ( ! -f $image_target or -M $image_target > -M $image_src ) {
+   if ( ! -f $image_target 
+      or  (-M $image_target > -M $image_src)
+      or  ( ( &param_value('mtp_preamble') eq $YES)
+      and (-M $image_target > -M $image_path.$MTP_PREAMBLE_FILENAME) ) ) {
       print "Converting image $image_name ...\n";
       my $working_dir = cwd."/";
       chdir("$image_path") or &abort("cannot cd to $image_path($!)");
@@ -2322,9 +2325,15 @@ sub run_ppower {
    my $exit_status=0;
    my $infile;
    my $outfile;
+   my $texfile_base;
+   my $texfile_path;
+   my $texfile_suffix;
 
-   $infile=$texfile.'.pdf';
-   $outfile=$texfile.'_p4.pdf';
+   ##### Getting document name, suffix and path
+   ($texfile_base,$texfile_path,$texfile_suffix) = fileparse($texfile,&param_value('tmp_base_suffix'));
+
+   $infile=$texfile_base.'.pdf';
+   $outfile=$texfile_base.'_p4.pdf';
 
    print "\nPostprocessing PDF file with 'ppower'\n\n";
    system('ppower', $infile, $outfile);
