@@ -265,74 +265,89 @@ sub abort {
 #### General functions (not script specific)
 
 ### interactively answer a question with yes or no
-# $1 question
-# $2 default value
+# parameter 1: question
+# parameter 2: default value (not set means $NIL)
+# parameter 3: yes: allow undefined as third value
+#              no : only yes/no allowed (default)
+# return value: the given answer
 
-sub questionYN {
+sub question_ynu {
    my $user_input;
-   my $default;
-   $RESPONSE="";
-   while ( $RESPONSE eq "" ) {
-      if ( $_[1] eq $YES ) {
-         print "$_[0] [y]";
-         $default=$YES;
-      } else {
-         print "$_[0] [n]";
-         $default=$NO;
-      }
+   my $question = $_[0];
+   my $default = defined($_[1]) ? $_[1] : $NIL;
+   my $undef_allowed = defined($_[2]) and $_[2] eq $YES;
+   my $response = undef;
+
+   if( $default =~ /^y(es)?/i ) {
+      $question .= ' [y]: ';
+      $default = $YES;
+   } elsif ( $default eq $NIL and $undef_allowed ) {
+      $question .= ' [u]: ';
+      $default = $NIL;
+   } else {
+      $question .= ' [n]: ';
+      $default = $NO;
+   }
+   while (! defined($response)) {
+      print $question;
       $user_input = <STDIN>;
       chomp($user_input);
       
-      if( $user_input =~ /^[yY]([Ee][Ss])?/ ) {
-         $RESPONSE=$YES;
-      } elsif ( $user_input =~ /^[Nn][Oo]?/ ) {
-         $RESPONSE=$NO;
+      if( $user_input =~ /^y(es)?/i ) {
+         $response=$YES;
+      } elsif ( $user_input =~ /^no?/i ) {
+         $response=$NO;
+      } elsif ( $user_input =~ /^u(ndef(ined)?)?/i and $undef_allowed ) {
+         $response=$NIL;
       } elsif ( $user_input eq "" ) {
-         $RESPONSE=$default;
+         $response=$default;
       } else {
-         print "Please respond with y or n.\n";
+         print "Please respond with y(es)";
+         print ", u(ndefined)" if($undef_allowed);
+         print " or n(o).\n";
       }
    }
+   return $response;
 }
 
 ### interactively input a positive integer number
-# $1 question
-# $2 default value
-# $3 min value
-# $4 max value
-# $RESPONSE: the input number
+# parameter 1: question
+# parameter 2: default value
+# parameter 3: min value
+# parameter 4: max value
+# return value: the input number
 
 sub input_number {
-   my $user_input;
    my $question = $_[0];
    my $default = $_[1];
    my $min_limit = $_[2];
    my $max_limit = $_[3];
-   $RESPONSE="";
+   my $response= undef;
 
-   while ( $RESPONSE eq "" ) {
+   while (! defined($response)) {
       print "$question [$default]: ";
-      $user_input = <STDIN>;
+      my $user_input = <STDIN>;
       chomp($user_input);
       
-      if ( $user_input eq "" ) {
-         $RESPONSE=$_[1];
+      if ($user_input eq "") {
+         $response=$default;
       } else {
          $_ = $user_input;
          if (s/^([[:digit:]]+)$/$1/ and $_ >= $min_limit and $_ <= $max_limit ) {
-            $RESPONSE = $_;
+            $response = $_;
 	 } else {
             print "Invalid input. Please enter a positve integer from $min_limit to $max_limit.\n";
          }
       }
    }
+   return $response;
 }
 
 ### interactively choose between several given values
-# 1 question
-# 2 default value
-# 3 reference to a list of possible values
-# $RESPONSE chosen value
+# parameter 1: question
+# parameter 2: default value
+# parameter 3: reference to a list of possible values
+# return value: the chosen value
 
 sub choose_value {
    my $question=$_[0];
@@ -340,6 +355,7 @@ sub choose_value {
    my @possible_values=@$_[2];
    my $list_index=1;
    my $default_no=1;
+   my $chosen_no;
 
    print "$question\n";
    foreach (@possible_values)
@@ -349,33 +365,36 @@ sub choose_value {
       $list_index = $list_index + 1;
    }
 
-   &input_number("Please enter the corresponding number", $default_no, 1, $#possible_values);
-   $RESPONSE = $_[$RESPONSE - 1];
+   $chosen_no=&input_number("Please enter the corresponding number", $default_no, 1, $#possible_values);
+   return $possible_values[$chosen_no - 1];
 }
 
 ### interactively answer a question
-# $1: question
-# $2: current value
+# parameter 1: question
+# parameter 2: current value
+# return value: the new value
 
 sub input_text {
-   my $user_input;
+   my $question=$_[0];
+   my $default=$_[1];
+   my $response= undef;
 
-   print "Suggested value: $_[1]\n";
-   &questionYN("Do you want to keep this value?", $YES);
-   if ( $RESPONSE eq $YES ) {
-      $RESPONSE="$_[1]";
+   print "Suggested value: $default\n";
+   if ( &question_ynu("Do you want to keep this value?", $YES) eq $YES ) {
+      $response= $default;
    } else {
-      print "$_[0] ";
-      $user_input = <STDIN>;
+      print "$question ";
+      my $user_input = <STDIN>;
       chomp($user_input);
       
-      $RESPONSE = $user_input;
+      $response = $user_input;
    }
+   return $response;
 }
 
 ##### Make sure that specified file exists and is readable; abort if missing
-# parameter $1: file to check
-# parameter $2: remark if check fails on specified file
+# parameter 1: file to check
+# parameter 2: remark if check fails on specified file
 
 sub check_file {
    my $file = $_[0];
@@ -393,10 +412,10 @@ sub check_file {
 }
 
 ##### Make sure that specified directory exists and is writable
-# return values: 0 - ok; 1 - error
-# parameter $1: directory to check
-# parameter $2: remark if check fails on specified directory
-# paramter $3: if yes, creation is allowed
+# parameter 1: directory to check
+# parameter 2: remark if check fails on specified directory
+# parameter 3: if yes, creation is allowed
+# return value: $TRUE - ok; $FALSE - error
 
 sub check_dir {
    my $directory = $_[0];
@@ -407,7 +426,7 @@ sub check_dir {
       print "\n";
       print "$MYNAME: Sorry. '$directory' is not an absolute path.\n";
       print "$message\n";
-      return 1;
+      return $FALSE;
    } elsif ( ! -d $directory ) {
       # dir does not exist
       print "\n";
@@ -416,40 +435,40 @@ sub check_dir {
          print "$MYNAME: I cannot find '$directory'. Try to create it.\n";
 	 if ( mkdir($directory, 0755) ) {
 	    print "Creation of '$directory' was successful.\n";
-	    return 0;
+	    return $TRUE;
 	 } else {
 	    print "$MYNAME: Creation of '$directory' failed.\n";
 	    print "$message\n";
-	    return 1;
+	    return $FALSE;
 	 }
       } else {
          # creation not allowed
          print "$MYNAME: Sorry. Directory '$directory' does not exist.\n";
          print "$message\n";
-         return 1;
+         return $FALSE;
       }
    } elsif ( ! -w $directory ) {
       # dir not writable
       print "\n";
       print "$MYNAME: Sorry. Directory '$directory' exists, but is not writable.\n";
       print "$message\n";
-      return 1;
+      return $FALSE;
    }
-   return 0;
+   return $TRUE;
 }
 
 ### interactively input an directory for data storage (absolute path)
-# $1 question
-# $2 default dir
-# $3 if 'yes' allow creation of directory
-# $RESPONSE: the given directory 
+# parameter 1: question
+# parameter 2: default dir
+# parameter 3: if 'yes' allow creation of directory
+# return value: the specified directory
 
 sub input_dir {
    my $question = $_[0];
    my $default_dir = $_[1];
    my $allow_creation = defined($_[2]) ? $_[2] : $NO;
    my $user_input;
-   $RESPONSE = "";
+   my $response = undef;
 
    if ( defined($default_dir) and index($default_dir, "/") == 0 
         and ( (! -d $default_dir and $allow_creation eq $YES) 
@@ -460,34 +479,35 @@ sub input_dir {
       $question .= ": ";
    }
 
-   while ( $RESPONSE eq "" ) {
+   while (! defined($response)) {
       print "$question";
       $user_input = <STDIN>;
       chomp($user_input);
       
       if( $user_input eq "" and defined($default_dir) ) {
          # user has only pressed <ENTER> and thereby confirmed default value
-	 if( &check_dir("$default_dir","Default value was not valid. Please, give different directory.", $allow_creation ) != 0 ) {
+	 if( ! &check_dir($default_dir,"Default value was not valid. Please, give different directory.", $allow_creation ) ) {
 	    # default dir does not exist and cannot be created
 	    $default_dir = undef;
 	    $question = "$_[0]: ";
 	 } else {
 	    # valid default dir has already existed or has been created
-            $RESPONSE = $default_dir;
+            $response = $default_dir;
 	 }
       } else {
          # user has given a directory
-         if( &check_dir($user_input,"This is not a valid directory!", $allow_creation) == 0 ) {
-	    $RESPONSE = $user_input;
+         if( &check_dir($user_input,"This is not a valid directory!", $allow_creation) ) {
+	    $response = $user_input;
          }
       }
    }
+   return $response;
 }
 
 ### set a variable by a command line option to 'yes' or' no'; abort on error
-# $1 variable
-# $2 given value
-# $3 option letter
+# parameter 1: variable
+# parameter 2: given value
+# parameter 3: option letter
 
 sub setYNValue {
    my $variable = $_[0];
@@ -499,17 +519,16 @@ sub setYNValue {
    } elsif ( $argument =~ /^[Nn][Oo]?/ ) {
       $$variable = $NO;
    } else {
-      print "\n";
-      print "$variable requires '$YES' or '$NO'." ;
+      print "\n$variable requires '$YES' or '$NO'." ;
       &abort("Illegal argument for option -$option_letter: $argument");
    }
 }
 
 ### set a variable by a command line option to a possible values; abort on error
-# $1 variable
-# $2 given value
-# $3 option letter
-# $4 list of possible values
+# parameter 1: variable
+# parameter 2: given value
+# parameter 3: option letter
+# parameter 4: list of possible values
 
 sub setValue {
    my $variable = $_[0];
@@ -523,8 +542,7 @@ sub setValue {
    my @possible_values = @_;
 
    if ( index("@possible_values", $argument) < 0 ) {
-      print "\n";
-      print "$variable allows: @possible_values.\n";
+      print "\n$variable allows: @possible_values.\n";
       &abort("Illegal argument for option -$option_letter: $argument");
       exit 1;
    }
@@ -658,96 +676,70 @@ sub print_version   {
 ### configure tex2pdf parameters interactively
 
 sub configure  {
-   print "\n";
-   print "Configuration for tex2pdf.\n";
+   print "\nConfiguration for tex2pdf.\n";
    print "The following answers are considered as defaults in later executions\n";
    print "of $MYNAME. You can change these values by using option -r.\n";
    print "The command-line options override these settings.\n";
    print "Many parameters can be set to '$NIL'. This means that NO value at\n";
    print "all (not even an empty value) is passed over to the called\n";
    print "application (e.g. latex package hyperref).\n";
-   print "\n";
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "$MYNAME can set the papersize of the resulting PDF document.\n";
-   &choose_value("What papersize should be used?",$PAPERSIZE,$POSSIBLE_PAPER);
-   $PAPERSIZE=$RESPONSE;
-   print "\n";
+   $PAPERSIZE=&choose_value("What papersize should be used?",$PAPERSIZE,$POSSIBLE_PAPER);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "The table of contents of the resulting PDF document is normally linked\n";
    print "to the corresponding section. However, you can also link it to the\n";
    print "corresponding page instead.\n";
-   &questionYN("Should TOC be linked to pages?",$LINKTOCPAGE);
-   $LINKTOCPAGE=$RESPONSE;
-   print "\n";
+   $LINKTOCPAGE=&question_ynu("Should TOC be linked to pages?",$LINKTOCPAGE);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "$MYNAME can use different colors for links inside the PDF document.\n";
-   &questionYN("Should colors be used for links?",$COLORLINKS);
-   $COLORLINKS=$RESPONSE;
-   print "\n";
+   $COLORLINKS=&question_ynu("Should colors be used for links?",$COLORLINKS);
 
    if ( $COLORLINKS eq $YES ) {
-        print "----------------\n";
+        print "\n----------------\n";
         print "It is possible to specify the color for page links.\n";
-        &choose_value("What color should be used for page links?",$PAGECOLOR,@LINK_COLORS);
-        $PAGECOLOR=$RESPONSE;
-        print "\n";
+        $PAGECOLOR=&choose_value("What color should be used for page links?",$PAGECOLOR,@LINK_COLORS);
 
-        print "----------------\n";
+        print "\n----------------\n";
         print "It is possible to specify the color for normal internal links.\n";
-        &choose_value("What color should be used for normal links?",$LINKCOLOR,@LINK_COLORS);
-        $LINKCOLOR=$RESPONSE;
-        print "\n";
+        $LINKCOLOR=&choose_value("What color should be used for normal links?",$LINKCOLOR,@LINK_COLORS);
 
-        print "----------------\n";
+        print "\n----------------\n";
         print "It is possible to specify the URL color.\n";
-        &choose_value("What color should be used for URLs?",$URLCOLOR,@LINK_COLORS);
-        $URLCOLOR=$RESPONSE;
-        print "\n";
+        $URLCOLOR=&choose_value("What color should be used for URLs?",$URLCOLOR,@LINK_COLORS);
 
-        print "----------------\n";
+        print "\n----------------\n";
         print "It is possible to specify the citation color.\n";
-        &choose_value("What color should be used for citation?",$CITECOLOR,@LINK_COLORS);
-        $CITECOLOR=$RESPONSE;
-        print "\n";
+        $CITECOLOR=&choose_value("What color should be used for citation?",$CITECOLOR,@LINK_COLORS);
    }
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "A PDF document contains meta data about itself: the document info.\n";
    print "Two of the info fields (title, author) can be set here as default\n";
    print "value which will be used in the case that $MYNAME cannot determine\n";
-   print "proper settings from the LaTeX document.\n";
-   print "\n";
+   print "proper settings from the LaTeX document.\n\n";
 
    print "The default title for the document info of all generated documents.\n";
-   print "$NIL will be recognized.\n";
-   print "\n";
-   &input_text("Default document title?",$DEFAULT_TITLE);
-   $DEFAULT_TITLE=$RESPONSE;
-   print "\n";
+   print "$NIL will be recognized.\n\n";
+   $DEFAULT_TITLE=&input_text("Default document title?",$DEFAULT_TITLE);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "The default author for the document info of all generated documents.\n";
-   print "$NIL will be recognized.\n";
-   print "\n";
-   &input_text("Default document author?",$DEFAULT_AUTHOR);
-   $DEFAULT_AUTHOR=$RESPONSE;
-   print "\n";
+   print "$NIL will be recognized.\n\n";
+   $DEFAULT_AUTHOR=&input_text("Default document author?",$DEFAULT_AUTHOR);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "If you like you can make me pass additional parameters to hyperref.\n";
    print "See the hyperref manual for possible values and details.\n";
    print "These parameters should normally have the format:\n";
    print "PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...\n";
-   print "Leave blank for no additional values.\n";
-   print "\n";
-   &input_text("Additional parameters ?",$ADDITIONAL_PARAMETERS);
-   $ADDITIONAL_PARAMETERS=$RESPONSE;
-   print "\n";
+   print "Leave blank for no additional values.\n\n";
+   $ADDITIONAL_PARAMETERS=&input_text("Additional parameters ?",$ADDITIONAL_PARAMETERS);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "You can now specify in which directory the resulting document should\n";
    print "be written by default:\n";
    print "- '@$POSSIBLE_PDFOUT[0]' means the same directory as the LaTeX file.\n";
@@ -757,88 +749,63 @@ sub configure  {
    print "  it is identical with the '@$POSSIBLE_PDFOUT[0]' option.\n";
    print "- '@$POSSIBLE_PDFOUT[2]' means you want to specify your own directory where the\n";
    print "  generated document should be written.\n";
-   &choose_value("Which output directory?",$PDFOUT,$POSSIBLE_PDFOUT);
-   $PDFOUT=$RESPONSE;
-   print "\n";
+   $PDFOUT=&choose_value("Which output directory?",$PDFOUT,$POSSIBLE_PDFOUT);
 
    if ( $PDFOUT eq @$POSSIBLE_PDFOUT[2] ) {
-      print "----------------\n";
+      print "\n----------------\n";
       print "You have choosen to specifiy a custom output directory.\n";
-      &input_dir("What custom directory should be used?",$PDFCUSTOMDIR,$YES);
-      $PDFCUSTOMDIR=$RESPONSE;
-      print "\n";
+      $PDFCUSTOMDIR=&input_dir("What custom directory should be used?",$PDFCUSTOMDIR,$YES);
    }
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "The sed executable to use can be specified.\n";
-   print "Type 'sed' in order to use the sed in your path.\n";
-   print "\n";
-   &input_text("What sed executable should be used?",$SEDEXE);
-   $SEDEXE=$RESPONSE;
-   print "\n";
+   print "Type 'sed' in order to use the sed in your path.\n\n";
+   $SEDEXE=&input_text("What sed executable should be used?",$SEDEXE);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "The bibtex usage can be specified.\n";
    print "Possible values are: '@$POSSIBLE_BIBTEX[0]' (always run bibtex), '@$POSSIBLE_BIBTEX[1]' (never run\n";
    print "bibtex) and '@$POSSIBLE_BIBTEX[3]' (scan tex file for a bibtex entry and run it\n";
    print "if required).\n";
-   &choose_value("How should bibtex be used?",$BIBTEX,$POSSIBLE_BIBTEX);
-   $BIBTEX=$RESPONSE;
-   print "\n";
+   $BIBTEX=&choose_value("How should bibtex be used?",$BIBTEX,$POSSIBLE_BIBTEX);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "The maximal number of runs for pdflatex can be specified.\n";
-   &input_number("What should be the maximum number of runs for pdflatex?",$MAXRUNNO 1 9);
-   $MAXRUNNO=$RESPONSE;
-   print "\n";
+   $MAXRUNNO=&input_number("What should be the maximum number of runs for pdflatex?",$MAXRUNNO 1 9);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "The minimal number of runs for pdflatex can be specified.\n";
    print "Possible values are: 1 ... $MAXRUNNO.\n";
-   &input_number("What should be the minimum number of runs for pdflatex?",$MINRUNNO,1,$MAXRUNNO);
-   $MINRUNNO=$RESPONSE;
-   print "\n";
+   $MINRUNNO=&input_number("What should be the minimum number of runs for pdflatex?",$MINRUNNO,1,$MAXRUNNO);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "The log directory is used to store information about the generation\n";
    print "process for later review, e.g. for debugging.\n";
-   &input_dir("What log directory should be used?",$LOGDIR,$YES);
-   $LOGDIR=$RESPONSE;
-   print "\n";
+   $LOGDIR=&input_dir("What log directory should be used?",$LOGDIR,$YES);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "$MYNAME can clean the log files before execution.\n";
    print "You might experience problems if you run $MYNAME on several documents\n";
    print "the same time. If you want to be on the safe side, answer '$NO'.\n";
-   &questionYN("Should the log files be cleaned before execution?",$CLEANLOGS);
-   $CLEANLOGS=$RESPONSE;
-   print "\n";
+   $CLEANLOGS=&question_ynu("Should the log files be cleaned before execution?",$CLEANLOGS);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "$MYNAME can check for the required executables.\n";
-   &questionYN("Should $MYNAME check for the required executables?",$COMMANDCHECK);
-   $COMMANDCHECK=$RESPONSE;
-   print "\n";
+   $COMMANDCHECK=&question_ynu("Should $MYNAME check for the required executables?",$COMMANDCHECK);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "$MYNAME can use thumbpdf to include thumbnails of the document pages.\n";
    print "This requires Ghostscript 5.50 or higher.\n";
-   &questionYN("Should PNG thumbnails be created?",$THUMBNAILS);
-   $THUMBNAILS=$RESPONSE;
-   print "\n";
+   $THUMBNAILS=&question_ynu("Should PNG thumbnails be created?",$THUMBNAILS);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "$MYNAME can force the call of makeindex if pdftex fails to do this.\n";
-   &questionYN("Should the call of makeindex be forced?",$MAKEINDEX);
-   $MAKEINDEX=$RESPONSE;
-   print "\n";
+   $MAKEINDEX=&question_ynu("Should the call of makeindex be forced?",$MAKEINDEX);
 
-   print "----------------\n";
+   print "\n----------------\n";
    print "Additional options for pdflatex can be specified.\n";
-   print "Normally, you can leave this blank.\n";
-   print "\n";
-   &input_text("What additional options for pdflatex should be used? :", $PDFTEXOPTS);
-   $PDFTEXOPTS=$RESPONSE;
+   print "Normally, you can leave this blank.\n\n";
+   $PDFTEXOPTS=&input_text("What additional options for pdflatex should be used? :", $PDFTEXOPTS);
    print "\n";
 }
 
