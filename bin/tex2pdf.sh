@@ -123,7 +123,7 @@
 # Mar 14th, 2001 -- Release 2.0
 #  * Release 2.0 beta 3 becomes Release 2.0
 #
-# ?????????????? -- Release 2.1
+# Apr 06th, 2001 -- Release 2.1
 #  * bugfix: included graphics haven't been recognised with [...] parameter
 #     (thanks to Ahmet Sekercioglu for the bug report)
 #  * introduced parameters MINRUNNO, INSERTCOMMAND and CLEANLOGS
@@ -136,7 +136,7 @@
 #     (thanks to Steffen Macke for his work)
 #
 
-MYRELEASE="2.0.7"
+MYRELEASE="2.1.0"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
