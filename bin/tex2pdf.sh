@@ -44,7 +44,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.6"
+MYRELEASE="2.2.7"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -873,7 +873,7 @@ extract_files() {
    then
       for i in $FILES
       do
-         [ -z `echo $FOUND_FILES | ${SEDEXE} -n "\| $i\( \|$\)|p"` ] \
+         [ -z "`echo $FOUND_FILES | ${SEDEXE} -n "\| $i\( \|$\)|p"`" ] \
 	  && FOUND_FILES="$FOUND_FILES $i"
       done
    fi
