@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0beta9";
+my $MYRELEASE="3.0";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -77,8 +77,8 @@ my $TRUE=1;
 
 ### file to store private parameters
 # If you only want to change your private parameters change them there
-# default: $HOME/.tex2pdfrc
-my $RC_FILENAME="$ENV{'HOME'}/.tex2pdfplrc";
+# default: $HOME/.tex2pdf3rc
+my $RC_FILENAME="$ENV{'HOME'}/.tex2pdf3rc";
 
 ########################## NEW PERL CONFIGURATON
 
@@ -599,7 +599,7 @@ sub input_number {
          $response=$default;
       } else {
          $_ = $user_input;
-         if (s/^([[:digit:]]+)$/$1/ and $_ >= $min_limit and $_ <= $max_limit ) {
+         if (s/^([0-9]+)$/$1/ and $_ >= $min_limit and $_ <= $max_limit ) {
             $response = $_;
 	 } else {
             print "Invalid input. Please enter a positve integer from $min_limit to $max_limit.\n";
@@ -1172,7 +1172,7 @@ sub print_usage {
    print "\nUsage: $MYNAME [OPTIONS] DOCUMENT.lyx\n";
    print "       $MYNAME [OPTIONS] DOCUMENT[.tex]\n\n";
    print "       $MYNAME -c | --configure     modify/set up configuration\n";
-   print "       $MYNAME -h | --help          give a short help,\n";
+   print "       $MYNAME -h | --help          give a short help\n";
    print "       $MYNAME -o | --print_config  print current configuration\n";
    print "       $MYNAME -v | --version       print my version\n\n";
 }
@@ -1212,8 +1212,9 @@ sub configure {
    print "\n***** Configuration for $MYNAME *****\n\n";
    print "The following answers are considered as defaults in later ";
    print "executions\n";
-   print "of $MYNAME. You can change these values by using the option -r ";
-   print "again.\nAdditionally, all command-line options override these settings.\n";
+   print "of $MYNAME. You can change these values by using the option ";
+   print "--configure \nagain.";
+   print "Additionally, all command-line options override these settings.\n";
    print "Many parameters can be set to '$NIL' or '$UNDEF'. This means that NO";
    print "\nvalue at all (not even an empty value) is passed over to the ";
    print "called\napplication (e.g. latex package hyperref).\n";
@@ -1630,7 +1631,7 @@ sub convert_eps2pdf {
 }
 
 ### Convert the given PSTEX_T file to PDF_T
-# parameters $1: PSTEX_T filename with absolute path
+# parameters 1: PSTEX_T filename with absolute path
 # return value: none
 
 sub convert_pstex2pdf {
@@ -1674,7 +1675,7 @@ sub convert_pstex2pdf {
    }
 }
 
-### Converted included images to pdf
+### Convert included images to pdf
 # parameter 1: tex source file
 # no return value
 
@@ -1725,8 +1726,8 @@ sub convert_images {
 }
 
 ### run pdflatex
-# parameter $1: LaTeX file without extension
-# parameter $2: log-file where the full out put is stored
+# parameter 1: LaTeX file without extension
+# parameter 2: log-file where the full out put is stored
 # return value: 0 - no errors (no rerun); 1 - errors (rerun required)
 
 sub run_pdflatex {
@@ -1825,7 +1826,6 @@ sub run_thumbpdf {
    my $texfile=$_[0];
    my $logfile=$_[1];
    my $exit_status=0;
-   #local $TEXFILE=$_[0];
 
    print "\nCreating thumbnails with 'thumbpdf'\n\n";
    system('thumbpdf', $texfile);
@@ -1880,12 +1880,12 @@ sub adjust_configuration {
       $opt_specs{&option_specifier($_)} = \&handle_option;
    }
    if(! GetOptions(%opt_specs)) {
-      print "\n";
+      &print_usage;
       &abort("An error occured while processing command line options");
    }
 
    if( ! $configured ) {
-      &abort("Script is not configured. Please run $MYNAME -r.");
+      &abort("Script is not configured. Please run $MYNAME --configure.");
    }
    
    #### do some test in order to secure as good as possible that we will
@@ -1938,6 +1938,7 @@ sub prepare_logdir {
 #### process the one and only argument (besides the options) which specifies
 #### which LaTeX document the user wants to translate to PDF
 #### a lyx file will be translated to LaTeX first
+# parameter 1: argument
 
 sub process_doc_argument {
    my $argument = $_[0];
