@@ -1,9 +1,9 @@
 
-tex2pdf: Script starts (Release 3.0.5)
+tex2pdf: Script starts (Release 3.0.6)
 
 tex2pdf: Processing given parameters and arguments.
 
-tex2pdf Version 3.0.5
+tex2pdf Version 3.0.6
 
 Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
        tex2pdf [OPTIONS] DOCUMENT[.tex]
