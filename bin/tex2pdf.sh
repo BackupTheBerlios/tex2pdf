@@ -1354,7 +1354,7 @@ then
    abort "Could not create log directory ($LOGDIR)."
 fi
 
-if [ -n "$LOGFILES" -a -n "`ls ${LOGDIR}`" -a "$CLEANLOGS" = "yes" ]
+if [ -n "`ls ${LOGDIR}`" -a "$CLEANLOGS" = "yes" ]
 then
    echo
    echo "Removing old log files ($LOGDIR)."
