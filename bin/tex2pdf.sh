@@ -126,9 +126,10 @@
 # ?????????????? -- Version 2.1
 #  * bugfix: included graphics haven't been recognised with [...] parameter
 #     (thanks to Ahmet Sekercioglu for this bug report)
+   * introduced parameters MINRUNNO and CLEANLOGS
 #
 
-MYVERSION="2.0.2"
+MYVERSION="2.0.3"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -181,11 +182,28 @@ BIBTEX=test
 # maximal number of runs for pdflatex
 MAXRUNNO=6
 
-# log file for the output of pdflatex, bibtex and thumbpdf
+# minimal number of runs for pdflatex
+# This option can be used to force pdflatex to run at least MINRUNNO times even
+# when tex2pdf cannot detect any more warnings or errors.
+# This might help if there is no table of contents or other things are missing.
+# possible values: 1 ... MAXRUNNO
+MINRUNNO=1
+
+# directory for log files
+# CAUTION: All files in this directory will be deleted if you set CLEANLOGS=yes!
 LOGDIR=/tmp/tex2pdf-$USER/
+
+# log files for the output of pdflatex, bibtex and thumbpdf
 PDFLOGFILE=${LOGDIR}pdflatex-$$.log
 BIBTEXLOG=${LOGDIR}bibtex-$$.log
 THUMBPDFLOG=${LOGDIR}thumbpdf-$$.log
+
+# clean log directory before execution
+# You might get problems with this when you run tex2pdf on several documents
+# at the same time. So, if you want to be on the safe side set "no" and clean
+# the log directory manually.
+# possible values: 'yes', 'no' 
+CLEANLOGS="no"
 
 # additional options for pdflatex
 PDFTEXOPTS=""
@@ -202,7 +220,7 @@ THUMB="no"
 
 # suffix for tmp files that will be put in between the basename and suffix of
 # the original file
-# CAUTION: If you leave this blank you will overwrite the original files
+# CAUTION: If you leave this blank you will overwrite the original files!
 TMPBASESUFFIX=-pdf
 
 ##### Functions
@@ -506,15 +524,17 @@ prepare_document() {
 
 ### run pdflatex
 # parameter $1: LaTeX file without extension
+# return value: 0 - no errors (no rerun); 1 - errors (rerun required) 
 
 run_pdflatex() {
    local TEXFILE=$1
+   local errors=0
    echo "Pdflatex is running. Please wait."
    echo
    pdflatex --interaction nonstopmode ${PDFTEXOPTS} ${TEXFILE} > $PDFLOGFILE
    echo "Pdflatex finished. Errors:"
-   rerun=`grep "! Emergency stop\|Error:\|LaTeX Warning:" $PDFLOGFILE | wc -l`
-   if [ $rerun -ne 0 ]
+   errors=`grep "! Emergency stop\|Error:\|LaTeX Warning:" $PDFLOGFILE | wc -l`
+   if [ $errors -ne 0 ]
    then
       if [ -n "`grep '! Emergency stop' $PDFLOGFILE`" ]
       then
@@ -528,8 +548,10 @@ run_pdflatex() {
       grep "Error:\|LaTeX Warning:" $PDFLOGFILE
       echo
       echo "$MYNAME: See $PDFLOGFILE for details."
+      return 1
    else
       echo "None."
+      return 0
    fi
 } 
 
@@ -619,11 +641,14 @@ then
    exit 1
 fi   
 
-if [ -n "`ls ${LOGDIR}`" ]
+if [ -n "$LOGFILES" -a -n "`ls ${LOGDIR}`" -a "$CLEANLOGS" = "yes" ]
 then
    echo
-   echo "Cleaning up log directory ($LOGDIR)."
+   echo "Cleaning up directory for log files ($LOGDIR)."
    rm ${LOGDIR}*
+else
+   echo
+   echo "All log files will be stored in ($LOGDIR)."
 fi
 
 ##### check for required commands
@@ -692,6 +717,7 @@ then
    TITLE=`${SEDEXE} -n "s/^.*[\]title{\([^{}]*\)}.*$/\1/1p" $PASSEDTEXDOC`
    if [ -z "$TITLE" ]
    then
+      echo
       echo "$MYNAME: WARNING: Could not identify the document's title correctly."
       echo "Title field will be empty."
       echo "Maybe you have used a LaTeX Tag inside the title which confuses me."
@@ -705,6 +731,7 @@ then
    AUTHOR=`${SEDEXE} -n "s/^.*[\]author{\([^{}]*\)}.*$/\1/1p" $PASSEDTEXDOC`
    if [ -z "$AUTHOR" ]
    then
+      echo
       echo "$MYNAME: WARNING: Could not identify the document's author correctly."
       echo "Author field will be empty."
       echo "Maybe you have used a LaTeX Tag inside the author's name which confuses me."
@@ -765,7 +792,14 @@ while [ $rerun -ne 0 -a $runno -le $MAXRUNNO ]
 do
    echo
    echo "************ Pdflatex run no. $runno *************"
-   run_pdflatex ${TMPBASE}
+   if run_pdflatex ${TMPBASE} && [ $MINRUNNO -le $runno ]
+   then
+      # no errors detected and MINRUNNO is processed
+      rerun=0
+   else
+      # errors or MINRUNNO has not been reached
+      rerun=1
+   fi 
    
    ### Execute BibTeX after first run if set (and required)
    if [ $runno -eq 1 -a "$BIBTEX" != "no" ]
