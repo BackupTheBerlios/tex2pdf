@@ -2,7 +2,7 @@
 
 #      tex2pdf - script for translating latex docs to pdf
 #
-#      Copyright (C) 2000-2002 by Steffen Evers
+#      Copyright (C) 2000-2002 by Steffen Evers and others
 #
 #      This program is free software; you can redistribute it and/or modify
 #      it under the terms of the GNU General Public License version 2 as 
@@ -93,7 +93,7 @@ my $TRUE=1;
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdf3rc
 my $RC_FILENAME="$ENV{'HOME'}/.tex2pdf3rc";
-my $MYRCFILE_VERSION=5;
+my $MYRCFILE_VERSION=6;
 my $RCVERSION_STRING="rcfile_version";
 
 ## set global variable configured to prevent access to configuration
@@ -373,7 +373,7 @@ my $EXPLANATION=6;
    'specify minimal number of pdflatex runs if no problems are detected',
    'What should be the minimum number of runs for pdflatex (1-6)?', "");
 
-&add_param('verbose', 'integer', 4, '', '=i',
+&add_param('verbosity', 'integer', 5, '', '=i',
    'set the level of verbosity',
    'Which level of verbosity do you want (0-9)',
    "Different people want different amounts of information about what the "
@@ -426,7 +426,15 @@ my $EXPLANATION=6;
 # return value: none
 
 sub report {
-   my ($level, @output) = @_;
+   my $level;
+   my @output;
+
+   if (@_ < 2 ) {
+      @output = ( "Oppss! Report function got only 1 argument!" );
+      $level  = 9;
+   } else {
+      ($level, @output) = @_;
+   }
 
    if ( $level <= $LOGFILE_VERBOSITY ) {
       open LOGFILE, ">> $MYLOGFILE";
@@ -435,12 +443,42 @@ sub report {
    }
 
    if($CONFIGURED) {
-      if ($level <= &param_value('verbose') ) {
+      if ($level <= &param_value('verbosity') ) {
          print @output,"\n";
       }
    } elsif ($level <= $PRE_CONFIG_VERBOSITY ) {
       print @output,"\n";
    }
+}
+
+### process system command and do the appropriate reports
+# parameter 1: the system command to process
+# parameter 2: flag - TRUE: abort on failure, FALSE: continue on failures
+# parameter 3: priority level for output of system command
+# parameter 4: specific failure message
+# return value: TRUE - success, FALSE - failure 
+
+sub system_command {
+   my $command = $_[0];
+   my $fatal_failure= $_[1];
+   my $output_priority = $_[2];
+   my $fail_message = $_[3];
+   my $system_out;
+
+   $system_out = `$command 2>&1`;
+
+   if ($?) {
+      if ($fatal_failure) {
+         &report(2, $system_out) if ($system_out);
+         &abort($fail_message.": $!");
+      } else {
+         &report($output_priority, $system_out) if ($system_out);
+         &report(3, $fail_message.": $!");
+      }
+      return $FALSE;
+   }
+
+   return $TRUE;
 }
 
 ### Index of the first occurence of a string in an array
@@ -463,10 +501,11 @@ sub array_index {
    return -1;
 }
 
-### print the last N lines of a text file to stdout
+### extract the last N lines of a text file
+# abort on failures
 # parameter 1: file to read
 # parameter 2: N - number of lines to print (undef/0: all lines)
-# return value: none
+# return value: last N lines 
 
 sub file_tail {
    my $file_name = $_[0];
@@ -478,30 +517,31 @@ sub file_tail {
       or &abort("Could not read file $file_name: $!");
 
    if($no_of_lines == 0) {
-      # print entire file
+      # use entire file
       while(<TAIL_SOURCE>) {
          if(!$_) { $_="\n"; }
-         print $_;
+         push(@cache, $_);
       }
-      return;
-   }
+   } else {
+      # only last N lines
    
-   # fill up cache
-   while(@cache < $no_of_lines and <TAIL_SOURCE>) {
-      if(!$_) { $_="\n"; }
-      push(@cache, $_);
-   }
+      # fill up cache
+      while(@cache < $no_of_lines and <TAIL_SOURCE>) {
+         if(!$_) { $_="\n"; }
+         push(@cache, $_);
+      }
    
-   # always cache the last N lines up to the end of the file
-   while(<TAIL_SOURCE>) {
-      if(!$_) { $_="\n"; }
-      shift(@cache);
-      push(@cache, $_);
+      # always cache the last N lines up to the end of the file
+      while(<TAIL_SOURCE>) {
+         if(!$_) { $_="\n"; }
+         shift(@cache);
+         push(@cache, $_);
+      }
    }
    
    close TAIL_SOURCE;
 
-   print @cache;
+   return @cache;
 }
 
 ### return all lines of FILE which match match regexp EXPR 
@@ -604,14 +644,15 @@ sub abort {
 sub checkCommand {
    my $command = $_[0];
    my $message = $_[1];
+   my $which_output;
 
-   $_ = `which $command 2>&1`; 
-   chomp;
+   $which_output = `which $command 2>&1`; 
+   chomp $which_output;
+   $_ = $which_output;
    s|^(.*/)?([^/]+)$|$2|;
 
    if ( $_ ne $command ) {
-      print "\n";
-      system('which', $command);
+      &report(2, "\n$which_output");
       &report(1, "\nRequired command '$command' seems not to be in your path.");
       if ( defined($message) ) {
          &report(2, "$message");
@@ -1441,7 +1482,10 @@ sub reserve_tmp_texname {
 sub generate_tex_file {
    my $lyx_doc = $_[0];
    my $tex_doc = $_[1];
-   my $lyx_dir = &param_value('lyxrc_path');
+   my $lyx_dir;
+   my $lyx_output;
+   
+   $lyx_dir = &param_value('lyxrc_path');
    $lyx_dir .= '/' if( ! ($lyx_dir =~ m#/$#) );
 
    ### Check if LyX file can be accessed
@@ -1462,10 +1506,16 @@ sub generate_tex_file {
          if ( -f $file ) { rename($file, $file.'~'); }
       }
 
-      system('lyx', '--export', 'latex', "$lyx_doc");
+      $lyx_output = `lyx --export latex $lyx_doc 2>&1`;
 
       ### check if LaTeX file now really exists
-      &check_file($tex_doc,"The LaTeX document was not generated by LyX!");
+      if ( ! -f $tex_doc ) {
+         &report(2, "Lyx Output:\n$lyx_output");
+         &report(2, "\nSorry. I cannot find '$tex_doc'.");
+         &abort("The LaTeX document was not generated by LyX!");
+      } else {
+         &report(8, "Lyx Output:\n$lyx_output");
+      }
    }
 }
 
@@ -1808,12 +1858,12 @@ sub convert_eps2pdf {
    if ( ! -f $image_target or -M $image_target > -M $image ) {
       &report(7, "Converting image $image_name to $image_target ...\n");
       if ($zipped > 0) {
-    	   system("gunzip -c $image | epstopdf -f -outfile=$image_target")
-        	   and &abort("epstopdf failed on $image_name: $!");
-	} else {
-         system('epstopdf', '-outfile='.$image_target, $image)
-        	   and &abort("epstopdf failed on $image_name: $!");
-	}
+         &system_command("gunzip -c $image | epstopdf -f -outfile=$image_target",
+         $TRUE, 8, "epstopdf failed on $image_name");
+      } else {
+         &system_command("epstopdf -outfile=$image_target $image",
+         $TRUE, 8, "epstopdf failed on $image_name");
+      }
       if (&param_value('delete_pdf_images') eq $YES) {
          push(@TMPFILES, $image_target);
       }
@@ -1918,8 +1968,8 @@ sub convert_mp2pdf {
       if ( &param_value('mtp_preamble') eq $YES ) {
          &modify_mp_file($image_base,$suffix);
       }
-      system('mpost', $image_name)
-          and &abort("mpost failed on $image_name: $!");
+      &system_command("mpost $image_name",
+         $TRUE, 8, "mpost failed on $image_name");
       chdir("$working_dir") or &abort("cannot cd to $working_dir($!)");
       if (&param_value('delete_pdf_images') eq $YES) {
          push(@TMPFILES, $image_target);
@@ -2132,8 +2182,8 @@ sub run_pdflatex {
       $extra_options = "";
    }
    
-   &report(6, "Running pdflatex. This may take a while.\n");
-   system("pdflatex --interaction nonstopmode $extra_options $texfile > $logfile");
+   &report(7, "Running pdflatex. This may take a while.\n");
+   system("pdflatex --interaction nonstopmode $extra_options $texfile > $logfile 2>&1");
    $exit_status=$?;
    &report(7, "Pdflatex finished. Errors:");
 
@@ -2146,14 +2196,14 @@ sub run_pdflatex {
    
    if ( @errors != 0 or $exit_status != 0 ) {
       if ( grep(/Emergency stop/, @errors) != 0 ) {
-         &file_tail($logfile,10);
+         &report(2, &file_tail($logfile,10));
          &report(2, "\nSee $logfile for details.");
          &abort("Fatal error occured. I am lost.");
       }
       if( @errors != 0 ) {
-         print @errors;
+         &report(8, @errors);
       } else {
-         &file_tail($logfile, 10);
+         &report(8, &file_tail($logfile,10));
       }
       &report(7, "\nSee $logfile for details.");
       return $FALSE;
@@ -2212,7 +2262,7 @@ sub handle_bibtex {
       @errors=&grep_file($logfile, 'error message');
 
       if ( @errors != 0 or $exit_status != 0 ) {
-         &file_tail($logfile);
+         &report(4, &file_tail($logfile));
          &report(4, "\nYou can switch off BibTeX support by setting the bibtex parameter accordingly.");
       } else {
          &report(7, "None detected (log file: $logfile).");
@@ -2261,7 +2311,7 @@ sub handle_gloss {
       my $exit_status=0;
 
       &report(7, "Running bibtex on $glsfile. This may take a while.\n");
-      system "bibtex $glsfile > $logfile";
+      system "bibtex $glsfile > $logfile 2>&1";
       $exit_status=$?;
       &report(7, "Bibtex finished. Errors:");
 
@@ -2269,7 +2319,7 @@ sub handle_gloss {
       @errors=&grep_file($logfile, 'error message');
 
       if ( @errors != 0 or $exit_status != 0 ) {
-         &file_tail($logfile);
+         &report(4, &file_tail($logfile));
          &report(4, "\nYou can switch off Gloss support by setting the gloss parameter accordingly.");
       } else {
          &report(7, "None detected (log file: $logfile).");
@@ -2288,16 +2338,13 @@ sub run_thumbpdf {
    my $exit_status=0;
 
    &report(7, "\nCreating thumbnails with 'thumbpdf'\n");
-   system('thumbpdf', $texfile);
-   $exit_status=$?;
-   if ( $exit_status != 0 ) {
-      &report(3, "\n$MYNAME: thumbpdf exit with status $exit_status.");
-      &report(4, "I will continue, but maybe there will not be thumbs in the PDF doc.");
-   }
+   &system_command("thumbpdf $texfile", $FALSE, 8,
+      "thumbpdf failed.\n"
+      ."I will continue, but maybe there will not be thumbs in the PDF doc.");
 
    if ( -f 'thumbpdf.log' ) {
       move('thumbpdf.log', $logfile);
-      &report(7, "\n$MYNAME: See $logfile for details.");
+      &report(7, "\nSee $logfile for details.");
    }
 
    ### store possible tmp files
@@ -2330,20 +2377,16 @@ sub run_ppower {
    $outfile=$texfile_base.'_p4.pdf';
 
    &report(7, "\nPostprocessing PDF file with 'ppower'\n");
-   system('ppower', $infile, $outfile);
-   $exit_status=$?;
-   if ( $exit_status != 0 ) {
-      &report(3, "\nppower exit with status $exit_status.");
-      &report(4, "I will continue, but maybe there will not be pause effects in the PDF doc.");
-   }
-   else{
-     &report(7, "\nThe postprocessed pdf file is: $outfile\n");
-   }
-   if ( -f 'ppower.log' ) {
-      move('ppower.log', $logfile);
-      &report(7, "\n$MYNAME: See $logfile for details.");
+   if(&system_command("ppower $infile $outfile", $FALSE, 8,
+      "ppower failed.\nI will continue, "
+      ."but maybe there will not be pause effects in the PDF doc.")) {
+      &report(7, "\nThe postprocessed pdf file is: $outfile\n");
    }
 
+   if ( -f 'ppower.log' ) {
+      move('ppower.log', $logfile);
+      &report(7, "See $logfile for details.");
+   }
 }
 
 #### run authorindex command to obtain an author index
@@ -2357,16 +2400,13 @@ sub run_authorindex {
    my $exit_status=0;
 
    &report(7, "\nProcessing file with 'authorindex'\n");
-   system('authorindex', $texfile);
-   $exit_status=$?;
-   if ( $exit_status != 0 ) {
-      &report(3, "\nppower exit with status $exit_status.");
-      &report(4, "I will continue, but maybe there will not be author index in the PDF doc.");
-   }
+   &system_command("authorindex $texfile", $FALSE, 8,
+      "authorindex failed.\nI will continue, "
+      ."but maybe there will not be an author index in the PDF doc.");
 
    if ( -f 'authorindex.log' ) {
       move('authorindex.log', $logfile);
-      &report(7, "\n$MYNAME: See $logfile for details.");
+      &report(7, "\nSee $logfile for details.");
    }
 
 }
@@ -2748,7 +2788,8 @@ sub generate_pdf_doc {
    $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
    my $makeindex_options=&param_value('makeindex_opts');
    
-   # setting the log files for the output of pdflatex, bibtex, gloss, thumbpdf, ppower and authorindex
+   # setting the log files for the output of pdflatex, bibtex, gloss,
+   # thumbpdf, ppower and authorindex
    my $pdflog_base = $log_dir."pdflatex-$$-";
    my $bibtex_log = $log_dir."bibtex-$$.log";
    my $gloss_log = $log_dir."gloss-$$.log";
@@ -2793,7 +2834,9 @@ sub generate_pdf_doc {
          }
          &report(6, "\n****************** Extra index generation ***************");
          &report(7, "Document seems to have an index. Generating ...\n");
-         system 'makeindex '.$makeindex_options.' '.$doc.'.idx';
+         &system_command("makeindex $makeindex_options $doc.idx", $FALSE, 8,
+            "makeindex failed.\nI will continue, "
+            ."but maybe there will not be an index in the PDF doc.");
       }
 
       $runno += 1;
@@ -2814,7 +2857,9 @@ sub generate_pdf_doc {
       }
       &report(6, "\n****************** Extra index generation ***************");
       &report(7, "Document seems to have an index. Generating ...\n");
-      system "makeindex $makeindex_options $doc'.idx'";
+      &system_command("makeindex $makeindex_options $doc.idx", $FALSE, 8,
+         "makeindex failed.\nI will continue, "
+         ."but maybe there will not be an index in the PDF doc.");
       $rerun=$TRUE;
    }
    
