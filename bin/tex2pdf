@@ -612,11 +612,11 @@ sub checkCommand {
    if ( $_ ne $command ) {
       print "\n";
       system('which', $command);
-      print "\n$MYNAME: Required command '$command' seems not to be in your path.\n";
+      &report(1, "\nRequired command '$command' seems not to be in your path.");
       if ( defined($message) ) {
-         print "$message\n";
+         &report(2, "$message");
       }
-      print "Aborting ...\n";
+      &report(2, "Aborting ...");
       exit 1;
    }
 }
@@ -773,10 +773,10 @@ sub check_file {
    my $message = defined($_[1]) ? $_[1] : "Required file cannot be accessed!";
 
    if ( ! -f $file ) {
-      print "\n$MYNAME: Sorry. I cannot find '$file'.\n";
+      &report(2, "\nSorry. I cannot find '$file'.");
       &abort($message);
    } elsif ( ! -r $file ) {
-      print "\n$MYNAME: Sorry. File '$file' exists, but is not readable.\n";
+      &report(2, "\nSorry. File '$file' exists, but is not readable.");
       &abort($message);
    }
 }
@@ -793,33 +793,32 @@ sub check_dir {
    my $allow_creation = defined($_[2]) ? $_[2] : $NO;
 
    if ( index($directory, "/") != 0 ) {
-      print "\n$MYNAME: Sorry. '$directory' is not an absolute path.\n";
-      print "$message\n";
+      &report(3, "\nSorry. '$directory' is not an absolute path.");
+      &report(3, $message);
       return $FALSE;
    } elsif ( ! -d $directory ) {
       # dir does not exist
-      print "\n";
       if ( $allow_creation eq $YES ) {
          # creation allowed
-         print "$MYNAME: I cannot find '$directory'. Try to create it.\n";
-	 if ( mkdir($directory, 0755) ) {
-	    print "Creation of '$directory' was successful.\n";
-	    return $TRUE;
-	 } else {
-	    print "$MYNAME: Creation of '$directory' failed.\n";
-	    print "$message\n";
-	    return $FALSE;
-	 }
+         &report(4, "\nI cannot find '$directory'. Try to create it.");
+         if ( mkdir($directory, 0755) ) {
+            &report(7, "Creation of '$directory' was successful.");
+            return $TRUE;
+         } else {
+            &report(3, "Creation of '$directory' failed.");
+            &report(3, $message);
+            return $FALSE;
+	      }
       } else {
          # creation not allowed
-         print "$MYNAME: Sorry. Directory '$directory' does not exist.\n";
-         print "$message\n";
+         &report(3, "\nSorry. Directory '$directory' does not exist.");
+         &report(3, $message);
          return $FALSE;
       }
    } elsif ( ! -w $directory ) {
       # dir not writable
-      print "\n$MYNAME: Sorry. Directory '$directory' exists, but is not writable.\n";
-      print "$message\n";
+      &report(3, "\nSorry. Directory '$directory' exists, but is not writable.");
+      &report(3, $message);
       return $FALSE;
    }
    return $TRUE;
@@ -1060,7 +1059,7 @@ sub handle_option {
       &set_param_value($key, $bool_value);
    } elsif ( $type eq 'directory') {
       if (! &check_dir($value)) {
-         print "$key requires an existing writable directory as an absolute path.\n";
+         &report(2, "$key requires an existing writable directory as an absolute path.");
          &abort("Illegal value: $value");
       }
       &set_param_value($key, $value);
@@ -1119,8 +1118,8 @@ sub set_enum_value {
 
    $type = &param_type($key);
    $enum_array_ref = &type_enum_array($type);
-   die "Internal error: No value array for parameter $key."
-     if(!defined($enum_array_ref));
+   &abort("Internal error: No value array for parameter $key.")
+      if(!defined($enum_array_ref));
 
    ### find out if the given value is allowed  
    foreach my $value_array_ref (${$enum_array_ref}) {
@@ -1137,7 +1136,7 @@ sub set_enum_value {
       push(@allowed_values, ${$value_array_ref}[0]);
    }
 
-   print "\n$key allows: " . @allowed_values . ".\n";
+   &report(2, "\n$key allows: " . @allowed_values . ".\n");
    &abort("Illegal value: $value");
 }
 
@@ -1598,7 +1597,7 @@ sub identify_files {
       # assume that this reference is of a different type and skip it
       # quietly   
       if (!$kpse_result) {
-         #print " Ignoring '$tag_contents'.\n";
+         &report(9, " Ignoring '$tag_contents'.");
          next;
       }
 
@@ -2000,7 +1999,7 @@ sub convert_images {
    my @major_suffixes;
    my $ignore_regexp;
 
-   print "\nConverting images referenced in $tex_source.\n";
+   &report(6, "\nConverting images referenced in $tex_source.");
 
    ##### Get images of major type from the source file
    @major_suffixes = (@BITMAP_SUFFIXES, $PDF_ORIG_SUFFIX, @EPS_SUFFIXES);
@@ -2133,10 +2132,10 @@ sub run_pdflatex {
       $extra_options = "";
    }
    
-   print "Pdflatex is running. Please wait.\n\n";
+   &report(6, "Running pdflatex. This may take a while.\n");
    system("pdflatex --interaction nonstopmode $extra_options $texfile > $logfile");
    $exit_status=$?;
-   print "Pdflatex finished. Errors:\n";
+   &report(7, "Pdflatex finished. Errors:");
 
    ### extract all errors and warnings from the log file
    @errors = &grep_file($logfile, '(Emergency stop|Error|Warning).*:');
@@ -2148,18 +2147,18 @@ sub run_pdflatex {
    if ( @errors != 0 or $exit_status != 0 ) {
       if ( grep(/Emergency stop/, @errors) != 0 ) {
          &file_tail($logfile,10);
-         print "\n$MYNAME: See $logfile for details.\n";
-	 &abort("Fatal error occured. I am lost.");
+         &report(2, "\nSee $logfile for details.");
+         &abort("Fatal error occured. I am lost.");
       }
       if( @errors != 0 ) {
          print @errors;
       } else {
          &file_tail($logfile, 10);
       }
-      print "\n$MYNAME: See $logfile for details.\n";
+      &report(7, "\nSee $logfile for details.");
       return $FALSE;
    } else {
-      print "None detected (log file: $logfile).\n";
+      &report(7, "None detected (log file: $logfile).");
       return $TRUE;
    }
 }
@@ -2177,25 +2176,25 @@ sub handle_bibtex {
    
    if ( $bibtex_param eq $YES ) {
       $run_bibtex=$TRUE;
-      print "BibTeX parameter set to '$YES':\n";
+      &report(7, "BibTeX parameter set to '$YES':");
    } else {
-      print "Checking for BibTeX bibliography in main document: ";
+      &report(7, "Checking for BibTeX bibliography in main document: ");
       if( &grep_file($auxfile.'.tex', '^[^%]*\\\\bibliography{') != 0) {
          $run_bibtex=$TRUE;
-	 print "Bibliography detected.\n";
+         &report(7, "Bibliography detected.");
       } else {
          if ( @REF_DOCS > 0 ) {
-            print "Checking for BibTeX bibliography in included documents:\n";
+            &report(7, "Checking for BibTeX bibliography in included documents:");
             foreach my $file (@REF_DOCS) {
                if( &grep_file($file, '^[^%]*\\\\bibliography{') != 0) {
                    $run_bibtex=$TRUE;
-                   print "Bibliography detected.\n";
+                   &report(7, "Bibliography detected.");
                } else {
-                 print "No bibliography detected in $file.\n";
+                 &report(7, "No bibliography detected in $file.");
                }
             }
          } else {
-           print "No bibliography detected.\n";
+           &report(7, "No bibliography detected.");
         }
       }
    }
@@ -2204,19 +2203,19 @@ sub handle_bibtex {
       my @errors=();
       my $exit_status=0;
 
-      print "Bibtex is running. Please wait.\n\n";
+      &report(7, "Running bibtex. This may take a while.\n");
       system "bibtex $auxfile > $logfile";
       $exit_status=$?;
-      print "Bibtex finished. Errors:\n";
+      &report(7, "Bibtex finished. Errors:");
 
       ### extract all errors and warnings from the log file
       @errors=&grep_file($logfile, 'error message');
 
       if ( @errors != 0 or $exit_status != 0 ) {
          &file_tail($logfile);
-         print "\nYou can switch off BibTeX support by setting the bibtex parameter accordingly.\n";
+         &report(4, "\nYou can switch off BibTeX support by setting the bibtex parameter accordingly.");
       } else {
-         print "None detected (log file: $logfile).\n";
+         &report(7, "None detected (log file: $logfile).");
       }
    }
 }
@@ -2235,25 +2234,25 @@ sub handle_gloss {
    
    if ( $gloss_param eq $YES ) {
       $run_gloss=$TRUE;
-      print "Gloss parameter set to '$YES':\n";
+      &report(7, "Gloss parameter set to '$YES':");
    } else {
-      print "Checking for Gloss bibliography in main document: ";
+      &report(7, "Checking for Gloss bibliography in main document: ");
       if( &grep_file($auxfile.'.tex', '^[^%]*\\\\printgloss{') != 0) {
          $run_gloss=$TRUE;
-	 print "Gloss bibliography detected.\n";
+         &report(7, "Gloss bibliography detected.");
       } else {
         if ( @REF_DOCS > 0 ) {
-           print "Checking for Gloss bibliography in included documents:\n";
+           &report(7, "Checking for Gloss bibliography in included documents:");
            foreach my $file (@REF_DOCS) {
               if( &grep_file($file, '^[^%]*\\\\printgloss') != 0) {
                   $run_gloss=$TRUE;
-                  print "Gloss bibliography detected.\n";
+                  &report(7, "Gloss bibliography detected.");
               } else {
-                print "No gloss database detected in $file.\n";
+                &report(7, "No gloss database detected in $file.");
               }
            }
         } else {
-          print "No gloss database detected.\n";	
+          &report(7, "No gloss database detected.");
 	}
       }
    }
@@ -2261,19 +2260,19 @@ sub handle_gloss {
       my @errors=();
       my $exit_status=0;
 
-      print "Bibtex is running on $glsfile. Please wait.\n\n";
+      &report(7, "Running bibtex on $glsfile. This may take a while.\n");
       system "bibtex $glsfile > $logfile";
       $exit_status=$?;
-      print "Bibtex finished. Errors:\n";
+      &report(7, "Bibtex finished. Errors:");
 
       ### extract all errors and warnings from the log file
       @errors=&grep_file($logfile, 'error message');
 
       if ( @errors != 0 or $exit_status != 0 ) {
          &file_tail($logfile);
-         print "\nYou can switch off Gloss support by setting the gloss parameter accordingly.\n";
+         &report(4, "\nYou can switch off Gloss support by setting the gloss parameter accordingly.");
       } else {
-         print "None detected (log file: $logfile).\n";
+         &report(7, "None detected (log file: $logfile).");
       }
    }
 }
@@ -2288,22 +2287,22 @@ sub run_thumbpdf {
    my $logfile=$_[1];
    my $exit_status=0;
 
-   print "\nCreating thumbnails with 'thumbpdf'\n\n";
+   &report(7, "\nCreating thumbnails with 'thumbpdf'\n");
    system('thumbpdf', $texfile);
    $exit_status=$?;
    if ( $exit_status != 0 ) {
-      print "\n$MYNAME: thumbpdf exit with status $exit_status.\n";
-      print "I will continue, but maybe there will not be thumbs in the PDF doc.\n";
+      &report(3, "\n$MYNAME: thumbpdf exit with status $exit_status.");
+      &report(4, "I will continue, but maybe there will not be thumbs in the PDF doc.");
    }
 
    if ( -f 'thumbpdf.log' ) {
       move('thumbpdf.log', $logfile);
-      print "\n$MYNAME: See $logfile for details.\n";
+      &report(7, "\n$MYNAME: See $logfile for details.");
    }
 
    ### store possible tmp files
-   push (@TMPFILES, glob 'thumb???.png');
-   push (@TMPFILES, 'thumbpdf.pdf');
+   push(@TMPFILES, glob 'thumb???.png');
+   push(@TMPFILES, 'thumbpdf.pdf');
    push(@TMPFILES, 'thumbdta.tex'); 
    push(@TMPFILES, $texfile.'.tpt');
 }
@@ -2330,19 +2329,19 @@ sub run_ppower {
    $infile=$texfile_base.'.pdf';
    $outfile=$texfile_base.'_p4.pdf';
 
-   print "\nPostprocessing PDF file with 'ppower'\n\n";
+   &report(7, "\nPostprocessing PDF file with 'ppower'\n");
    system('ppower', $infile, $outfile);
    $exit_status=$?;
    if ( $exit_status != 0 ) {
-      print "\n$MYNAME: ppower exit with status $exit_status.\n";
-      print "I will continue, but maybe there will not be pause effects in the PDF doc.\n";
+      &report(3, "\nppower exit with status $exit_status.");
+      &report(4, "I will continue, but maybe there will not be pause effects in the PDF doc.");
    }
    else{
-     print "\nThe postprocessed pdf file is: $outfile\n\n";
+     &report(7, "\nThe postprocessed pdf file is: $outfile\n");
    }
    if ( -f 'ppower.log' ) {
       move('ppower.log', $logfile);
-      print "\n$MYNAME: See $logfile for details.\n";
+      &report(7, "\n$MYNAME: See $logfile for details.");
    }
 
 }
@@ -2357,17 +2356,17 @@ sub run_authorindex {
    my $logfile=$_[1];
    my $exit_status=0;
 
-   print "\nPocessing file with 'authorindex'\n\n";
+   &report(7, "\nProcessing file with 'authorindex'\n");
    system('authorindex', $texfile);
    $exit_status=$?;
    if ( $exit_status != 0 ) {
-      print "\n$MYNAME: ppower exit with status $exit_status.\n";
-      print "I will continue, but maybe there will not be author index in the PDF doc.\n";
+      &report(3, "\nppower exit with status $exit_status.");
+      &report(4, "I will continue, but maybe there will not be author index in the PDF doc.");
    }
 
    if ( -f 'authorindex.log' ) {
       move('authorindex.log', $logfile);
-      print "\n$MYNAME: See $logfile for details.\n";
+      &report(7, "\n$MYNAME: See $logfile for details.");
    }
 
 }
@@ -2388,7 +2387,7 @@ sub adjust_configuration {
    
    ### Check number of arguments
    if ( @ARGV == 0 ) {
-      print "\n$MYNAME: I need at least one argument!\n";
+      &report(1, "\nI need at least one argument!");
       &print_usage;
       exit 1;
    }
@@ -2402,12 +2401,12 @@ sub adjust_configuration {
       if( $rcfile_version == $MYRCFILE_VERSION ) {
          $valid_rcfile = $TRUE;
       } elsif ( $rcfile_version == 0 ) {
-         print "Could not determine version of read RC file. ";
-         print "Reconfiguration required.\n";
+         &report(2, "Could not determine version of read RC file. ",
+            "Reconfiguration required.");
       } else {
-         print "Version of read RC file ($rcfile_version) and "
-            ."this script ($MYRCFILE_VERSION) differs.\n";
-         print "Reconfiguration required.\n";
+         &report(2, "Version of read RC file ($rcfile_version) and ",
+            "this script ($MYRCFILE_VERSION) differs.\n",
+            "Reconfiguration required.");
       }
    }
    
@@ -2433,8 +2432,8 @@ sub adjust_configuration {
 
    ### make sure that tmp_base_suffix is not empty
    if ( &param_value('tmp_base_suffix') eq "" ) {
-      print "\n$MYNAME: CAUTION: Parameter tmp_base_suffix is not set.\n";
-      &abort("Using these settings would destroy the original files!");
+      &report(2, "\nCAUTION: Empty tmp_base_suffix would destroy the original files!");
+      &abort("Parameter tmp_base_suffix is not set.");
    }
    
    ##### check for required commands
@@ -2444,7 +2443,7 @@ sub adjust_configuration {
 
    ### Check number of arguments
    if ( @ARGV != 1 ) {
-      print "\n$MYNAME: Wrong number of arguments. I need exactly one file.\n";
+      &report(1, "\nWrong number of arguments. I need exactly one file.");
       &print_usage;
       exit 1;
    }
@@ -2467,13 +2466,13 @@ sub prepare_logdir {
    $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
    
    if( <$log_dir/*.log> and &param_value('clean_logs') eq $YES ) { 
-      print "\nRemoving old log files ($log_dir).\n";
+      &report(6, "\nRemoving old log files ($log_dir).");
       unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>,
          <$log_dir/gloss-*.log>, <$log_dir/thumbpdf-*.log>,
          <$log_dir/ppower-*.log>, <$log_dir/authorindex-*.log>,
          <$log_dir/tex2pdf-*.log>);
    } else {
-      print "\nAll log files will be stored in ($log_dir).\n";
+      &report(6, "\nAll log files will be stored in ($log_dir).");
    }
 
    ### move my pre-configuration log file to specified log directory
@@ -2539,9 +2538,9 @@ sub process_inputpath {
    ### Maybe the user has given us a different inputpath
    $input_path = &param_value('input_path');
    if(defined($input_path) and $input_path ne "") {
-      print "Setting input path to specified directory: $input_path\n";
+      &report(6, "Setting input path to specified directory: $input_path");
       
-      print "Change working directory to input path.\n";
+      &report(7, "Change working directory to input path.");
       chdir $input_path;
       
       return $input_path;
@@ -2562,17 +2561,17 @@ sub process_inputpath {
    
    ## check if input_path is ok
    if ($input_path) {
-      print "$MYNAME: Found an input path in the latex document: $input_path\n";
+      &report(7, "Found an input path in the latex document: $input_path");
       if( &check_dir($input_path, 'The retrieved input@path seems not to be valid.', $NO)) {
          &set_param_value('input_path', $input_path);
-         print "Change working directory to input path.\n";
+         &report(7, "Change working directory to input path.");
          chdir $input_path;
       } else {
          &abort ('I am lost.');
       }
    } else {
-      print "$MYNAME: No input path in the latex document found.\n";
-      print "Resources are expected to be relative to document's location: $doc_path\n";
+      &report(4, "No input path in the latex document found.");
+      &report(7, "Resources are expected to be relative to document's location: $doc_path");
          $input_path=$doc_path;
    }
    
@@ -2612,7 +2611,7 @@ sub get_target_name {
 
    if( ! defined($pdf_path) or $pdf_path eq "" or ! &check_dir($pdf_path,
       'The specified destination directory for the final PDF documents is not valid.', $NO)) {
-      print "$MYNAME: Using document's instead of destination path: $doc_path\n";
+      &report(7, "Using document's instead of destination path: $doc_path");
       $pdf_path=$doc_path;
    }
 
@@ -2640,23 +2639,21 @@ sub generate_hyperref_params {
          my @matches=&extract_tag_contents($texdoc, $info);
          $value= $matches[0];
          if (! defined($value) ) {
-            print "\n$MYNAME: WARNING: Could not identify document's $info correctly.\n";
-            print "Maybe you have used a LaTeX tag inside the $info which confuses me.\n";
-            print "Adjust the $info of the LaTeX file in order to avoid the problem or\n";
-            print "you could set the $info parameter manually.";
+            &report(4, "\nWARNING: Could not identify document's $info correctly.");
+            &report(7, "Maybe you have used a LaTeX tag inside the $info which confuses me.\n",
+               "Adjust the $info of the LaTeX file in order to avoid the problem or\n",
+               "you could set the $info parameter manually.");
             $value= &param_value("default_$info");
-	    print "Using default-$info: $value\n";
+            &report(7, "Using default-$info: $value");
          }
       }
       if (! defined($value) or $value eq $NIL ) {
-         print "$info field set to $NIL - no value will be passed.\n";
+         &report(7, "$info field set to $NIL - no value will be passed.");
       } else {
-         print "Document's $info: $value\n";
+         &report(7, "Document's $info: $value");
          push(@params, "pdf$info={$value}");
       }
    }
-   
-   print "\n";
    
    $para=&param_value('paper');
    if ( $para ne $NIL ) { push(@params, $para); }
@@ -2705,17 +2702,17 @@ sub prepare_documents {
    
    ## tell user about the identified refereneced docs
    if ( @REF_DOCS > 0 ) {
-      print "\nFound the following referenced TeX files:\n";
+      &report(7, "\nFound the following referenced TeX files:");
       foreach my $file (@REF_DOCS) {
-         print ">>>>> $file\n";
+         &report(7, ">>>>> $file");
       }
    } else {
-      print "\nFound no referenced TeX files.\n";
+      &report(7, "\nFound no referenced TeX files.");
    }
    
    ##### Generate adjusted temp tex files and convert all their images
    ## main doc
-   print "\n$MYNAME: Generating main temporary LaTeX document: $main_tmp_doc\n";
+   &report(6, "\nGenerating main temporary LaTeX document: $main_tmp_doc");
    &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params);
    &convert_images($main_tex_doc);
    
@@ -2724,7 +2721,7 @@ sub prepare_documents {
       my $tmp_file = &reserve_tmp_texname($file);
    
       ### Insert pdf conversation tags in tex file and write it to tmp_file
-      print "\n$MYNAME: Generating temporary LaTeX document: $tmp_file\n";
+      &report(7, "\nGenerating temporary LaTeX document: $tmp_file");
       &convert_tex2tmp($file, $tmp_file, undef);
       &convert_images($file);
    }
@@ -2767,7 +2764,7 @@ sub generate_pdf_doc {
    ### run pdflatex until no more errors are reported (max MAXRUNNO)
    while ( $rerun and $runno <= $max_run_no )
    {
-      print "\n************ Pdflatex run no. $runno *************\n";
+      &report(6, "\n************ Pdflatex run no. $runno *************");
       if ( &run_pdflatex($doc, $pdflog_base.$runno.'.log') == $TRUE 
          and ( $min_run_no <= $runno )) {
          # no errors detected and min. no. of runs are done
@@ -2779,13 +2776,13 @@ sub generate_pdf_doc {
    
       ### Execute BibTeX after first run if set (and required)
       if ( $runno == 1 and &param_value('bibtex') ne $NO ) {
-         print "\n****************** BibTeX handling ***********************\n";
+         &report(6, "\n****************** BibTeX handling ***********************");
          &handle_bibtex($doc, $bibtex_log);
       }
 
       ### Execute BibTeX on file.gls after first run if set (and required)
       if ( $runno == 1 and &param_value('gloss') ne $NO ) {
-         print "\n****************** Gloss handling ***********************\n";
+         &report(6, "\n****************** Gloss handling ***********************");
          &handle_gloss($doc, $gloss_log);
       }
 
@@ -2794,8 +2791,8 @@ sub generate_pdf_doc {
          if( !defined($makeindex_options) or $makeindex_options eq $NIL ) {
             $makeindex_options = "";
          }
-         print "\n****************** Extra index generation ***************\n";
-         print "Document seems to have an index. Generating ...\n\n";
+         &report(6, "\n****************** Extra index generation ***************");
+         &report(7, "Document seems to have an index. Generating ...\n");
          system 'makeindex '.$makeindex_options.' '.$doc.'.idx';
       }
 
@@ -2806,7 +2803,7 @@ sub generate_pdf_doc {
 
    ### if the authorindex option is switched on then run authorindex
    if ( &param_value('authorindex') eq $YES ) {
-      print "\n****************** authorindex generation *****************\n";
+      &report(6, "\n****************** authorindex generation *****************");
       &run_authorindex($doc, $authorindex_log);
    }
    
@@ -2815,34 +2812,33 @@ sub generate_pdf_doc {
       if( !defined($makeindex_options) or $makeindex_options eq $NIL ) {
          $makeindex_options = "";
       }
-      print "\n****************** Extra index generation ***************\n";
-      print "Document seems to have an index. Generating ...\n\n";
+      &report(6, "\n****************** Extra index generation ***************");
+      &report(7, "Document seems to have an index. Generating ...\n");
       system "makeindex $makeindex_options $doc'.idx'";
       $rerun=$TRUE;
    }
    
    ### if the thumbpdf option is switched on then make thumbnails
    if ( &param_value('thumbpdf') eq $YES ) {
-         print "\n****************** Thumbnail generation *****************\n";
+         &report(6, "\n****************** Thumbnail generation *****************");
       &run_thumbpdf($doc, $thumbpdf_log);
       $rerun=$TRUE;
    }
 
    ### One final pdflatex run if requested
    if ( $rerun ) {
-      print "\n************ One final pdflatex run no. $runno *************\n";
+      &report(6, "\n************ One final pdflatex run no. $runno *************");
       &run_pdflatex($doc, $pdflog_base.$runno.'.log');
    }
 
    ### if the ppower option is switched on then run ppower
    if ( &param_value('ppower') eq $YES ) {
-      print "\n****************** ppower postprocess *****************\n";
+      &report(6, "\n****************** ppower postprocess *****************");
       &run_ppower($doc, $ppower_log);
    }
 
    if ( ! -f $pdf_doc ) {
-      print "\n";
-      &abort("The new PDF file could not be generated: ".$pdf_doc);
+      &abort("\nThe new PDF file could not be generated: ".$pdf_doc);
    }
 
    return $pdf_doc;
