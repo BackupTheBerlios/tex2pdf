@@ -44,7 +44,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.0"
+MYRELEASE="2.2.2"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
