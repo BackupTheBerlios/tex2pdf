@@ -1,13 +1,17 @@
 
-tex2pdf: Script starts (Release 3.0beta7)
+tex2pdf: Script starts (Release 3.0)
 
 tex2pdf: Processing given parameters and arguments.
 
-tex2pdf Version 3.0beta7
+tex2pdf Version 3.0
 
 Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
        tex2pdf [OPTIONS] DOCUMENT[.tex]
-       tex2pdf [-h|-v|-o|-r]
+
+       tex2pdf -c | --configure     modify/set up configuration
+       tex2pdf -h | --help          give a short help
+       tex2pdf -o | --print_config  print current configuration
+       tex2pdf -v | --version       print my version
 
 --help | -h:
    print a short help text and exit
@@ -18,7 +22,7 @@ Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
 --print_config | -o:
    print the current configuration and exit
 
---configure | -r:
+--configure | -c:
    configure all parameters interactivly, store them and exit
 
 --title | -t VALUE:
@@ -54,7 +58,7 @@ Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
 --[no]clean_logs | -l:
    delete all log files in log directory before execution
 
---[no]check_commands | -c:
+--[no]check_commands:
    make sure that required shell commands does exist before start
 
 --destination VALUE:
