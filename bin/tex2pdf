@@ -30,7 +30,8 @@
 # Matej Cepl, Herbert Voss, Nicolas Marsgui, Bruce Foster, Mark van Rossum,
 # Matt Bandy, Garrick Chien Welsh, Stacy J. Prowell, Pavel Sedivy,
 # Holger Daszler, Olaf Gabler, Ahmet Sekercioglui, Richard, Steffen Macke,
-# Rainer Dorsch & friends, Jean-Pierre Chretien, Fernando Perez
+# Rainer Dorsch & friends, Jean-Pierre Chretien, Fernando Perez,
+# Ha Duong Minh, Oscar Lopez
 #
 # Project Homepage: http://tex2pdf.berlios.de
 # Developer Homepage: http://developer.berlios.de/projects/tex2pdf
@@ -55,7 +56,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.3";
+my $MYRELEASE="3.0.4";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -1439,8 +1440,6 @@ sub identify_files {
       my $kpse_result;
       my $working_dir = cwd."/";
 
-      print "$tag_contents\n";
-
       ($base,$path,$suffix) = fileparse($tag_contents, $regexp_suffixes);
 
       # if a suffix is specified reduce list of relevant suffixes to this one
@@ -1584,7 +1583,7 @@ sub convert_tex2tmp {
             }
  
             if ( &param_value('ppower') eq $YES ) {
-#               print '\usepackage{thumbpdf}' . "\n";
+#               print '\usepackage{mpmulti}' . "\n";
             } else {
                print "% no ppower support\n";
             }
@@ -1829,6 +1828,11 @@ sub modify_mp_file {
 
    ### set STDOUT as stdout again
    select STDOUT;
+
+   ### close files
+   close SOURCE_FILE;
+   close TARGET_FILE;
+   close PREAMBLE_FILE;
 
 }
 
@@ -2075,11 +2079,6 @@ sub run_ppower {
       print "\n$MYNAME: See $logfile for details.\n";
    }
 
-   ### store possible tmp files
-#   push (@TMPFILES, glob 'thumb???.png');
-#   push (@TMPFILES, 'thumbpdf.pdf');
-#   push(@TMPFILES, 'thumbdta.tex'); 
-#   push(@TMPFILES, $texfile.'.tpt');
 }
 
 
