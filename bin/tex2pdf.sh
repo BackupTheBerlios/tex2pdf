@@ -45,7 +45,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.10"
+MYRELEASE="2.2.11"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -1021,7 +1021,7 @@ convert_pstex2pdf() {
 
       # convert image to pdf
       # check time stamp to skip conversion if eps is older than pdf
-      if [ "$REUSEPDF" = "no" || [ ! -e ${PSTEXPATH}${EPSBASE}.pdf ] \
+      if [ "$REUSEPDF" = "no" ] || [ ! -e ${PSTEXPATH}${EPSBASE}.pdf ] \
          || [ ${PSTEXPATH}${EPSBASE}.pdf -ot ${PSTEXPATH}${EPSIMAGE} ]
       then 
          echo Converting image ${PSTEXPATH}${EPSIMAGE} ...
@@ -1114,12 +1114,11 @@ prepare_document() {
    ### Insert pdf conversation tags in tex file and write it to TARGETFILE
    echo
    echo $MYNAME: Generating temporary LaTeX document
-
+  
    # wipe out pdf extension \includegraphics
    ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^]]*\]\)\?\({[^}]\+\)\.\(e\)*ps}/\1\2\3}/g" \
    -e "s/\([\]input{[^}]\+\.\)pstex_t}/\1pdf_t}/g" \
-   -e "s/\([\]input{[^}]\+\)\(\.tex\)\?}/\1${TMPBASESUFFIX}\2}/g" \
-   -e "s/\([\]include{[^}]\+\)\(\.tex\)\?}/\1${TMPBASESUFFIX}\2}/g" \
+   -e "s/\([\]\(input\|include\){\([^}]*\/\)\?[^}/.]\+\)\(\.tex\)\?}/\1\3${TMPBASESUFFIX}\4}/g" \
    -e "1,/^[\]begin{document}$/s/^[\]batchmode$//" \
    -e "$INSERTCOMMAND"' \
    \\usepackage{pslatex}' \
