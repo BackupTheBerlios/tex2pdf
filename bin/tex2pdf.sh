@@ -2,7 +2,7 @@
 
 #      tex2pdf - script for translating latex docs to pdf
 #
-#      Copyright (C) 2000 by Steffen Evers (tron@cs.tu-berlin.de)
+#      Copyright (C) 2000,2001 by Steffen Evers (tron@cs.tu-berlin.de)
 #
 #      This program is free software; you can redistribute it and/or modify
 #      it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@
 #     (thanks to all the people who supported me with their feedback)
 #
 # Aug 14th, 2000 -- Release 1.3
-#  * added command to rename ~/.lyx/lyxpipe.out and ~/.lyx/lyxpipe.in 
+#  * added command to rename ~/.lyx/lyxpipe.out and ~/.lyx/lyxpipe.in
 #     (thanks to Herbert Voss for this hint)
 #  * converted the sed command to be suitable for a single line
 #  * added check for number of command line arguments
@@ -39,7 +39,7 @@
 #  * made sed commands work with GNU sed v3.02 and made them more readable
 #     (thanks to Bruce Foster (bef@nwu.edu) for this patch)
 #  * introduced environment variable for sed executable
-#     (thanks to Bruce Foster for the idea and his patch) 
+#     (thanks to Bruce Foster for the idea and his patch)
 #  * added parameter section
 #  * added the possibility to give pdflatex some additional options
 #  * added check for required commands (sed, pdflatex, epstopdf)
@@ -75,10 +75,10 @@
 #  * fixed permission problems with multiple users (log-files)
 #     (thanks to Garrick Chien Welsh for this patch)
 #
-# Jan 14th, 2001 -- Release 1.8 beta 2 
+# Jan 14th, 2001 -- Release 1.8 beta 2
 #  * added conversation of pictures in included TeX files
 #     (thanks to Stacy J. Prowell <sprowell@cs.utk.edu> for his patch)
-#  * corrected sed expressions to check for backslash 
+#  * corrected sed expressions to check for backslash
 #  * introduced function section (code more structured)
 #  * added support for pstex_t files with included EPS image
 #     (thanks to Pavel Sedivy for his patch)
@@ -86,15 +86,15 @@
 #     (thanks to Pavel Sedivy for this idea)
 #  * minor changes
 #
-# Jan 21st, 2001 -- Release 1.8 beta 3 
+# Jan 21st, 2001 -- Release 1.8 beta 3
 #  * modified LyX export command to work with LyX 1.1.6
 #     (thanks to Stacy J. Prowell <sprowell@cs.utk.edu> for this hint)
 #
-# Mar 02nd, 2001 -- Release 1.8 beta 4 
+# Mar 02nd, 2001 -- Release 1.8 beta 4
 #  * modified image searching to cover not only first image in a line
 #     (thanks to Holger Daszler for this hint)
 #
-# Mar 09th, 2001 -- Release 1.8 
+# Mar 09th, 2001 -- Release 1.8
 #  * included convert_pstex2pdf tmp files in clean up
 #  * added support for PDF thumbnails
 #     (thanks to Olaf Gabler for his patch)
@@ -135,16 +135,21 @@
 #  * added optional makeindex support (set MAKEINDEX=test to activate)
 #     (thanks to Steffen Macke for his work)
 #
+# ?????????????? -- Release 2.2
+#  * made the script a little bit safer (log files, temp files, parameters)
+#
 
-MYRELEASE="2.1.0"
+MYRELEASE="2.1.1"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
 ##### Have fun!!!
 
-##### Parameters: Adjust them to your personal system
+##### Default parameters
+## Change the parameters below if you want to change the default settings for
+## all users.
 
-### pdftex package options: 
+### pdftex package options:
 ### see hyperref manual for more:/usr/share/texmf/doc/latex/hyperref/manual.pdf
 
 # papersize of the resulting pdf document
@@ -182,7 +187,7 @@ PDFOUTDIR=
 SEDEXE=
 
 # usage of bibtex
-# possible values: 'yes' (always run bibtex), 'no' (never run bibtex), 
+# possible values: 'yes' (always run bibtex), 'no' (never run bibtex),
 # 'test' (scan tex file for a bibtex entry and run it if required)
 BIBTEX=test
 
@@ -194,29 +199,20 @@ MAXRUNNO=6
 # when tex2pdf cannot detect any more warnings or errors.
 # This might help if there is no table of contents or other things are missing.
 # possible values: 1 ... MAXRUNNO
-MINRUNNO=3
+MINRUNNO=2
 
 # directory for log files
-# CAUTION: All files in this directory will be deleted if you set CLEANLOGS=yes!
 LOGDIR=/tmp/tex2pdf-$USER/
 
-# log files for the output of pdflatex, bibtex and thumbpdf
-PDFLOGFILE=${LOGDIR}pdflatex-$$.log
-BIBTEXLOG=${LOGDIR}bibtex-$$.log
-THUMBPDFLOG=${LOGDIR}thumbpdf-$$.log
-
-# clean log directory before execution
+# clean log files before execution
 # You might get problems with this when you run tex2pdf on several documents
 # at the same time. So, if you want to be on the safe side set "no" and clean
 # the log directory manually.
-# possible values: 'yes', 'no' 
+# possible values: 'yes', 'no'
 CLEANLOGS="no"
 
-# additional options for pdflatex
-PDFTEXOPTS=""
-
 # Use which command to check for required executables
-# possible values: 'yes', 'no' 
+# possible values: 'yes', 'no'
 COMMANDCHECK="yes"
 
 # use thumbpdf to include thumbnails of all PDF document pages
@@ -225,16 +221,23 @@ COMMANDCHECK="yes"
 # possible values: "yes" for thumbnails, "no" - without thumbnails
 THUMB="no"
 
+# execution of the makeindex command for index handling
+# this should fix the problem with a missing document index
+# possible values: "yes" - check for index file and if found call makeindex
+#                  "no"  - never execute it
+MAKEINDEX="yes"
+
+##### expert parameters
+## the following parameters should NOT be modified by regular users!
+## study the script carefully before you change them !!!
+
+# additional options for pdflatex
+PDFTEXOPTS=""
+
 # suffix for tmp files that will be put in between the basename and suffix of
 # the original file
 # CAUTION: If you leave this blank you will overwrite the original files!
 TMPBASESUFFIX=-pdf
-
-# execution of the makeindex command for index handling
-# this should fix the problem with a missing document index
-# possible values: "test" - check for index file and if found call makeindex 
-#                  "no" - never execute it
-MAKEINDEX="no"
 
 # sed command which is used to insert additional TeX commands in the LaTeX
 # preamble
@@ -244,34 +247,11 @@ MAKEINDEX="no"
 # INSERTCOMMAND="/^[\]makeatletter$/i"
 INSERTCOMMAND="/^[\]documentclass\(\[[^]]*\]\)\?{.*}/a"
 
+##### Functions ###########################################
 
-##### Functions
+#### General functions (not script specific)
 
-### Removing all temporary files
-
-clean_up() {
-   echo $MYNAME: Removing temporary files ... 
-   [ -n "$TMPFILES" ] && rm $TMPFILES
-   [ -n "$TMPBASE" ] && rm ${TMPBASE}.*
-}
-
-### Check arguments
-# parameters ($@): all arguments that were passed to the script by the shell
-
-check_arguments() {
-   if [ $# -ne 1 ]
-   then
-      echo
-      echo $MYNAME: Wrong number of arguments.
-      echo
-      echo "Usage: $MYNAME DOCUMENT.lyx"
-      echo "       $MYNAME DOCUMENT.tex"
-      echo
-      exit 1
-   fi
-}
-
-##### Make sure that specified file exists and is readable; abort if missing 
+##### Make sure that specified file exists and is readable; abort if missing
 # parameter $1: file to check
 # parameter $2: remark if check fails on specified file
 
@@ -300,7 +280,7 @@ check_file() {
    fi
 }
 
-### Check for required command with 'which'; abort if not found 
+### Check for required command with 'which'; abort if not found
 # parameter $1: command to check
 # parameter $2: remark if specified command is not found
 
@@ -322,6 +302,30 @@ checkCommand() {
    fi
 }
 
+#### Specific functions (for use with this script only)
+
+### print usage of command
+
+usage () {
+   echo
+   echo "Usage: $MYNAME DOCUMENT.lyx"
+   echo "       $MYNAME DOCUMENT.tex"
+   echo
+}
+
+### Check number of arguments
+# parameters ($@): all arguments that were passed to the script by the shell
+
+check_arguments() {
+   if [ $# -ne 1 ]
+   then
+      echo
+      echo $MYNAME: Wrong number of arguments.
+      usage
+      exit 1
+   fi
+}
+
 ### check if the most important executables are installed on the system
 # parameters: none
 
@@ -336,7 +340,7 @@ check_commands() {
    then
       checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed"
    fi
-   
+
    ### pdftex executables
    # Homepage: http://tug.org/applications/pdftex
    checkCommand pdflatex "See pdftex homepage for details: http://tug.org/applications/pdftex"
@@ -352,6 +356,14 @@ check_commands() {
    then
       checkCommand bibtex "You can switch off BibTeX support by setting BIBTEX=no in the parameter section of $MYNAME."
    fi
+}
+
+### Removing all temporary files
+
+clean_up() {
+   echo $MYNAME: Removing temporary files ...
+   [ -n "$TMPFILES" ] && rm $TMPFILES
+   [ -n "$TMPBASE" ] && rm ${TMPBASE}.*
 }
 
 ### generate LaTeX file from LyX document with LyX itself
@@ -376,12 +388,12 @@ generate_tex_file() {
       ### export LaTeX file with LyX (needs a display!)
       checkCommand lyx "Cannot generate LaTeX document without LyX!"
       echo
-      echo $MYNAME: Exporting LaTeX file 
+      echo $MYNAME: Exporting LaTeX file
       [ -f $HOME/.lyx/lyxpipe.out ] && mv $HOME/.lyx/lyxpipe.out $HOME/.lyx/lyxpipe.out~
       [ -f $HOME/.lyx/lyxpipe.in ] && mv $HOME/.lyx/lyxpipe.in $HOME/.lyx/lyxpipe.in~
       [ -f $TEXDOC ] && mv $TEXDOC $TEXDOC~
       lyx --export latex $LYXDOC
-      
+
       ### check if LaTeX file now really exists
       check_file $TEXDOC "The LaTeX document was not generated by LyX!"
    fi
@@ -398,7 +410,7 @@ getFileList() {
    if [ -z "$flag" ] ; then
       # Make sure the file can be accessed
       check_file $1 "Included TeX file seems not to be available. Path problem?"
-      
+
       # Save the argument in the list of files.
       FILES="$FILES $1"
 
@@ -428,7 +440,7 @@ convert_eps2pdf() {
 
       #### check if image file really exists
       check_file ${IMAGEPATH}${IMAGENAME} "Could not convert included image."
-   
+
       echo Converting image ${IMAGENAME} ...
       epstopdf -outfile=${IMAGEPATH}${IMAGEBASE}.pdf ${IMAGEPATH}${IMAGENAME}
       TMPFILES="$TMPFILES ${IMAGEPATH}${IMAGEBASE}.pdf"
@@ -450,13 +462,13 @@ convert_pstex2pdf() {
 
       #### check if image file really exists
       check_file ${PSTEXPATH}${PSTEXNAME} "Could not convert included image."
-   
+
       # descend into file
       echo Converting file ${PSTEXNAME} ...
 
       # create .pdf_t file
       sed -e "s/\(^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{.*\.\)pstex\(.*$\)/\2pdf\3/g" ${PSTEXPATH}${PSTEXNAME} > "${PSTEXPATH}${PSTEXBASE}.pdf_t"
-      
+
       # find included EPS image
       EPSIMAGE=`${SEDEXE} -n "s/^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{\([^}]\+\)}.*$/\2/pg" ${PSTEXPATH}${PSTEXNAME}`
       EPSBASE=`basename $EPSIMAGE .pstex`
@@ -475,14 +487,14 @@ convert_pstex2pdf() {
 # parameter ($2): tex target file
 
 prepare_document() {
-  
-   ### set required variables 
+
+   ### set required variables
    local TEXSOURCE="$1"
    local TARGETFILE="$2"
 
    echo
    echo "Preparing document: $TEXSOURCE."
-   
+
    ##### Get EPS images from the source file
    echo
    echo "Scanning for EPS images (.eps/.ps):"
@@ -493,7 +505,7 @@ prepare_document() {
    else
       echo "None."
    fi
-   
+
    ##### Get PSTEX_T files from the source file
    echo
    echo "Scanning for PSTEX_T files (.pstex_t):"
@@ -533,20 +545,20 @@ prepare_document() {
       rm $TARGETFILE
       mv ${TARGETFILE}2 $TARGETFILE
    fi
-      
+
    ### Convert all EPS images to pdf
    [ -n "$EPSIMAGES" ] && convert_eps2pdf $EPSIMAGES
-   
+
    ### Convert all PSTEX_T files to PDF_T
    [ -n "$PSTEXS" ] && convert_pstex2pdf $PSTEXS
-   
+
    echo
    echo "Finished: ${TEXSOURCE}."
 }
 
 ### run pdflatex
 # parameter $1: LaTeX file without extension
-# return value: 0 - no errors (no rerun); 1 - errors (rerun required) 
+# return value: 0 - no errors (no rerun); 1 - errors (rerun required)
 
 run_pdflatex() {
    local TEXFILE=$1
@@ -575,7 +587,7 @@ run_pdflatex() {
       echo "None."
       return 0
    fi
-} 
+}
 
 #### run bibtex if BIBTEX=yes or a bibliography tag is found
 # included tex files are not parsed for a bibliography
@@ -618,7 +630,7 @@ handle_bibtex() {
          echo "BibTeX finished without errors."
       fi
    fi
-} 
+}
 
 #### run thumbpdf command to make thumbnails
 # more informations: /usr/share/texmf/doc/pdftex/thumbpdf/readme.txt
@@ -628,7 +640,7 @@ run_thumbpdf() {
    local TEXFILE=$1
    echo
    echo "$MYNAME: Creating thumbnails with 'thumbpdf'"
-   echo 
+   echo
    thumbpdf ${TEXFILE}
    mv thumbpdf.log $THUMBPDFLOG
 
@@ -650,6 +662,11 @@ TMPFILES=
 echo
 echo "$MYNAME: Script starts (Release $MYRELEASE)"
 
+##### Check arguments
+echo
+echo "$MYNAME: Processing given parameters and arguments."
+check_arguments $@
+
 ##### Preparing the LOGDIR
 if ! mkdir -p ${LOGDIR}
 then
@@ -657,16 +674,31 @@ then
    echo "$MYNAME: Could not create log directory ($LOGDIR)."
    echo "Aborting ..."
    exit 1
-fi   
+fi
 
 if [ -n "$LOGFILES" -a -n "`ls ${LOGDIR}`" -a "$CLEANLOGS" = "yes" ]
 then
    echo
-   echo "Cleaning up directory for log files ($LOGDIR)."
-   rm ${LOGDIR}*
+   echo "Removing old log files ($LOGDIR)."
+   rm ${LOGDIR}pdflatex-*.log ${LOGDIR}bibtex-*.log ${LOGDIR}thumbpdf-*.log
 else
    echo
    echo "All log files will be stored in ($LOGDIR)."
+fi
+
+# setting the log files for the output of pdflatex, bibtex and thumbpdf
+PDFLOGFILE=${LOGDIR}pdflatex-$$.log
+BIBTEXLOG=${LOGDIR}bibtex-$$.log
+THUMBPDFLOG=${LOGDIR}thumbpdf-$$.log
+
+### make sure that TMPBASESUFFIX is not empty
+if [ -z "$TMPBASESUFFIX" ]
+then
+   echo
+   echo "$MYNAME: CAUTION: Parameter TMPBASESUFFIX is not set."
+   echo "Running $MYNAME with this settings would destroy the original files!"
+   echo "Aborting ..."
+   exit 1
 fi
 
 ##### check for required commands
@@ -677,7 +709,7 @@ then
       echo
       echo "$MYNAME: Specified sed executable not found (${SEDEXE})"
       echo "Using sed executable in your path."
-      echo "Maybe it does not work. GNU sed v3.02 or higher is recommended." 
+      echo "Maybe it does not work. GNU sed v3.02 or higher is recommended."
       SEDEXE=sed
    fi
 else
@@ -691,8 +723,7 @@ fi
 
 ##### Check arguments
 echo
-echo "$MYNAME: Processing your argument(s)."
-check_arguments $@
+echo "$MYNAME: Analysing your document argument."
 
 ##### Getting document name and path
 DOCUMENT="$1"
@@ -719,7 +750,7 @@ else
    ### given file is a LaTeX file
    # cut off .tex extension if there is one
    DOCBASE=`basename $DOCNAME .tex`
-   
+
    ###### check access to given LaTeX document
    check_file ${DOCBASE}.tex "Cannot read the specified LaTeX document!"
 fi
@@ -729,7 +760,7 @@ TMPBASE=${DOCBASE}${TMPBASESUFFIX}
 
 ##### Get title and author from main LaTeX document
 echo
-echo $MYNAME: Parsing LaTeX file 
+echo $MYNAME: Parsing LaTeX file
 if [ -z "$TITLE" ]
 then
    TITLE=`${SEDEXE} -n "s/^.*[\]title{\([^{}]*\)}.*$/\1/1p" $PASSEDTEXDOC`
@@ -779,13 +810,13 @@ FILES=`echo $FILES | ${SEDEXE} -e "s|^ *$PASSEDTEXDOC||"`
 
 if [ -n "$FILES" ]
 then
-   echo 
+   echo
    echo "Found the following included TeX files:"
    for file in $FILES ; do
       echo ">>>>> $file"
    done
 else
-   echo 
+   echo
    echo "Found no included TeX files."
 fi
 
@@ -803,7 +834,7 @@ then
 fi
 
 ##### Generate the final PDF document
-### run pdflatex until no more errors are reported (max MAXRUNNO) 
+### run pdflatex until no more errors are reported (max MAXRUNNO)
 runno=1
 rerun=1
 while [ $rerun -ne 0 -a $runno -le $MAXRUNNO ]
@@ -817,8 +848,8 @@ do
    else
       # errors or MINRUNNO has not been reached
       rerun=1
-   fi 
-   
+   fi
+
    ### Execute BibTeX after first run if set (and required)
    if [ $runno -eq 1 -a "$BIBTEX" != "no" ]
    then
