@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0beta2";
+my $MYRELEASE="3.0beta4";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -1208,7 +1208,7 @@ sub reserve_tmp_texname {
    if(!defined($tmp_path) or $tmp_path eq "") {
       $tmp_path=$original_path;
    } else {
-      $tmp_path .= '/' if( $tmp_path ne "" and ! $tmp_path =~ m#/$# );
+      $tmp_path .= '/' if( $tmp_path ne "" and ! ($tmp_path =~ m#/$#) );
    }
    
    # abort if no absolute path is given 
@@ -1333,7 +1333,7 @@ sub extract_files {
       $path_prefix = dirname $source;
    }
 
-   $path_prefix .= '/' if( $path_prefix ne "" and ! $path_prefix =~ m#/$# );
+   $path_prefix .= '/' if( $path_prefix ne "" and ! ($path_prefix =~ m#/$#) );
 
    @matched_tags = &extract_tag_contents($source, $tag_name);
    
@@ -1771,7 +1771,7 @@ sub prepare_logdir {
    }
 
    # make sure there is a slash at the end of the path
-   $log_dir .= '/' if( ! $log_dir =~ m#/$# );
+   $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
    
    if( <$log_dir/*.log> ne "" and &param_value('clean_logs') eq $YES ) { 
       print "\nRemoving old log files ($log_dir).\n";
@@ -1913,7 +1913,7 @@ sub get_target_name {
    }
 
    # make sure there is a slash at the end of the path
-   $pdf_path .= '/' if( ! $pdf_path =~ m#/$# );
+   $pdf_path .= '/' if( ! ($pdf_path =~ m#/$#) );
    
    return $pdf_path.$doc_base.'.pdf';
 }
@@ -1988,7 +1988,6 @@ sub generate_hyperref_params {
 
 sub prepare_documents {
    my ($main_tex_doc, @hyperref_params) = @_;
-   my $main_tmp_doc;
    my $input_path = &param_value('input_path');
    @REF_DOCS=();
 
