@@ -137,9 +137,12 @@
 #
 # ?????????????? -- Release 2.2
 #  * made the script a little bit safer (log files, temp files, parameters)
+#  * introduced experimental support for private configuration files and
+#    command line options (set USE_EXTENDED_OPTIONS=yes to activate)
+#     (thanks to Steffen Macke for this great patch)
 #
 
-MYRELEASE="2.1.1"
+MYRELEASE="2.1.2"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -147,7 +150,8 @@ MYRELEASE="2.1.1"
 
 ##### Default parameters
 ## Change the parameters below if you want to change the default settings for
-## all users.
+## all users.  If you only want to change your private parameters change them
+## in the RC_FILE (experimental - see below)
 
 ### pdftex package options:
 ### see hyperref manual for more:/usr/share/texmf/doc/latex/hyperref/manual.pdf
@@ -247,9 +251,60 @@ TMPBASESUFFIX=-pdf
 # INSERTCOMMAND="/^[\]makeatletter$/i"
 INSERTCOMMAND="/^[\]documentclass\(\[[^]]*\]\)\?{.*}/a"
 
+# use private configuration files (RC_FILES) and command line options
+# This is experimental at the moment and should not be used for regular work
+# Be careful with it!
+# possible values: "yes" - use RCS_FILES and command line options,
+#                  "no"  - do not use this feature
+USE_EXTENDED_OPTIONS=no
+
+### file to store private parameters
+# If you only want to change your private parameters change them there
+# default: $HOME/.tex2pdfrc
+RC_FILE=$HOME/.tex2pdfrc
+
+# print the configuration parameters and exit
+# used for debugging USE_EXTENDED_OPTIONS (see above)
+# possible values: "yes" - print and exit, "no" - regular execution
+PRINT_ONLY=no
+
 ##### Functions ###########################################
 
 #### General functions (not script specific)
+
+###  exit with an error message
+
+abort() {
+   echo $MYNAME: "$@"
+   echo Aborting ...
+   exit 1
+}
+
+### interactively answer a question with yes or no
+# $1 question
+# $2 default value
+
+questionYN() {
+   local response
+   local default
+   while true; do
+      if [ $2 = yes ]
+      then
+         echo -n "$1" "[y]"
+         default=yes
+      else
+         echo -n "$1" "[n]"
+         default=no
+      fi
+      read response </dev/tty
+      case $response in
+         y*|Y*) RESPONSE=yes; return ;;
+         n*|N*) RESPONSE=no; return ;;
+         "") RESPONSE=$default; return ;;
+         *) echo Please respond with y or n.
+      esac
+   done
+}
 
 ##### Make sure that specified file exists and is readable; abort if missing
 # parameter $1: file to check
@@ -308,8 +363,31 @@ checkCommand() {
 
 usage () {
    echo
-   echo "Usage: $MYNAME DOCUMENT.lyx"
-   echo "       $MYNAME DOCUMENT.tex"
+   echo "Usage: $MYNAME [OPTIONS] DOCUMENT.lyx"
+   echo "       $MYNAME [OPTIONS] DOCUMENT.tex"
+   echo "       $MYNAME [-h|-v|-p|-c]"
+   echo
+}
+
+### print command help
+
+help () {
+   echo
+   echo "$MYNAME  Version $MYRELEASE"
+   usage
+   echo "     -i : force makeindex"
+   echo
+   echo "     -h : print this message"
+   echo "     -v : print version information"
+   echo "     -p : print configuration parameters"
+   echo "     -c : configure parameters"
+}
+
+### print script version
+
+print_version () {
+   echo
+   echo "$MYNAME  Version $MYRELEASE"
    echo
 }
 
@@ -317,13 +395,103 @@ usage () {
 # parameters ($@): all arguments that were passed to the script by the shell
 
 check_arguments() {
-   if [ $# -ne 1 ]
+   if [ $# -eq 0 -o $# -gt 2 ]
    then
       echo
       echo $MYNAME: Wrong number of arguments.
       usage
       exit 1
    fi
+}
+
+### configure tex2pdf parameters interactively
+
+configure() {
+   echo
+   echo Configuration for tex2pdf.
+   echo The following answers are considered as defaults in later executions
+   echo of $MYNAME. You can change these values by using option -c.
+   echo The command-line options override these settings.
+   echo
+
+   echo "$MYNAME can force the call of makeindex if pdftex fails to do this."
+   questionYN "Should the call of makeindex be forced?" $MAKEINDEX
+   MAKEINDEX=$RESPONSE
+   echo
+}
+
+### save configuration in rc file
+
+write_configuration() {
+   if ! echo "# Configuration file for $MYNAME V$MYRELEASE" > $RC_FILE
+   then
+      abort Couldn\'t write confguration file $RC_FILE
+   fi
+   echo "# Generated `date` by $USER on $HOSTNAME" >> $RC_FILE
+   echo PAPERSIZE=$PAPERSIZE >> $RC_FILE
+   echo COLORLINKS=$COLORLINKS >> $RC_FILE
+   echo URLCOLOR=$URLCOLOR >> $RC_FILE
+   echo CITECOLOR=$CITECOLOR >> $RC_FILE
+   echo TITLE=$TITLE >> $RC_FILE
+   echo AUTHOR=$AUTHOR >> $RC_FILE
+   echo PDFOUTDIR=$PDFOUTDIR >> $RC_FILE
+   echo SEDEXE=$SEDEXE >> $RC_FILE
+   echo BIBTEX=$BIBTEX >> $RC_FILE
+   echo MAXRUNNO=$MAXRUNNO >> $RC_FILE
+   echo MINRUNNO=$MINRUNNO >> $RC_FILE
+   echo LOGDIR=$LOGDIR >> $RC_FILE
+   echo CLEANLOGS=$CLEANLOGS >> $RC_FILE
+   echo PDFTEXOPTS=$PDFTEXOPTS >> $RC_FILE
+   echo COMMANDCHECK=$COMMANDCHECK >> $RC_FILE
+   echo THUMB=$THUMB >> $RC_FILE
+   echo TMPBASESUFFIX=$TMPBASESUFFIX >> $RC_FILE
+   echo MAKEINDEX=$MAKEINDEX >> $RC_FILE
+   echo INSERTCOMMAND=$INSERTCOMMAND >> $RC_FILE
+   echo "# EOF" >> $RC_FILE
+}
+
+### print the configuration parameters
+print_configuration() {
+   echo "Configuration for $MYNAME V$MYRELEASE"
+   echo PAPERSIZE=$PAPERSIZE
+   echo COLORLINKS=$COLORLINKS
+   echo URLCOLOR=$URLCOLOR
+   echo CITECOLOR=$CITECOLOR
+   echo TITLE=$TITLE
+   echo AUTHOR=$AUTHOR
+   echo PDFOUTDIR=$PDFOUTDIR
+   echo SEDEXE=$SEDEXE
+   echo BIBTEX=$BIBTEX
+   echo MAXRUNNO=$MAXRUNNO
+   echo MINRUNNO=$MINRUNNO
+   echo LOGDIR=$LOGDIR
+   echo CLEANLOGS=$CLEANLOGS
+   echo PDFTEXOPTS=$PDFTEXOPTS
+   echo COMMANDCHECK=$COMMANDCHECK
+   echo THUMB=$THUMB
+   echo TMPBASESUFFIX=$TMPBASESUFFIX
+   echo MAKEINDEX=$MAKEINDEX
+   echo INSERTCOMMAND=$INSERTCOMMAND
+   echo
+}
+
+### load parameters from rc file
+
+read_configuration() {
+   if [ ! -r $RC_FILE ]
+   then
+      echo $MYNAME: $RC_FILE doesn\'t exist or is not readable
+      abort Couldn\'t read configuration file
+   fi
+
+   for i in PAPERSIZE COLORLINKS URLCOLOR CITECOLOR TITLE AUTHOR PDFOUTDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS COMMANDCHECK THUMB TMPBASESUFFIX MAKEINDEX INSERTCOMMAND
+   do
+      TEMPVAR=`sed -n "s/^\($i=[[:print:]]*\)$/\1/1p" $RC_FILE`
+      if [ -n "$TEMPVAR" ]
+      then
+        export $i=`echo $TEMPVAR | cut -d = -f 2-`
+      fi
+   done
 }
 
 ### check if the most important executables are installed on the system
@@ -666,6 +834,60 @@ echo "$MYNAME: Script starts (Release $MYRELEASE)"
 echo
 echo "$MYNAME: Processing given parameters and arguments."
 check_arguments $@
+
+##### command line options and private configuration files handling
+if [ "$USE_EXTENDED_OPTIONS" = yes ]
+then
+
+   CONFIGURE_REQ=no
+
+   ### scan parameters (1st level)
+
+   OPTIND=1
+   while getopts hvipc OPTION
+   do
+      case "$OPTION" in
+         i) MAKEINDEX=yes ;;
+         h) help; exit 0 ;;
+         v) print_version; exit 0 ;;
+         p) PRINT_ONLY=yes ;;
+         c) CONFIGURE_REQ=yes;;
+         *) usage; exit 1 ;;
+      esac
+   done
+
+   ### set parameters from rc file
+   if [ -f "$RC_FILE" ]
+   then
+     read_configuration
+   else
+     if [ "$PRINT_ONLY" != yes ]
+     then
+        CONFIGURE_REQ=yes
+     fi
+   fi
+
+   ### configure parameters
+   if [ "$CONFIGURE_REQ" = "yes" ]
+   then
+     configure
+     write_configuration
+   fi
+
+   ### scan parameters (2nd level)
+   ### second level scan should be put here !!!
+
+   ### print configuration parameters
+
+   if [ "$PRINT_ONLY" = "yes" ]
+   then
+      print_configuration
+      exit 0
+   fi
+
+   #### remove all command line options, leave the document argument as $1
+   shift $(($OPTIND - 1))
+fi
 
 ##### Preparing the LOGDIR
 if ! mkdir -p ${LOGDIR}
