@@ -20,7 +20,8 @@
 #
 # Credits:
 # Thanks to Matej Cepl and Herbert Voss for helping me with the latex stuff!
-#
+# Thanks to all the people who supported me with their feedback!
+# 
 # Version History:
 #
 # Aug 13th, 2000 -- Version 1.2
@@ -34,7 +35,7 @@
 #
 # Sep 15th, 2000 -- Version 1.4
 #  * added some reports while execution
-#  * stop rerunning pdflatex when there are no more warnings/errors
+#  * stopped rerunning pdflatex when there are no more warnings/errors
 #     (thanks to Nicolas Marsgui for the idea and his patch)
 #  * made sed commands work with GNU sed v3.02 and made them more readable
 #     (thanks to Bruce Foster (bef@nwu.edu) for this patch)
@@ -44,7 +45,13 @@
 #  * added the possibility to give pdflatex some additional options
 #  * added check for required commands (sed, pdflatex, epstopdf)
 #  * added existence check for images and tex document
-#  * reduce output of pdflatex to warnings and errors
+#  * reduced output of pdflatex to warnings and errors
+#
+# Sep 20th, 2000 -- Version 1.5
+#  * made command checking work on more systems and give advice
+#  * stopped pdflatex to prompt for input (output redirection=> invisible!)
+#  * some more status messages for pdflatex
+#  * minor changes
 #
 
 ##### You will need pdftex and epstopdf for the translation!
@@ -66,7 +73,7 @@ MAXRUNNO=9
 PDFLOGFILE=/tmp/latex2pdf.log
 
 # additional options for pdflatex
-PDFTEXOPTS=
+PDFTEXOPTS=""
 
 # Use which command to check executables
 WHICHON=yes
@@ -91,9 +98,18 @@ fi
 
 ##### Check other dependencies with which if turned on
 checkCommand(){
-   if ! which $1
+   WHICHRESULT=`which $1 2>1`
+   WHICHBASE=`basename "$WHICHRESULT"`
+   if [ "$WHICHBASE" != "$1" ]
    then
-      echo "$MYNAME: Required command '$1' seems not to be installed."
+      echo
+      which $1
+      echo
+      echo "$MYNAME: Required command '$1' seems not to be in your path."
+      if [ -n "$2" ]
+      then
+         echo $MYNAME: "$2"
+      fi
       echo "$MYNAME: Aborting ..."
       exit 1
    fi
@@ -101,11 +117,11 @@ checkCommand(){
 
 if [ "$WHICHON" = "yes" ] 
 then
-   checkCommand pdflatex
-   checkCommand epstopdf
+   checkCommand pdflatex "See pdftex homepage for details: http://tug.org/applications/pdftex"
+   checkCommand epstopdf "See pdftex homepage for details: http://tug.org/applications/pdftex"
    if [ -z "$SEDEXE" ]
    then
-      checkCommand sed
+      checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed"
       SEDEXE=sed
    fi
 fi
@@ -216,11 +232,18 @@ rerun=1
 while [ $rerun -ne 0 -a $runno -le $MAXRUNNO ]
 do
    echo
-   echo "************ PDF Latex run no. $runno *************"
+   echo "************ Pdflatex run no. $runno *************"
+   echo "Pdflatex is running. Please wait."
    echo
-   pdflatex ${PDFTEXOPTS} ${LYXPATH}${DOCUMENTBASE}-pdf.tex > $PDFLOGFILE
-   grep "Error:\|LaTeX Warning:" $PDFLOGFILE
-   rerun=`grep "LaTeX Warning:" $PDFLOGFILE | wc -l`
+   pdflatex --interaction nonstopmode ${PDFTEXOPTS} ${LYXPATH}${DOCUMENTBASE}-pdf.tex > $PDFLOGFILE
+   echo "Pdflatex finished. Errors:"
+   rerun=`grep "Error:\|LaTeX Warning:" $PDFLOGFILE | wc -l`
+   if [ $rerun -ne 0 ]
+   then
+      grep "Error:\|LaTeX Warning:" $PDFLOGFILE
+   else
+      echo "None."
+   fi
    runno=$((runno+1))
 done
 
