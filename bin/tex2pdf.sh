@@ -5,9 +5,8 @@
 #      Copyright (C) 2000,2001 by Steffen Evers
 #
 #      This program is free software; you can redistribute it and/or modify
-#      it under the terms of the GNU General Public License as published by
-#      the Free Software Foundation; either version 2 of the License, or
-#      (at your option) any later version.
+#      it under the terms of the GNU General Public License version 2 as 
+#      published by the Free Software Foundation.
 #
 #      This program is distributed in the hope that it will be useful,
 #      but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +22,7 @@
 #
 # Thanks a lot to all the people that have already contributed to this project!
 #
-# The changelog with all the credits has become too long. So, I had to remove it
+# The changelog including the credits has become too long. So, I have removed it
 # from the script, but it is still available online (see below). 
 #
 # Special thanks to the following people for their contribution
@@ -45,7 +44,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.1.6"
+MYRELEASE="2.2.0"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
