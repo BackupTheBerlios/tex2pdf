@@ -58,11 +58,13 @@ $MYRELEASE="2.2.8pl";
 ### text token for no value
 $NIL="NOVALUE";
 
-### text token for boolean 'no' 
+### token for boolean 'false', 'no' 
 $NO="no";
+$FALSE=undef;
 
-### text token for boolean 'yes' 
+### token for boolean 'true', 'yes' 
 $YES="yes";
+$TRUE=1;
 
 ### pdftex package options:
 ### see hyperref manual for more:/usr/share/texmf/doc/latex/hyperref/manual.pdf
@@ -219,19 +221,36 @@ $RC_FILENAME="$ENV{'HOME'}/.tex2pdfrc";
 
 ##### Functions ###########################################
 
+### Check if a string is an element of a list
+# parameter 1: text
+# parameter 2: list
+# return value: TRUE/FALSE 
+
+sub contains {
+   my $text = $_[0];
+   shift @_;
+   my @list = @_;
+
+   foreach (@list) {
+      if ( $_ eq $text ) { return $TRUE; }
+   }
+   
+   return $FALSE;
+}
+
 ### Removing all temporary files
 
 sub clean_up {
    print "$MYNAME: Removing temporary files ...\n";
-   if ( $TMPFILES ) { unlink glob $TMPFILES; }
-   if ( $TMPBASE ) { unlink glob "$TMPBASE.*"; }
+   if ( $TMPFILES ne "" ) { unlink glob $TMPFILES; }
+   if ( $TMPBASE ne "" ) { unlink glob "$TMPBASE.*"; }
 }
 
 ###  exit with an error message
 
 sub abort {
    print "$MYNAME: @_\n";
-   if ( $CLEAN_ON_ABORT eq $YES ) { clean_up; }
+   if ( $CLEAN_ON_ABORT eq $YES ) { &clean_up; }
    print "Aborting ...\n";
    exit 1;
 }
@@ -337,7 +356,7 @@ sub input_text {
    my $user_input;
 
    print "Suggested value: $_[1]\n";
-   questionYN("Do you want to keep this value?", $YES);
+   &questionYN("Do you want to keep this value?", $YES);
    if ( $RESPONSE eq $YES ) {
       $RESPONSE="$_[1]";
    } else {
@@ -834,27 +853,27 @@ sub configure  {
 
 sub check_commands {
    ### check for which command
-   checkCommand which "You can switch off all command checks by setting $COMMANDCHECK=$NO in the parameter section of $MYNAME.";
+   &checkCommand("which","You can switch off all command checks by setting $COMMANDCHECK=$NO in the parameter section of $MYNAME.");
 
    ### sed executable
    # GNU sed version 3.02 or higher is recommended
    # Download: ftp://ftp.gnu.org/pub/gnu/sed
    if ( $SEDEXE eq "sed" ) {
-      checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed";
+      &checkCommand("sed","You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed");
    }
 
    ### pdftex executables
    # Homepage: http://tug.org/applications/pdftex
-   checkCommand pdflatex "See pdftex homepage for details: http://tug.org/applications/pdftex";
-   checkCommand epstopdf "See pdftex homepage for details: http://tug.org/applications/pdftex";
+   &checkCommand("pdflatex","See pdftex homepage for details: http://tug.org/applications/pdftex");
+   &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
 
    if ( $THUMBNAILS eq $YES ) {
-      checkCommand thumbpdf "You can switch off thumbpdf support by setting $THUMBNAILS=$NO in the parameter section of $MYNAME.";
+      &checkCommand("thumbpdf","You can switch off thumbpdf support by setting $THUMBNAILS=$NO in the parameter section of $MYNAME.");
    }
 
    ### bibtex executable
    if ( $BIBTEX ne $NO ) {
-      checkCommand bibtex "You can switch off BibTeX support by setting $BIBTEX=$NO in the parameter section of $MYNAME.";
+      &checkCommand("bibtex","You can switch off BibTeX support by setting $BIBTEX=$NO in the parameter section of $MYNAME.");
    }
 }
 
@@ -862,31 +881,34 @@ sub check_commands {
 # parameter ($1): Lyx document
 # parameter ($2): Latex document
 
-sub generate_tex_file  {
-   local $LYXDOC=$_[0];
-   local $TEXDOC=$_[1];
+sub generate_tex_file {
+   my $lyx_doc = $_[0];
+   my $tex_doc = $_[1];
+   my $lyx_dir = "$ENV{'HOME'}/.lyx/";
 
    ### Check if LyX file can be accessed
-   check_file $LYXDOC "Cannot read the specified LyX document!";
+   &check_file($lyx_doc,"Cannot read the specified LyX document!");
 
    ### Check if LaTeX file exists and is newer than the LyX file
-   if ( -f $TEXDOC and $TEXDOC -nt $LYXDOC ) {
+   if ( -f $tex_doc and $tex_doc -nt $lyx_doc ) {
       print "\n";
-      print "$MYNAME: LaTeX file is newer than LyX document '$LYXDOC'.\n";
-      print "Using existing TeX file: $TEXDOC\n";
+      print "$MYNAME: LaTeX file is newer than LyX document '$lyx_doc'.\n";
+      print "Using existing TeX file: $tex_doc\n";
       print "Remove it to force its new generation.\n";
    } else {
       ### export LaTeX file with LyX (needs a display!)
-      checkCommand lyx "Cannot generate LaTeX document without LyX!";
+      &checkCommand("lyx","Cannot generate LaTeX document without LyX!");
       print "\n";
       print "$MYNAME: Exporting LaTeX file\n";
-      if ( -f $HOME/.lyx/lyxpipe.out ) { mv $HOME/.lyx/lyxpipe.out $HOME/.lyx/lyxpipe.out~; }
-      if ( -f $HOME/.lyx/lyxpipe.in ) { mv $HOME/.lyx/lyxpipe.in $HOME/.lyx/lyxpipe.in~; }
-      if ( -f $TEXDOC ) { mv $TEXDOC $TEXDOC~; }
-      lyx --export latex $LYXDOC;
+      
+      foreach my $file ($lyx_dir."lyxpipe.out",$lyx_dir."lyxpipe.in",$tex_doc) {
+         if ( -f $file ) { rename($file, $file.'~'); }
+      }
+
+      system "lyx --export latex $lyx_doc";
 
       ### check if LaTeX file now really exists
-      check_file $TEXDOC "The LaTeX document was not generated by LyX!";
+      &check_file($tex_doc,"The LaTeX document was not generated by LyX!");
    }
 }
 
@@ -897,24 +919,29 @@ sub generate_tex_file  {
 # parameter ($3): regular expression for the filname suffix (including '.')
 # $FOUND_FILES: result
 
-sub extract_files  {
-   local $SOURCE=$_[0];
-   local $TAGNAME=$_[1];
-   local $SUFFIX=$3;
-   local $FILES=;
-   $FOUND_FILES=;
+sub extract_files {
+   my $source=$_[0];
+   my $tag_name=$_[1];
+   my $suffix=$_[2];
+   my $matched_file;
+   $FOUND_FILES=();
 
-   $FOUND_FILES=`sed -n -e "s/\(^\|[^\]\)%.*$/\1/" \;
-     -e "s/^.*[\]\($TAGNAME\)\(\[[^{]*\]\)\?{\(\([^}]*\/\)\?[^}/.]\+\($SUFFIX\)\)}.*$/\3/p" $SOURCE`;
+   &check_file($source, "Could not access TeX document to extract filenames.");
+   open(SOURCE_FILE, "<$source") or
+      &abort("Could not open TeX document to extract filenames ($source)");
 
-   if ( $FILES ) {
-      for $i ($FILES);
-      {
-         if ( `echo $FOUND_FILES | ${SEDEXE} -n "\| $i\( \|$\)|p"` ) {
-	    $FOUND_FILES="$FOUND_FILES $i";
+   while(<SOURCE_FILE>) {
+      chomp;
+      s/([^\])%.*$/$1/;
+      while( /\\$tag_name(\[[^{]*\])?{(([^}]*\/)?[^}/.]+($suffix))}/ ) {
+         $matched_file = $2; 
+         if( ! &contains($matched_file, @FOUND_FILES) ) {
+	    push(@FOUND_FILES, $matched_file);
 	 }
       }
    }
+   
+   close SOURCE_FILE;
 }
 
 ### Build a list of all files which are included from the root file.
@@ -922,25 +949,25 @@ sub extract_files  {
 # One input parameter for this ($1): a tex file.
 # Be sure to set FILES to the empty string prior to calling this.
 
-sub getFileList  {
-   local $IMPORTS=;
+sub getFileList {
+   local $source = $_[0];
+   local @imports = ();
 
    # This is the cycle avoidance logic.
-   $FILES=`echo $FILES | ${SEDEXE} -n "\| $_[0]|p`; 
-   if ( ! "$flag" ) {
+   if ( ! @contains($source, @FILES) ) {
       # Make sure the file can be accessed
-      check_file $_[0] "Included TeX file seems not to be available. Path problem?";
+      &check_file($source, "Included TeX file seems not to be available. Path problem?");
 
       # Save the argument in the list of files.
-      $FILES="$FILES $_[0]";
+      push(@FILES, $source);
 
       # Get the list of files included by the argument.
-      extract_files "$_[0]" "include\|input" "";
-      $IMPORTS=$FOUND_FILES;
+      &extract_files($source, "include|input", "");
+      @imports=@FOUND_FILES;
 
       # Recurse.
-      for $file ($IMPORTS ; do);
-         getFileList "$file.tex";
+      foreach my $file (@imports) {
+         &getFileList("$file.tex");
       }
    }
 }
@@ -1009,23 +1036,23 @@ sub convert_pstex2pdf  {
 ### generate hyperref parameters from given settings
 # HYPERREF_PARAMS: result
 
-sub generate_parameters  {
-   local $PARAMS=pdftex;
-   if ( $PAPERSIZE ne $NIL ) { $PARAMS="$PARAMS,$PAPERSIZE"; }
-   if ( $LINKTOCPAGE eq $YES ) { $PARAMS="$PARAMS,linktocpage"; }
-   if ( $TITLE ne $NIL ) { $PARAMS="$PARAMS,pdftitle={$TITLE}"; }
-   if ( $AUTHOR ne $NIL ) { $PARAMS="$PARAMS,pdfauthor={$AUTHOR}"; }
+sub generate_parameters {
+   my $params=pdftex;
+   if ( $PAPERSIZE ne $NIL ) { $params="$params,$PAPERSIZE"; }
+   if ( $LINKTOCPAGE eq $YES ) { $params="$params,linktocpage"; }
+   if ( $TITLE ne $NIL ) { $params="$params,pdftitle={$TITLE}"; }
+   if ( $AUTHOR ne $NIL ) { $params="$params,pdfauthor={$AUTHOR}"; }
    if ( $COLORLINKS eq $YES ) {
-      $PARAMS="$PARAMS,colorlinks=true";
-      if ( $LINKCOLOR ne $NIL ) { $PARAMS="$PARAMS,linkcolor={$LINKCOLOR}"; }
-      if ( $PAGECOLOR ne $NIL ) { $PARAMS="$PARAMS,pagecolor={$PAGECOLOR}"; }
-      if ( $URLCOLOR ne $NIL ) { $PARAMS="$PARAMS,urlcolor={$URLCOLOR}"; }
-      if ( $CITECOLOR ne $NIL ) { $PARAMS="$PARAMS,citecolor={$CITECOLOR}"; }
+      $params="$params,colorlinks=true";
+      if ( $LINKCOLOR ne $NIL ) { $params="$params,linkcolor={$LINKCOLOR}"; }
+      if ( $PAGECOLOR ne $NIL ) { $params="$params,pagecolor={$PAGECOLOR}"; }
+      if ( $URLCOLOR ne $NIL ) { $params="$params,urlcolor={$URLCOLOR}"; }
+      if ( $CITECOLOR ne $NIL ) { $params="$params,citecolor={$CITECOLOR}"; }
    } else {
-      $PARAMS="$PARAMS,colorlinks=false";
+      $params="$params,colorlinks=false";
    }
-   if ( $ADDITIONAL_PARAMETERS ) { $PARAMS="$PARAMS,$ADDITIONAL_PARAMETERS"; }
-   $HYPERREF_PARAMS=$PARAMS;
+   if ( $ADDITIONAL_PARAMETERS ne "" ) { $params="$params,$ADDITIONAL_PARAMETERS"; }
+   $HYPERREF_PARAMS=$params;
 }
 
 ### Converted included images to pdf and change the corresponding
@@ -1047,7 +1074,7 @@ sub prepare_document  {
    print "Scanning for EPS images (.eps/.ps):\n";
    extract_files $TEXSOURCE includegraphics "\.e\?ps";
    $EPSIMAGES=$FOUND_FILES;
-   if ( $EPSIMAGES ) {
+   if ( $EPSIMAGES ne "" ) {
       print "$EPSIMAGES\n";
    } else {
       print "None.\n";
@@ -1058,7 +1085,7 @@ sub prepare_document  {
    print "Scanning for PSTEX_T files (.pstex_t):\n";
    extract_files $TEXSOURCE input "\.pstex_t";
    $PSTEXS=$FOUND_FILES;
-   if ( $PSTEXS ) {
+   if ( $PSTEXS ne "" ) {
       print "$PSTEXS\n";
    } else {
       print "None.\n";
