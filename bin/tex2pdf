@@ -270,6 +270,14 @@ my $EXPLANATION=6;
    "When ever you specifiy to store the generated PDF document (command line "
    ."or\nconfiguration) in a custom directory I will put it here.");
 
+&add_param('font_substitution', 'text', 'helvetica', '', '=s',
+     "specify the font substitution",
+     'What font substitution should be used?',
+     "You can substitute your CM-Fonts whith one of the following packages:\n" 
+     ."pslatex:   the old package\n"
+     ."helvetica: the new one for math (mathptmx.sty) and text (helvet.sty)\n"
+     ."palatino:  another new one for math (mathpazo.sty) and text (palatino.sty)");
+ 
 &add_param('colorlinks', 'three', $YES, '', '!',
    'activate colored links in PDF doc (hyperref)',
    'Should colors be used for links?',
@@ -1770,9 +1778,18 @@ sub adjust_preamble {
    }
 
    ### collect additional LaTeX code
-   #   first we load the fonts (instead of pslatex, which is obsolete)
-   $extra_code = "\n" . '\usepackage{mathptmx}' . "\n";
-   $extra_code .= '\usepackage[scaled=0.9]{helvet}' . "\n";
+   #   first we load the font substitution
+   if ( &param_value('font_substitution') eq 'pslatex' ) {
+     $extra_code = "\n" . '\usepackage{pslatex}' . "\n";
+   } else {
+      if ( &param_value('font_substitution') eq 'helvetica' ) {
+         $extra_code = "\n" . '\usepackage{mathptmx}' . "\n";
+         $extra_code .= '\usepackage[scaled=0.9]{helvet}' . "\n";
+      } else {
+         $extra_code = "\n" . '\usepackage{mathpazo}' . "\n";
+         $extra_code .= '\usepackage{palatino}' . "\n";
+      }
+   }
 
    if ( &param_value('thumbpdf') eq $YES ) {
       $extra_code .= '\usepackage{thumbpdf}' . "\n";
