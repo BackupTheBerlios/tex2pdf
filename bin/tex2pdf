@@ -89,9 +89,11 @@ my $TRUE=1;
 #  parameters before configuration process is finished
 my $CONFIGURED=$FALSE;
 
+## set global variable to change execution flow when pstricks is present
+my $RUN_PSforPDF = $NO;
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.17";
+my $MYRELEASE="3.1.18";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -1919,6 +1921,9 @@ sub adjust_preamble {
    my $cut_code = '';
    my $result;
    my $font_subst_param = &param_value('font_substitution');
+
+   my $ps4pdf = "\\usepackage{ps4pdf}\n";
+   my $PSforPDF = "\\PSforPDF{\n";
    
    $_ = $preamble;
 
@@ -1935,6 +1940,16 @@ sub adjust_preamble {
    # Comment out the use of psfrag package
    s/(\\usepackage(\[[^]]*?\])*?\{psfrag\})/\%$1/m;
 
+   # Protect the use of pstricks package
+   # and set PSforPDF run mode
+   if (/(\\usepackage(\[[^]]*?\])*?\{pstricks\})/m) {
+      s/(\\usepackage(\[[^]]*?\])*?\{pstricks\})/$ps4pdf$PSforPDF$1\}/m;
+      $RUN_PSforPDF = $YES;
+   }
+   #### Protect other pstricks packages. It is assumed that pstricks is loaded first
+   if (/(\\usepackage(\[[^]]*?\])*?\{pst-(\w)+\})/m) {
+      s/(\\usepackage(\[[^]]*?\])*?\{pst-(\w)+\})/$PSforPDF$1\}/m;
+   }
    # insert a4paper in the documentclass when a4wide is used 
    # fixes problem that hyperref defaults to letter otherwise
    if ( /^[^%]*\\usepackage(\[widemargins\])?\{(a4|a4wide)\}/m ) {
@@ -2035,6 +2050,9 @@ sub process_textags {
 
       if ( $name eq "begin" ) {
          $CONTEXT_DEPTH++;
+         if ($contents =~ /pspicture/) {
+           $result .= "\\PSforPDF{\n";
+         }
       } elsif ( $name eq "end" ) {
          ### remove parameter tags of current scope
          my @new_params;
@@ -2256,6 +2274,9 @@ sub process_textags {
       
       $tag{contents} = $contents;
       $result .= join_tag(%tag);
+      if ($name eq "end" and  $contents =~ /pspicture/) {
+         $result = $result . "\n}";
+      }
    }
    report(9, "<<<<< process_textags");
 
@@ -3047,6 +3068,29 @@ sub adjust_configuration {
    return $ARGV[0];
 }
 
+##### read and transform the tex file to create a temporal latex file 
+##### avoiding the use of hypreref
+# parameters 1:  source latex file
+# parameters 1:  temporal latex file
+# return value: none
+
+sub create_tmp_tex{
+ my ($source,$tmp) =@_;
+
+ open TMPFILE, "> $tmp";
+ open SRCFILE, "< $source";
+
+ while (<SRCFILE>){
+   if (/(\\usepackage(\[[^]]*?\])*?\{hyperref\})/m) {
+      s/(\\usepackage(\[[^]]*?\])*?\{hyperref\})/%$1/;
+   }
+   print TMPFILE $_;
+ }
+
+ close TMPFILE;
+ close SRCFILE;
+}
+
 #### prepare the logdir for the log files of the various called appplications
 
 sub prepare_logdir {
@@ -3275,6 +3319,22 @@ sub generate_pdf_doc {
    $doc = $path.$base;
    $pdf_doc = $base.'.pdf';
 
+   if ($RUN_PSforPDF eq $YES) {
+     my $tex_doc = $doc.'-tmp.tex';
+     my $latexlog_base = $log_dir."latex-$$-";
+     my $dvi_doc = $doc.'-tmp.dvi';
+     my $dvilog_base = $log_dir."dvi-$$-";
+     my $dvi_target = $doc.'-pics.ps';
+     my $pics_target = $doc.'-pics.pdf';
+
+     &report(6, "\n************ Creating image container for pstricks *************");
+     &create_tmp_tex($doc.'.tex',$tex_doc);
+     &report(6, "\n************ Running latex on $doc *************");
+     &run_latex($tex_doc, $latexlog_base.'.log');
+     &report(6, "\n************ Running dvips on $dvi_doc *************");
+     &run_dvips($dvi_doc,$dvilog_base,$dvi_target,'-Ppdf');
+     system "ps2pdf $dvi_target $pics_target";
+   }
    ### run pdftex until no more errors are reported (max MAXRUNNO)
    while ( $rerun and $runno < $max_run_no )
    {
