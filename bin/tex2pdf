@@ -58,7 +58,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1.6";
+my $MYRELEASE="3.1.7";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1707,6 +1707,8 @@ sub extract_tag {
       $result{name} = substr($matched_tag_name,1);
       $tag_prefix = substr($data, 0, $tag_pos - length($matched_tag_name));
       $tag_remainder = substr($data, pos($data));
+      &report(9, "Tag found (".$result{name}.") - plain contents: >".
+               $result{contents}."<");
       
       return ($tag_prefix, $tag_remainder, %result);
    }
@@ -1750,8 +1752,8 @@ sub extract_tag_contents {
    my $error_message="Could not read TeX document to extract $tag_name";
 
    &check_file($source, $error_message.'.');
-   open(EXTRACT_SOURCE, "<$file") or
-      &abort($error_message." ($file).");
+   open(EXTRACT_SOURCE, "<$source") or
+      &abort($error_message." ($source).");
 
    while(<EXTRACT_SOURCE>) {
       $data .= $_;
@@ -2077,7 +2079,7 @@ sub adjust_preamble {
 # parameter 1: original LaTeX code from the source file
 # return value: adjusted code
 
-sub adjust_filenames {
+sub adjust_filenames_OLD {
    my $code = $_[0];
    my $tmp_suffix = &param_value('tmp_base_suffix');
    my $result;
@@ -2112,6 +2114,92 @@ sub adjust_filenames {
    s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#$1$tmp_suffix$4#sg;
 
    return $_;
+}
+
+### adjust all filenames in the LaTeX code to the tmp files
+# parameter 1: original LaTeX code from the source file
+# return value: adjusted code
+
+sub adjust_filenames {
+   my $source = $_[0];
+   my $tmp_suffix = &param_value('tmp_base_suffix');
+   my $mtp_preamble = &param_value('mtp_preamble');
+   my $result="";
+   my $handled_tagnames="psfrag|includegraphics|input|include|multiinclude|convertMPtoPDF";
+   
+   while(defined($source) and $source ne "") {
+      my %tag;
+      my $prefix;
+      my $contents;
+      my $name;
+
+      ($prefix, $source, %tag) = extract_tag($source, $handled_tagnames);
+
+      $result .= $prefix;
+
+      ### leave loop if no tag was found
+      last if(not %tag);
+      
+      $name = $tag{name};
+
+      if($name eq "psfrag") {
+         # Comment out the psfrag statements
+         #s/(\\psfrag\{.*\}(\[[^]]*?\])*?\{.*\})/\%$1/g;
+
+         my $tag_string = '% '.join_tag(%tag);
+         $tag_string =~ s/\n/\n\% /gs;
+         $tag_string .= "\n" if (substr($source,0,1) ne "\n");
+         $result .= $tag_string;
+         next;
+      }
+      
+      $contents = $tag{contents};
+      
+      if ($name eq "includegraphics") {
+         # cut off the suffix of eps, ps, *.gz and pstex graphics
+         #s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)
+         #\n?\}/$1}/sg;
+         $contents =~ s/\.(e?ps|pstex|e?ps\.gz)\s*$//;
+
+         if ($mtp_preamble ne $NO) {
+            # replace the suffix '.#' with '-mp.#'
+            #s/(\\includegraphics(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/$1
+            #$MTP_TMP_BASESUFFIX\.$3}/sg;
+            $contents =~ s/(\.\d+?)\s*$/$MTP_TMP_BASESUFFIX$1/;
+         }
+      } elsif ($name eq "input" or $name eq "include") {
+         # replace the suffix 'pstex_t' with 'pdf_t'
+         # s/(\\input\{[^}]+?\.)pstex_t\n?\}/$1pdf_t}/sg;
+         $contents =~ s/\.pstex_t\s*$/\.pdf_t/;
+
+         # insert the tmp_suffix in tex filenames
+         # I assume that files with no extension are TeX files as well; correct?
+         # s#(\\(input|include)\{([^}]*?/)?[^}/.]+?)((\.tex)?\n?\})#
+         # $1$tmp_suffix$4#sg;
+         $contents =~ s#^\s*((.*?/)?[^/.]+?)(\.tex)?\s*$#$1$tmp_suffix$3#;
+      } elsif ($name eq "multiinclude") {
+         if ($mtp_preamble eq $NO) {
+            # cut off the suffix of mmp graphics
+            # s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)\.mmp\n?\}/$1}/sg;
+            $contents =~ s/\.mmp\s*$//;
+         } else {
+            # cut off optional suffix '.mmp' and append '-mp' in any case
+            # s/(\\multiinclude(\[[^]]*?\])?\{[^}]+?)(\.mmp)?\n?\}/
+            # $1$MTP_TMP_BASESUFFIX}/sg;
+            $contents =~ s/\.mmp\s*$/$MTP_TMP_BASESUFFIX/;
+         }
+      } elsif ($name eq "convertMPtoPDF" and $mtp_preamble ne $NO) {
+         # replace the suffix '.#' with '-mp.#'
+         # s/(\\convertMPtoPDF(\[[^]]*?\])?\{[^}]+?)\.(\d+?)\n?\}/
+         # $1$MTP_TMP_BASESUFFIX\.$3}/sg;
+         $contents =~ s/(\.\d+?)\s*$/$MTP_TMP_BASESUFFIX$1/;
+      }
+      
+      $tag{contents} = $contents;
+      $result .= join_tag(%tag);
+   }
+
+   return $result;
 }
 
 ### Convert given tex file to the temp tex file we need for pdftex
