@@ -62,6 +62,9 @@ my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
 my $USER_HOME=$ENV{'HOME'};
+if (not $MYUSER) { $MYUSER = 'nobody'; }
+if (not $USER_HOME) { $USER_HOME = '/tmp'; }
+
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
 my $NUM_PARAM_MIN=0;
@@ -76,7 +79,7 @@ my @BITMAP_SUFFIXES=( 'jpg', 'png', 'tif' );
 # (initial) log file of this script
 # this log file will be moved to the specified log_dir after configuration
 # and the variable will be updated to the new name
-my $MYLOGFILE="/tmp/tex2pdf-$$.log";  
+my $MYLOGFILE="$USER_HOME/tex2pdf-$$.log";  
 my $LOGFILE_VERBOSITY=9;
 
 ### text token for no value
@@ -177,7 +180,7 @@ my $EXPLANATION=6;
 # parameter type action is not allowed
 # $key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation
 
-&add_param('logdir', 'directory',"/tmp/tex2pdf-$MYUSER/", '', '=s',
+&add_param('logdir', 'directory',"$USER_HOME/tex2pdf-log/", '', '=s',
    'set directory for saving log files',
    'What log directory should be used?',
    "The log directory is used to store information about the generation\n"
