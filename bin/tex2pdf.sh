@@ -18,6 +18,9 @@
 #      along with this program; if not, write to the Free Software
 #      Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
+#      The GNU General Public License is also available online:
+#      http://www.gnu.org/licenses/gpl.html
+#
 # Thanks a lot to all the people that have already contributed to this project!
 #
 # The changelog with all the credits has become too long. So, I had to remove it
@@ -42,7 +45,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.1.5"
+MYRELEASE="2.1.6"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -53,12 +56,15 @@ MYRELEASE="2.1.5"
 ## all users.  If you only want to change your private parameters change them
 ## in the RC_FILE
 
+### text token for no value
+NIL=NOVALUE
+
 ### pdftex package options:
 ### see hyperref manual for more:/usr/share/texmf/doc/latex/hyperref/manual.pdf
 
 # possible paper sizes
 # this list MUST have the syntax "PAPER1 PAPER2 ..."
-POSSIBLE_PAPER="a4paper letterpaper legalpaper executivepaper"
+POSSIBLE_PAPER="a4paper letterpaper legalpaper executivepaper $NIL"
 
 # papersize of the resulting pdf document
 PAPERSIZE=a4paper
@@ -69,21 +75,44 @@ COLORLINKS=yes
 
 # possible link colors
 # this list MUST have the syntax "COLOR1 COLOR2 ..."
-LINK_COLORS="red green cyan blue magenta black"
+LINK_COLORS="yellow red green cyan blue magenta black $NIL"
+
+# color to use for page links in resulting document
+# some possible values: see above
+# set to $NIL for default value
+PAGECOLOR=magenta
+
+# color to use for regular internal links in resulting document
+# some possible values: see above
+# set to $NIL for default value
+LINKCOLOR=green
 
 # color to use for URLS in resulting document
 # some possible values: see above
+# set to $NIL for default value
 URLCOLOR=blue
 
 # color to use for citations in resulting document
 # some possible values: see above
+# set to $NIL for default value
 CITECOLOR=red
 
 # Default title for document info in the resulting PDF 
-DEFAULT_TITLE=""
+# leave blank for default value
+DEFAULT_TITLE="$NIL"
 
 # Default author for document info in the resulting PDF 
-DEFAULT_AUTHOR=""
+# leave blank for default value
+DEFAULT_AUTHOR="$NIL"
+
+# additional parameters for hyperref package
+# format: PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...
+# leave blank for no additional values
+ADDITIONAL_PARAMETERS=
+
+# link tabel of contents to pages instead of sections
+# sets linktocpage
+LINKTOCPAGE=yes
 
 ### other parameters
 
@@ -154,6 +183,9 @@ PDFTEXOPTS=""
 # CAUTION: If you leave this blank you will overwrite the original files!
 TMPBASESUFFIX=-pdf
 
+# remove all tmp files on abort
+CLEAN_ON_ABORT=no
+
 # sed command which is used to insert additional TeX commands in the LaTeX
 # preamble
 # try the following commands if you have strange errors or junk on the
@@ -170,19 +202,28 @@ RC_FILE=$HOME/.tex2pdfrc
 # variables for the rc file
 # list of all variables that should be stored/read in/from the rc file
 # this list MUST have the syntax "VARIABLE1 VARIABLE2 ..."
-RC_VARIABLES="PAPERSIZE COLORLINKS URLCOLOR CITECOLOR DEFAULT_TITLE DEFAULT_AUTHOR PDFOUT PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERTCOMMAND"
+RC_VARIABLES="PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR DEFAULT_TITLE DEFAULT_AUTHOR LINKTOCPAGE ADDITIONAL_PARAMETERS PDFOUT PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERTCOMMAND"
 
 ##### Functions ###########################################
 
-#### General functions (not script specific)
+### Removing all temporary files
+
+clean_up() {
+   echo $MYNAME: Removing temporary files ...
+   [ -n "$TMPFILES" ] && rm $TMPFILES
+   [ -n "$TMPBASE" ] && rm ${TMPBASE}.*
+}
 
 ###  exit with an error message
 
 abort() {
    echo $MYNAME: "$@"
+   [ "$CLEAN_ON_ABORT" == yes ] && clean_up
    echo Aborting ...
    exit 1
 }
+
+#### General functions (not script specific)
 
 ### interactively answer a question with yes or no
 # $1 question
@@ -265,11 +306,19 @@ chooseValue() {
 }
 
 ### interactively answer a question
-# $1 question
+# $1: question
+# $2: current value
 
-question() {
-   echo -n "$1 "
-   read RESPONSE </dev/tty
+input_text() {
+   echo "Suggested value: $2"
+   questionYN "Do you want to keep this value?" yes
+   if [ "$RESPONSE" == yes ]
+   then
+      RESPONSE="$2"
+   else
+      echo -n "$1 "
+      read RESPONSE </dev/tty
+   fi
 }
 
 ##### Make sure that specified file exists and is readable; abort if missing
@@ -284,20 +333,12 @@ check_file() {
    then
       echo
       echo "$MYNAME: Sorry. I cannot find '$1'."
-      echo "$MESSAGE"
-      clean_up
-      echo "Aborting ..."
-      echo
-      exit 1
+      abort "$MESSAGE"
    elif [ ! -r "$1" ]
    then
       echo
       echo "$MYNAME: Sorry. File '$1' exists, but is not readable."
-      echo "$MESSAGE"
-      clean_up
-      echo "Aborting ..."
-      echo
-      exit 1
+      abort "$MESSAGE"
    fi
 }
 
@@ -454,6 +495,50 @@ checkCommand() {
    fi
 }
 
+### save configuration in rc file
+
+write_configuration() {
+   if ! echo "# Configuration file for $MYNAME V$MYRELEASE" > $RC_FILE
+   then
+      abort "Couldn't write confguration file '$RC_FILE'"
+   fi
+   echo "# Generated `date` by $USER on $HOSTNAME" >> $RC_FILE
+   for i in $RC_VARIABLES
+   do
+      echo $i=${!i} >> $RC_FILE
+   done
+   echo "# EOF" >> $RC_FILE
+}
+
+### print the configuration parameters
+print_configuration() {
+   echo "Configuration for $MYNAME V$MYRELEASE"
+   for i in $RC_VARIABLES
+   do
+      echo $i=${!i}
+   done
+   echo
+}
+
+### load parameters from rc file
+
+read_configuration() {
+   if [ ! -r $RC_FILE ]
+   then
+      echo "$MYNAME: '$RC_FILE' does not exist or is not readable"
+      abort "Couldn't read configuration file"
+   fi
+
+   for i in $RC_VARIABLES
+   do
+      TEMPVAR=`sed -n "s/^\($i=[[:print:]]*\)$/\1/1p" $RC_FILE`
+      if [ -n "$TEMPVAR" ]
+      then
+        export $i="`echo $TEMPVAR | cut -d = -f 2-`"
+      fi
+   done
+}
+
 #### Specific functions (for use with this script only)
 
 ### print usage of command
@@ -518,13 +603,26 @@ configure() {
    echo The following answers are considered as defaults in later executions
    echo of $MYNAME. You can change these values by using option -r.
    echo The command-line options override these settings.
+   echo "Many parameters can be set to '$NIL'. This means that NO value at"
+   echo "all (not even an empty value) is passed over to the called"
+   echo "application (e.g. latex package hyperref)."
    echo
 
+   echo ----------------
    echo "$MYNAME can set the papersize of the resulting PDF document."
    chooseValue "What papersize should be used?" $PAPERSIZE $POSSIBLE_PAPER
    PAPERSIZE=$RESPONSE
    echo
 
+   echo ----------------
+   echo "The table of contents of the resulting PDF document is normally linked"
+   echo "to the corresponding section. However, you can also link it to the"
+   echo "corresponding page instead."
+   questionYN "Should TOC be linked to pages?" $LINKTOCPAGE
+   LINKTOCPAGE=$RESPONSE
+   echo
+
+   echo ----------------
    echo "$MYNAME can use different colors for links inside the PDF document."
    questionYN "Should colors be used for links?" $COLORLINKS
    COLORLINKS=$RESPONSE
@@ -532,17 +630,32 @@ configure() {
 
    if [ "$COLORLINKS" == "yes" ]
    then
+        echo ----------------
+        echo "It is possible to specify the color for page links."
+        chooseValue "What color should be used for page links?" $PAGECOLOR $LINK_COLORS
+        PAGECOLOR=$RESPONSE
+        echo
+
+        echo ----------------
+        echo "It is possible to specify the color for normal internal links."
+        chooseValue "What color should be used for normal links?" $LINKCOLOR $LINK_COLORS
+        LINKCOLOR=$RESPONSE
+        echo
+
+        echo ----------------
         echo "It is possible to specify the URL color."
         chooseValue "What color should be used for URLs?" $URLCOLOR $LINK_COLORS
         URLCOLOR=$RESPONSE
         echo
 
+        echo ----------------
         echo "It is possible to specify the citation color."
         chooseValue "What color should be used for citation?" $CITECOLOR $LINK_COLORS
         CITECOLOR=$RESPONSE
         echo
    fi
 
+   echo ----------------
    echo "A PDF document contains meta data about itself: the document info."
    echo "Two of the info fields (title, author) can be set here as default"
    echo "value which will be used in the case that $MYNAME cannot determine"
@@ -550,15 +663,32 @@ configure() {
    echo
 
    echo "The default title for the document info of all generated documents."
-   question "Default document title?"
-   DEFAULT_TITLE=$RESPONSE
+   echo "$NIL will be recognized."
+   echo
+   input_text "Default document title?" "$DEFAULT_TITLE"
+   DEFAULT_TITLE="$RESPONSE"
    echo
 
+   echo ----------------
    echo "The default author for the document info of all generated documents."
-   question "Default document author?"
-   DEFAULT_AUTHOR=$RESPONSE
+   echo "$NIL will be recognized."
+   echo
+   input_text "Default document author?" "$DEFAULT_AUTHOR"
+   DEFAULT_AUTHOR="$RESPONSE"
    echo
 
+   echo ----------------
+   echo "If you like you can make me pass additional parameters to hyperref."
+   echo "See the hyperref manual for possible values and details."
+   echo "These parameters should normally have the format:"
+   echo "PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},..."
+   echo "Leave blank for no additional values."
+   echo
+   input_text "Additional parameters ?" "$ADDITIONAL_PARAMETERS"
+   ADDITIONAL_PARAMETERS="$RESPONSE"
+   echo
+
+   echo ----------------
    echo "You can now specify in which directory the resulting document should"
    echo "be written by default:"
    echo "- 'source_dir' means the same directory as the LaTeX file."
@@ -574,18 +704,22 @@ configure() {
    
    if [ "$PDFOUT" == "custom" ]
    then
+      echo ----------------
       echo "You have choosen to specifiy a custom output directory."
       input_dir "What custom directory should be used?" "$PDFCUSTOMDIR" "yes"
       PDFCUSTOMDIR=$RESPONSE
       echo
    fi
 
+   echo ----------------
    echo "The sed executable to use can be specified."
    echo "Leave blank in order to use the sed in the path."
-   question "What sed executable should be used?"
+   echo
+   input_text "What sed executable should be used?"
    SEDEXE=$RESPONSE
    echo
 
+   echo ----------------
    echo "The bibtex usage can be specified."
    echo "Possible values are: 'yes' (always run bibtex), 'no' (never run"
    echo "bibtex) and 'test' (scan tex file for a bibtex entry and run it"
@@ -594,23 +728,27 @@ configure() {
    BIBTEX=$RESPONSE
    echo
 
+   echo ----------------
    echo "The maximal number of runs for pdflatex can be specified."
    input_number "What should be the maximum number of runs for pdflatex?" $MAXRUNNO 1 9
    MAXRUNNO=$RESPONSE
    echo
 
+   echo ----------------
    echo "The minimal number of runs for pdflatex can be specified."
    echo "Possible values are: 1 ... $MAXRUNNO."
    input_number "What should be the minimum number of runs for pdflatex?" $MINRUNNO 1 $MAXRUNNO
    MINRUNNO=$RESPONSE
    echo
 
+   echo ----------------
    echo "The log directory is used to store information about the generation"
    echo "process for later review, e.g. for debugging."
    input_dir "What log directory should be used?" "$LOGDIR" "yes"
    LOGDIR=$RESPONSE
    echo
 
+   echo ----------------
    echo "$MYNAME can clean the log files before execution."
    echo "You might experience problems if you run $MYNAME on several documents"
    echo "the same time. If you want to be on the safe side, answer 'no'."
@@ -618,71 +756,32 @@ configure() {
    CLEANLOGS=$RESPONSE
    echo
 
+   echo ----------------
    echo "$MYNAME can check for the required executables."
    questionYN "Should $MYNAME check for the required executables?" $COMMANDCHECK
    COMMANDCHECK=$RESPONSE
    echo
 
+   echo ----------------
    echo "$MYNAME can use thumbpdf to include thumbnails of the document pages."
    echo "This requires Ghostscript 5.50 or higher."
    questionYN "Should PNG thumbnails be created?" $THUMBNAILS
    THUMBNAILS=$RESPONSE
    echo
 
+   echo ----------------
    echo "$MYNAME can force the call of makeindex if pdftex fails to do this."
    questionYN "Should the call of makeindex be forced?" $MAKEINDEX
    MAKEINDEX=$RESPONSE
    echo
 
+   echo ----------------
    echo "Additional options for pdflatex can be specified."
    echo "Normally, you can leave this blank."
-   question "What additional options for pdflatex should be used? :"
+   echo
+   input_text "What additional options for pdflatex should be used? :"
    PDFTEXOPTS="$RESPONSE"
    echo
-}
-
-### save configuration in rc file
-
-write_configuration() {
-   if ! echo "# Configuration file for $MYNAME V$MYRELEASE" > $RC_FILE
-   then
-      abort "Couldn't write confguration file '$RC_FILE'"
-   fi
-   echo "# Generated `date` by $USER on $HOSTNAME" >> $RC_FILE
-   for i in $RC_VARIABLES
-   do
-      echo $i=${!i} >> $RC_FILE
-   done
-   echo "# EOF" >> $RC_FILE
-}
-
-### print the configuration parameters
-print_configuration() {
-   echo "Configuration for $MYNAME V$MYRELEASE"
-   for i in $RC_VARIABLES
-   do
-      echo $i=${!i}
-   done
-   echo
-}
-
-### load parameters from rc file
-
-read_configuration() {
-   if [ ! -r $RC_FILE ]
-   then
-      echo "$MYNAME: '$RC_FILE' does not exist or is not readable"
-      abort "Couldn't read configuration file"
-   fi
-
-   for i in $RC_VARIABLES
-   do
-      TEMPVAR=`sed -n "s/^\($i=[[:print:]]*\)$/\1/1p" $RC_FILE`
-      if [ -n "$TEMPVAR" ]
-      then
-        export $i="`echo $TEMPVAR | cut -d = -f 2-`"
-      fi
-   done
 }
 
 ### check if the most important executables are installed on the system
@@ -715,14 +814,6 @@ check_commands() {
    then
       checkCommand bibtex "You can switch off BibTeX support by setting BIBTEX=no in the parameter section of $MYNAME."
    fi
-}
-
-### Removing all temporary files
-
-clean_up() {
-   echo $MYNAME: Removing temporary files ...
-   [ -n "$TMPFILES" ] && rm $TMPFILES
-   [ -n "$TMPBASE" ] && rm ${TMPBASE}.*
 }
 
 ### generate LaTeX file from LyX document with LyX itself
@@ -840,6 +931,29 @@ convert_pstex2pdf() {
    done
 }
 
+### generate hyperref parameters from given settings
+# HYPERREF_PARAMS: result
+
+generate_parameters() {
+   local PARAMS=pdftex
+   [ "$PAPERSIZE" != "$NIL" ] && PARAMS="$PARAMS,$PAPERSIZE"
+   [ "$LINKTOCPAGE" == "yes" ] && PARAMS="$PARAMS,linktocpage"
+   [ "$TITLE" != "$NIL" ] && PARAMS="$PARAMS,pdftitle={$TITLE}"
+   [ "$AUTHOR" != "$NIL" ] && PARAMS="$PARAMS,pdfauthor={$AUTHOR}"
+   if [ "$COLORLINKS" == yes ]
+   then
+      PARAMS="$PARAMS,colorlinks=true"
+      [ "$LINKCOLOR" != "$NIL" ] && PARAMS="$PARAMS,linkcolor={$LINKCOLOR}"
+      [ "$PAGECOLOR" != "$NIL" ] && PARAMS="$PARAMS,pagecolor={$PAGECOLOR}"
+      [ "$URLCOLOR" != "$NIL" ] && PARAMS="$PARAMS,urlcolor={$URLCOLOR}"
+      [ "$CITECOLOR" != "$NIL" ] && PARAMS="$PARAMS,citecolor={$CITECOLOR}"
+   else
+      PARAMS="$PARAMS,colorlinks=false"
+   fi
+   [ -n "$ADDITIONAL_PARAMETERS" ] && PARAMS="$PARAMS,$ADDITIONAL_PARAMETERS"
+   HYPERREF_PARAMS="$PARAMS"
+}
+
 ### Converted included images to pdf and change the corresponding
 ### reference in the tmp-tex files
 # parameter ($1): tex source file
@@ -879,6 +993,14 @@ prepare_document() {
    ### Save the filename so we can delete it later.
    TMPFILES="$TMPFILES $TARGETFILE"
 
+   ### if thumbnails should be generated thumbdf package must be used
+   if [ "$THUMBNAILS" = "yes" ]
+   then
+      THUMBPDF_INSERT='\\usepackage{thumbpdf}'
+   else
+      THUMBPDF_INSERT="% no thumbpdf support"
+   fi
+      
    ### Insert pdf conversation tags in tex file and write it to TARGETFILE
    echo
    echo $MYNAME: Generating temporary LaTeX document
@@ -890,20 +1012,14 @@ prepare_document() {
    -e "$INSERTCOMMAND"' \
    \\usepackage{pslatex}' \
    -e "$INSERTCOMMAND"' \
+   '"$THUMBPDF_INSERT" \
+   -e "$INSERTCOMMAND"' \
    \\makeatletter' \
    -e "$INSERTCOMMAND"' \
-   \\usepackage[pdftex,pdftitle={'"$TITLE},pdfauthor={$AUTHOR},linktocpage,$PAPERSIZE,colorlinks={$COLORLINKS},urlcolor={$URLCOLOR},citecolor={$CITECOLOR}]{hyperref}"  \
+   \\usepackage['"$HYPERREF_PARAMS]{hyperref}"  \
    -e "$INSERTCOMMAND"' \
    \\makeatother' \
    $1 > $TARGETFILE
-
-   if [ "$THUMBNAILS" = "yes" ]
-   then
-      ${SEDEXE} -e "$INSERTCOMMAND"' \
-      \\usepackage{thumbpdf}' $TARGETFILE > ${TARGETFILE}2
-      rm $TARGETFILE
-      mv ${TARGETFILE}2 $TARGETFILE
-   fi
 
    ### Convert all EPS images to pdf
    [ -n "$EPSIMAGES" ] && convert_eps2pdf $EPSIMAGES
@@ -935,10 +1051,7 @@ run_pdflatex() {
       then
          cat $PDFLOGFILE
 	 echo
-	 echo "$MYNAME: Fatal error occured. I am lost."
-	 clean_up
-	 echo "Aborting ..."
-	 exit 1
+	 abort "Fatal error occured. I am lost."
       fi
       grep "Error:\|LaTeX Warning:" $PDFLOGFILE
       echo
@@ -1192,14 +1305,6 @@ PDFLOGBASE=${LOGDIR}pdflatex-$$-
 BIBTEXLOG=${LOGDIR}bibtex-$$.log
 THUMBPDFLOG=${LOGDIR}thumbpdf-$$.log
 
-# translate COLORLINKS to real value (see prepare_document)
-if [ "$COLORLINKS" == "yes" ]
-then
-   COLORLINKS=true
-else
-   COLORLINKS=false
-fi
-
 ##### Get title and author from main LaTeX document
 echo
 echo $MYNAME: Parsing LaTeX file
@@ -1220,6 +1325,8 @@ then
       else
          echo "Title field will be empty."
       fi
+   else
+     echo "Document's title: $TITLE"
    fi
 fi
 
@@ -1240,12 +1347,15 @@ then
       else
          echo "Author field will be empty."
       fi
+   else
+     echo "Document's author: $AUTHOR"
    fi
 fi
 
 echo
-echo "Document's title: $TITLE"
-echo "Document's author: $AUTHOR"
+
+# translate hyperref settings to the actual package parameters 
+generate_parameters
 
 ###### change working directory to INPUTPATH if set
 # When the files' path (images, included documents, etc.) in your document is
