@@ -1432,7 +1432,7 @@ sub check_commands {
    &checkCommand("latex","See latex homepage for details: http://tug.org/");
    &checkCommand("dvips","See dvips homepage for details: http://www.radicaleye.com/dvips.html");
    &checkCommand("pdflatex","See pdftex homepage for details: http://tug.org/applications/pdftex");
-   &checkCommand("eps2eps","See Ghostscript homepage for details: http://www.aladdin.com/");
+   &checkCommand("ps2eps","See ps2eps homepage for details: http://www.telematik.informatik.uni-karlsruhe.de/~bless/ps2eps.html");
    &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
    $exec_epstopdf = `which epstopdf`;
    chomp $exec_epstopdf;
@@ -1760,7 +1760,7 @@ sub get_file_list {
    }
 }
 
-### do the required modifications in the LaTeX preamble 
+### create the pdf files corresponding to eps files with psfrag substitutions
 # parameter 1: original preamble from the source file
 #              lines before \begin{document} tag (without this tag)
 # parameter 2: the body of the document
@@ -1782,18 +1782,22 @@ sub pdffrag {
    # and the last line related with includegraphics
    # Therefore, we look for every paragraph starting with \psfrag and ending with an includegraphics.The chunk between 
    # them and themselves is considered the psfrag code that applies to the corresponding eps graphic.
-   while ($body =~ m/^ *\\psfrag(.*?)((\\includegraphics)(\[[^]]*?\])?(\{([^}]+?)))\.(e?ps|pstex|e?ps\.gz)\n?\}(.*?)$/msg){
-       $eps_file = $6."\.".$7;
-       $suffix = "\.".$7;
-
+   while ($body =~ m/^*\\psfrag(.*?)((\\includegraphics)(\[[^]]*?\])?(\{([^}]*?(\.(e?ps|pstex|e?ps\.gz))?)\})?)/msg){
+       if (defined($7)) {
+	  $eps_file = $6;
+	  $suffix = $7;
+       } else {
+	  $eps_file = $6."\.eps";
+	  $suffix = "\.eps";
+       }
+       &report(7, "Psfrag: detecting $eps_file using psfrag substitutions\n");
        # Getting the path, base and suffix of every graphic under the psfrag substitution
        ($eps_base,$eps_path,$suffix) = fileparse($eps_file,$suffix);
        $tex_src   =  $eps_path.$eps_base;
        $tex_target = $eps_path.$eps_base."\.tex";
        $pdf_target = $eps_path.$eps_base."\.pdf";
        $frg_target = $eps_path.$eps_base.'-frg.eps';
-       $tmp_target = $eps_path.$eps_base.'-tmp.eps';
-
+       $tmp_target = $frg_target.'.eps';
        # Writing the simplified latex files with the psfrag substitution
        open(TARGET_FILE, ">$tex_target") or
 	  &abort("Could not open file to write temporary TeX document ($tex_target).");
@@ -1805,23 +1809,11 @@ sub pdffrag {
        $dvi_log = $tex_src."-dvi.log";
        $tex_log = $tex_src."-tex.log";
        &run_latex($tex_target,$tex_log);
-       &run_dvips($eps_base.'.dvi',$dvi_log,$frg_target,'-Pcmz -E');
+       &run_dvips($eps_base.'.dvi',$dvi_log,$frg_target,'-Pcmz');
 
        # Adjusting the bounding box size, this is taken from eps2bb
-       &system_command("eps2eps $frg_target $tmp_target",$TRUE, 8, "eps2eps failed on $tmp_target");
-       my @lines = &grep_file($tmp_target,'BoundingBox');
-       open(INPUT_FILE, "<$frg_target") or
-           &abort("Could not open file ($frg_target).");
-       open(TARGET_FILE, ">$tmp_target") or
-           &abort("Could not open file ($tmp_target).");
-       while(<INPUT_FILE>) {
-         if(/BoundingBox/){
-           $_=$lines[0];
-         }
-         print TARGET_FILE $_;
-       }
+       &system_command("ps2eps -l -f $frg_target",$TRUE, 8, "ps2eps failed on $frg_target");
        rename($tmp_target,$frg_target) or &abort("Can't move $tmp_target to $frg_target: $!");
-
        # Here we take advantage of the fact that the pdf output file is newer that the original eps file and 
        # the conversion image eps2pdf process will skip the conversion, leaving the psfrag figure just 
        # converted to pdf. 
@@ -1848,7 +1840,7 @@ sub adjust_preamble {
    $_ = $preamble;
 
    #### cut out all code that must stand behind hyperref inclusion
-   
+
    while ( s/\\usepackage(\[[^]]*?\])*?{cite}//s ) {
       $cut_code .= "\n". $&;
    }
@@ -1859,8 +1851,6 @@ sub adjust_preamble {
 
    # Comment out the use of psfrag package
    s/(\\usepackage(\[[^]]*?\])*?\{psfrag\})/\%$1/m;
-
-#   s/(\\usepackage\{psfrag\})/\%$1/m;
 
    # insert a4paper in the documentclass when a4wide is used 
    # fixes problem that hyperref defaults to letter otherwise
@@ -1993,6 +1983,7 @@ sub convert_tex2tmp {
       $preamble = $`;
       $body = $&.$';
       if ($preamble =~ /\\usepackage(\[[^]]*?\])*?\{psfrag\}/) {
+	 &report(6, "Psfrag substitution detected. Entering pdffrag process");
          &pdffrag($preamble,$body);
       }
       $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
