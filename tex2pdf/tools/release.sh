@@ -85,6 +85,14 @@ then
   exit 1
 fi
 
+echo "********* Adding gpl.txt *********"
+if ! cp -p gpl.txt $NEW_RELEASE_DIR/LICENSE
+then
+  echo "Sorry. Could not copy LICENSE"
+  echo "Aborting ..."
+  exit 1
+fi
+
 #echo "+++++++++ README ++++++++++"
 #cat $NEW_RELEASE_DIR/README
 
