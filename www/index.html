@@ -13,8 +13,10 @@ Anyway, I hope people can make use of it.
 <h2>Description</h2>
 tex2pdf (formerly lyx2pdf) is a script that generates a PDF document from a
 LaTeX or LyX document using pdf(la)tex, hyperref and other tools. There is a
-bash shell and Perl implementation available. (The bash port is no longer
-maintained and is considered deprecated.)<br><br>
+bash shell and Perl implementation available.<br>
+The bash port is no longer maintained and is considered deprecated.
+However, you can find it in the <a href="ftp://ftp.berlios.de/pub/tex2pdf/">
+Anonymous FTP Space</a>. tex2pdf is coded in Perl from version 3.0 on.<br><br>
 When the input file is a LyX document the script produces a LaTeX file with the
 LyX export function first and than processes the exported LaTeX document.<br>
 LaTeX documents are searched for referenced files (other LaTeX docs, images),
@@ -34,6 +36,10 @@ known problems with called applications are already integrated.<br>
    <li>bibtex: handles a bibliograhy and its references
    <li>makeindex: makes create an index from your LaTeX document.
    <li>thumbpdf: creates little images of all your document pages and integrate them.
+   <li><a href="http://www-sp.iti.informatik.tu-darmstadt.de/software/ppower4/beta/">
+   ppower4</a>: A java class to postprocess PDF files adding pause effects
+   not only in the text but also in the image displaying. (Only required if
+   you want to process metapost files.)
    <li><a href="http://www.lyx.org/">LyX</a>: A LaTeX word processor. It is
    only required when you want to process Lyx documents.
    <li><a href="ftp://ftp.gnu.org/pub/gnu/sed">sed</a>: All sed expressions
