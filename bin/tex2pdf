@@ -87,7 +87,7 @@ my $CONFIGURED=$FALSE;
 
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.11";
+my $MYRELEASE="3.1.12";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -2091,6 +2091,7 @@ sub process_textags {
          # translate to pdf (taking @graphic_params into account)
          if ($found_file and $found_file =~ /\.($suffixes_regexp)$/ ) {
             my $file_suffix = $1;
+            my $params = defined($tag{params}) ? $tag{params} : "";
             my $eps_regexp = join("|", @EPS_SUFFIXES);
             if ( $file_suffix eq $PDF_ORIG_SUFFIX ) {
                my $path;
@@ -2110,15 +2111,21 @@ sub process_textags {
                   &report(7, $base."pdf newer than $base$PDF_ORIG_SUFFIX, "
                      ."copy skipped ...");
                }
+               $file_suffix = "pdf";
             } elsif ($file_suffix =~ /$eps_regexp/ ) {
                report(7, "EPS graphic identified: $found_file");
                &convert_eps2pdf($found_file);
+               $file_suffix = "pdf";
             } elsif ($file_suffix eq $MPOST_SUFFIX) {
                report(7, "Metapost graphic identified: $found_file");
                &convert_mp2pdf($found_file);
             } else {
                report(7, "Bitmap graphic identified: $found_file");
             }
+            $params .= "," if ($params ne "");
+            $tag{params} = $params."type=$file_suffix,ext=.$file_suffix,"
+               ."read=.$file_suffix";
+
          } elsif ($found_file) {
             report(4, "Included graphic of unknown type, ignoring it:"
             ."\n\t".$found_file);
