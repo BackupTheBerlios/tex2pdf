@@ -151,7 +151,8 @@ my $EXPLANATION=6;
 &add_param_type('font_subs',
    [ [ "pslatex", "(old) pslatex" ],
      [ "helvetica", "new helvetica for math (mathptmx.sty) and text (helvet.sty)" ],
-     [ "palatino", "new palatino for math (mathpazo.sty) and text (palatino.sty)" ]
+     [ "palatino", "new palatino for math (mathpazo.sty) and text (palatino.sty)" ],
+     [ "none", "no font substitutionby by tex2pdf; you take care of it" ]
    ] );
 
 ### Option parameters: these parameters have no default value and can not
@@ -1770,6 +1771,7 @@ sub adjust_preamble {
    my $hyperref_code;
    my $cut_code = '';
    my $result;
+   my $font_subst_param = &param_value('font_substitution');
    
    $_ = $preamble;
 
@@ -1793,15 +1795,18 @@ sub adjust_preamble {
    }
    
    ### collect additional LaTeX code
+
    #   first we load the font substitution
-   if ( &param_value('font_substitution') eq 'pslatex' ) {
+   if ( $font_subst_param eq 'pslatex' ) {
       $extra_code = "\n" . '\usepackage{pslatex}' . "\n";
-   } elsif ( &param_value('font_substitution') eq 'helvetica' ) {
+   } elsif ( $font_subst_param eq 'helvetica' ) {
       $extra_code = "\n" . '\usepackage{mathptmx}' . "\n";
       $extra_code .= '\usepackage[scaled=0.9]{helvet}' . "\n";
-   } else {
+   } elsif ( $font_subst_param eq 'palatino' ) {
       $extra_code = "\n" . '\usepackage{mathpazo}' . "\n";
       $extra_code .= '\usepackage{palatino}' . "\n";
+   } else {
+      $extra_code = "\n% no font substitution by tex2pdf\n";
    }
 
    if ( &param_value('thumbpdf') eq $YES ) {
