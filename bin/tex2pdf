@@ -53,11 +53,12 @@ use File::Copy;
 use Getopt::Long;
 use Sys::Hostname;
 use Cwd;
+use Text::Balanced extract_bracketed;
 use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1.5";
+my $MYRELEASE="3.1.6";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1582,7 +1583,7 @@ sub generate_tex_file {
 # parameter 2: full TeX tag name
 # return value: list of the contents strings of all matching tags
 
-sub extract_tag_contents {
+sub extract_tag_contents_OLD {
    my $source=$_[0];
    my $tag_name=$_[1];
    my $contents;
@@ -1619,6 +1620,166 @@ sub extract_tag_contents {
       $text =~ s/\\\\/ /g;
       $text="" if (!defined($text));
       push(@results, $text);
+   }
+
+   return @results;
+}
+
+
+#### extract initial occurence of specified tag from given string (e.g. author, title)
+# parameter 1: string to parse
+# parameter 2: full TeX tag name(s) separated by "|"
+# return value:
+#
+#   success:
+#     $prefix:    string before extracted tag
+#     $remainder: string after extracted tag or "" if nothing left
+#     %tag:       name, params_prefix, params, contents_prefix, contents
+#
+#   not found:
+#     $prefix: entire string
+#     $remainder: undef
+#     %tag: () 
+#
+
+sub extract_tag {
+   my $data=$_[0];
+   my $tag_name=$_[1];
+
+   while( $data =~ /\n(.*)(\\($tag_name))/g ) {
+      my $line_prefix = $1;
+      my $matched_tag_name = $2;
+      my $tag_pos = pos($data);
+
+      my %result = ();
+      my $tag_prefix = undef;
+      my $tag_remainder = undef;
+      my $params_prefix = undef;
+      my $params = undef;
+      my $contents_prefix = undef;
+      my $contents = undef;
+      my $remainder = undef;
+      my $line_remainder = substr($data, $tag_pos, 200);
+      $line_remainder =~ s/\n.*//s;
+      
+      #print "*********************************************\n";
+      ### skip tag if commented out or escaped
+      #print "line prefix: >$line_prefix<\ntag_name: >$matched_tag_name<\n";
+      #print "remaining line: >$line_remainder<\n";
+      #printf "tag pos: %d\n", pos($data);
+      if( $line_prefix =~ /(^|[^\\])%/ or $line_prefix =~ /\\$/ ) {
+         #print "Commented out tag found!\n";
+         ### skip rest of this comment line in search
+         pos($data) = index($data,"\n", pos($data));
+         next;
+      } elsif( $line_prefix =~ /\\$/ ) {
+         #print "Escaped tag found!\n";
+         next;
+      } else {
+         #print "Valid tag found!\n";
+      }
+
+      ($params,$remainder,$params_prefix) = extract_bracketed($data, '[]');
+
+      if ( defined($params) and $params ne "" ) {
+         #print "Tag parameters found\n";
+         #print "params_prefix : >$params_prefix<\nparams: >$params<\n";
+         #printf "tag pos: %d\n", pos($data);
+         $result{params_prefix} = $params_prefix;
+         $result{params} = substr($params, 1, length($params)-2);
+      } else {
+         #print "No tag parameters found\n";
+         pos($data) = $tag_pos;
+      }
+
+      ($contents, $remainder, $contents_prefix)=extract_bracketed($data, "{}");
+      
+      if ( not defined($contents)  or $contents eq "" ) {
+         #print "No tag contents found\n";
+         next;
+      }
+
+      #print "Tag contents found\n";
+      #print "contents prefix: >$contents_prefix<\ntag contents: >$contents<\n\n";
+      $result{contents_prefix} = $contents_prefix;
+      $result{contents} = substr($contents, 1, length($contents)-2);
+
+      $result{name} = substr($matched_tag_name,1);
+      $tag_prefix = substr($data, 0, $tag_pos - length($matched_tag_name));
+      $tag_remainder = substr($data, pos($data));
+      
+      return ($tag_prefix, $tag_remainder, %result);
+   }
+
+   ### no valid tag found
+
+   return ($data, undef, ());
+
+}
+
+#### concatinate given TeX tag in a string
+# parameter1: %tag: tag in a hash
+# return value: tag in a string
+#
+
+sub join_tag {
+   my %tag = @_;
+   my $tag_string;
+   
+   $tag_string = '\\'.$tag{name};
+
+   if (exists $tag{params}) {
+      $tag_string .= $tag{params_prefix}.'['.$tag{params}.']';
+   }
+
+   $tag_string .= $tag{contents_prefix}.'{'.$tag{contents}.'}'; 
+   
+   return $tag_string;
+}
+
+my $file = $ARGV[0];
+my $tagname = $ARGV[1];
+my $data;
+my $error_message="Could not read TeX document to extract $tagname";
+print "File: $file\n";
+print "Tagname: $tagname\n";
+
+
+#### search TeX document for a certain text tag (e.g. author, title)
+# parameter 1: file to parse
+# parameter 2: full TeX tag name
+# return value: list of the contents strings of all matching tags
+
+sub extract_tag_contents {
+   my $source=$_[0];
+   my $tag_name=$_[1];
+   my $data;
+   my @results=();
+   my $error_message="Could not read TeX document to extract $tag_name";
+
+   &check_file($source, $error_message.'.');
+   open(EXTRACT_SOURCE, "<$file") or
+      &abort($error_message." ($file).");
+
+   while(<EXTRACT_SOURCE>) {
+      $data .= $_;
+   }
+
+   close EXTRACT_SOURCE;
+
+   while(defined($data) and $data ne "") {
+      my %tag;
+      my $prefix;
+   
+      ($prefix, $data, %tag) = extract_tag $data, $tag_name;
+      if (%tag) {
+         my $contents = $tag{contents};
+         # remove newlines
+         $contents =~ s/\n//g;
+         # remove latex newlines
+         $contents =~ s/\\\\/ /g;
+         push(@results, $contents);
+      }
    }
 
    return @results;
