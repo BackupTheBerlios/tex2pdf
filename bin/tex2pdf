@@ -93,7 +93,7 @@ my $CONFIGURED=$FALSE;
 my $RUN_PSforPDF = $NO;
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.2b";
+my $MYRELEASE="3.2.1";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -104,6 +104,8 @@ my $MPOST_SUFFIX='mp';
 my $DOT_REPLACEMENT="_";
 my $MULTI_MP_SUFFIX='mmp';
 my @BITMAP_SUFFIXES=( 'jpg', 'png', 'tif' );
+my $EPS2PDF_CMD="convert";
+my $CONVERT_OPTIONS="-density 150";
 
 # (initial) log file of this script
 # this log file will be moved to the specified log_dir after configuration
@@ -122,7 +124,7 @@ my $PRE_CONFIG_VERBOSITY=4;
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdf3rc
 my $RC_FILENAME="$USER_HOME/.tex2pdf3rc";
-my $MYRCFILE_VERSION=8;
+my $MYRCFILE_VERSION=9;
 my $RCVERSION_STRING="rcfile_version";
 
 ########################## NEW PERL CONFIGURATON
@@ -245,6 +247,16 @@ my $EXPLANATION=6;
    ."second\nexecution as I might refuse to overwrite these files for security "
    ."reasons.\nYou have to remove them manually in this case. Additionally, I "
    ."will provide\nas much information during execution as possible.");
+
+&add_param('use_convert', 'bool', $NO, '', '!',
+   'use convert command (ImageMagick) instead of epstopdf (pdftex)',
+   'Should I use convert instead of epstopdf?',
+   "pdftex cannot handle EPS images. Therefore all such images need to be\n"
+   ."translated to PDF in advance. Currently $MYNAME supports two methods to\n"
+   ."do this: convert (part of ImageMagick) and epstopdf (part of pdftex).\n"
+   ."epstopdf was used traditionally by tex2pdf, but had several problems.\n"
+   ."convert works better, but produces lower quality. So, if you have "
+   ."problems\nwith epstopdf you should try convert instead.");
 
 &add_param('delete_pdf_images', 'bool', $NO, '', '!',
    'delete generated PDF image files after execution',
@@ -1454,8 +1466,6 @@ sub configure {
 # parameters: none
 
 sub check_commands {
-   my $exec_epstopdf;
-   
    ### check for which command
    &checkCommand("which","You can switch off all command checks to fix this.");
 
@@ -1465,20 +1475,29 @@ sub check_commands {
    &checkCommand("dvips","See dvips homepage for details: http://www.radicaleye.com/dvips.html");
    &checkCommand(&param_value('pdftex_exec'),
          "See pdftex homepage for details: http://tug.org/applications/pdftex");
-   &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
-   $exec_epstopdf = `which epstopdf`;
-   chomp $exec_epstopdf;
-   if (&grep_file($exec_epstopdf, "-dCompatibilityLevel=1\\.1", $TRUE) > 0) {
-      &report(9, "Good: ghostscript option '-dCompatibilityLevel=1.1' detected "
-         ."in\n'$exec_epstopdf'.");
+
+   if (&param_value('use_convert') eq $YES) {
+      &checkCommand("convert", "See ImageMagick homepage for details: http://www.imagemagick.org/");
+
    } else {
-      &report(4, "\nWARNING: no ghostscript option '-dCompatibilityLevel=1.1' "
-         ."in\n'$exec_epstopdf'.\n"
-         ."You might run into trouble with the conversions of bitmaps.\n"
-         ."Adjusting epstopdf or setting the environment variable GS_OPTIONS "
-         ."to \n".'"$GS_OPTIONS -dCompatibilityLevel=1.1" before calling this '
-         ."script\nmight help in this case.\n");
+      my $exec_epstopdf;
+      &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
+      $exec_epstopdf = `which epstopdf`;
+      chomp $exec_epstopdf;
+      if (&grep_file($exec_epstopdf, "-dCompatibilityLevel=1\\.1", $TRUE) > 0) {
+         &report(9, "Good: ghostscript option '-dCompatibilityLevel=1.1' detected "
+            ."in\n'$exec_epstopdf'.");
+      } else {
+         &report(4, "\nWARNING: no ghostscript option '-dCompatibilityLevel=1.1' "
+            ."in\n'$exec_epstopdf'.\n"
+            ."You might run into trouble with the conversions of bitmaps.\n"
+            ."Adjusting epstopdf or setting the environment variable GS_OPTIONS "
+            ."to \n".'"$GS_OPTIONS -dCompatibilityLevel=1.1" before calling this '
+            ."script\nmight help in this case.\n");
+      }
    }
+
+
 
    if ( &param_value('thumbpdf') eq $YES ) {
       &checkCommand("thumbpdf","You can switch off thumbpdf support to fix this.");
@@ -1898,7 +1917,15 @@ sub convert_epsfrag2pdf {
       # Here we take advantage of the fact that the pdf output file is newer that the original eps file and 
       # the conversion image eps2pdf process will skip the conversion, leaving the psfrag figure just 
       # converted to pdf. 
-      &system_command("epstopdf -outfile=$pdf_target $frg_target ",$TRUE, 8, "epstopdf failed on $frg_target");
+      if (&param_value('use_convert') eq $YES) {
+         # use convert command
+         &system_command("convert $CONVERT_OPTIONS $frg_target epdf:$pdf_target",$TRUE, 8,
+            "convert failed on $frg_target");
+      } else {
+         # use epstopdf command
+         &system_command("epstopdf -outfile=$pdf_target $frg_target ",$TRUE, 8,
+            "epstopdf failed on $frg_target");
+      }
       if (&param_value('delete_pdf_images') eq $YES) {
          push(@TMPFILES, $pdf_target);
       }
@@ -2389,11 +2416,25 @@ sub convert_eps2pdf {
    if ( ! -f $image_target or -M $image_target > -M $image ) {
       &report(7, "Converting graphic $image_name to $image_base.pdf");
       if ($zipped > 0) {
-         &system_command("gunzip -c $image | epstopdf -f -outfile=$image_target",
-         $TRUE, 8, "epstopdf failed on $image_name");
+         if (&param_value('use_convert') eq $YES) {
+             # use convert command
+             &system_command("gunzip -c $image | convert $CONVERT_OPTIONS - epdf:$image_target",
+             $TRUE, 8, "convert failed on $image_name");
+         } else {
+             # use epstopdf command
+             &system_command("gunzip -c $image | epstopdf -f -outfile=$image_target",
+               $TRUE, 8, "epstopdf failed on $image_name");
+         }
       } else {
-         &system_command("epstopdf -outfile=$image_target $image",
-         $TRUE, 8, "epstopdf failed on $image_name");
+         if (&param_value('use_convert') eq $YES) {
+            # use convert command
+            &system_command("convert $CONVERT_OPTIONS $image epdf:$image_target",
+            $TRUE, 8, "convert failed on $image_name");
+         } else {
+            # use epstopdf command
+            &system_command("epstopdf -outfile=$image_target $image ",$TRUE,
+               8, "epstopdf failed on $image_name");
+         }
       }
       if (&param_value('delete_pdf_images') eq $YES) {
          push(@TMPFILES, $image_target);
