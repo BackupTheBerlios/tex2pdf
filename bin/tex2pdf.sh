@@ -1039,12 +1039,14 @@ run_pdflatex() {
    local TEXFILE=$1
    local errors=0
    local PDFLOGFILE=$2
+   local exiti_status=0
    echo "Pdflatex is running. Please wait."
    echo
    pdflatex --interaction nonstopmode ${PDFTEXOPTS} ${TEXFILE} > $PDFLOGFILE
+   exit_status=$?
    echo "Pdflatex finished. Errors:"
    errors=`grep "! Emergency stop\|Error:\|LaTeX Warning:" $PDFLOGFILE | wc -l`
-   if [ $errors -ne 0 ]
+   if [ $errors -ne 0 -o $exit_status -ne 0 ]
    then
       if [ -n "`grep '! Emergency stop' $PDFLOGFILE`" ]
       then
@@ -1052,12 +1054,17 @@ run_pdflatex() {
 	 echo
 	 abort "Fatal error occured. I am lost."
       fi
-      grep "Error:\|LaTeX Warning:" $PDFLOGFILE
+      if [ $errors -ne 0 ]
+      then
+         grep "Error:\|LaTeX Warning:" $PDFLOGFILE
+      else
+         tail $PDFLOGFILE
+      fi
       echo
       echo "$MYNAME: See $PDFLOGFILE for details."
       return 1
    else
-      echo "None."
+      echo "None detected (log file: $PDFLOGFILE)."
       return 0
    fi
 }

@@ -1,0 +1,34 @@
+tex2pdf replaces lyx2pdf. lyx2pdf is deprecated and should not be used anymore.
+
+Install Instructions:
+
+  1. To install tex2pdf pack it out with 'tar xfz FILE' and move the resulting
+     tex2pdf file in a bin directory that is in your path. 
+  2. Make sure that the script has the right path to your bash shell!
+     It should be found at /bin/bash. If it is somewhere else on your system
+     modify the first line in tex2pdf accordingly. 
+  3. Then you might want to adjust the default parameters for all users in
+     tex2pdf itself with an editior. 
+  4. Each user of the script has to run 'tex2pdf -r' first in order to customize
+     it. The given settings will be stored in a private RC file in the user's
+     home directory. 
+  5. Finally, run 'tex2pdf -h' to see a tiny help info for the command line
+     options. 
+
+More information:
+
+ Project Homepage: http://tex2pdf.berlios.de
+ Developer Homepage: http://developer.berlios.de/projects/tex2pdf
+ Mailing lists: http://developer.berlios.de/mail/?group_id=57
+ Changelog: http://tex2pdf.berlios.de/changelog.html
+
+ Anyone is invited to help to improve tex2pdf. Therefore any kind of feedback
+ is welcome. Maybe you even would like to hack the code and send us your
+ changes. This would help a lot and is highly appreciated. Think about it :-)
+ Subscribing to the developer mailing list might be a first step (see above).
+
+ Send feedback to: tex2pdf-devel@lists.berlios.de
+
+ Browse the CVS repository for more details on the code and further experimental
+ patches. 
+
