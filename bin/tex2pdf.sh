@@ -45,7 +45,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.9"
+MYRELEASE="2.2.10"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -892,7 +892,7 @@ extract_files() {
    local FILES=
    FOUND_FILES=
 
-   FOUND_FILES=`${SEDEXE} -n -e "s/\(^\|[^\]\)%.*$/\1/" \
+   FILES=`${SEDEXE} -n -e "s/\(^\|[^\]\)%.*$/\1/" \
      -e "s/^.*[\]\($TAGNAME\)\(\[[^{]*\]\)\?{\(\([^}]*\/\)\?[^}/.]\+\($SUFFIX\)\)}.*$/\3/p" $SOURCE`
 
    if [ -n "$FILES" ]
