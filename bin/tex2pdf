@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.1beta";
+my $MYRELEASE="3.0.3";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -313,6 +313,18 @@ $DEF_VALUE=3;
    'Should PNG thumbnails be created?',
    "I can use thumbpdf to include thumbnails of the document pages in the PDF "
    ."file.\nThis requires Ghostscript 5.50 or higher.");
+
+&add_param('ppower', 'bool', $NO, '|w', '!',
+   'postprocess PDF document with ppower',
+   'Should ppower postprocess the PDF document?',
+   "I can use ppower to postprocess the PDF "
+   ."file.\nThis requires ppower 4.0 or higher.");
+
+&add_param('preamble', 'bool', $NO, '|r', '!',
+   'add the file preamble.cfg at the current dir to metapost files',
+   'Should the preamble.cfg file be added to the metapost files?',
+   "I can add preamble.cfg to metapost "
+   ."files.\nThis requires an existing preamble.cfg file.");
 
 &add_param('maxrun', 'integer', 6, '', '=i',
    'specify maximal number of pdflatex runs if problems are detected',
@@ -1247,6 +1259,11 @@ sub check_commands {
       &checkCommand("thumbpdf","You can switch off thumbpdf support to fix this.");
    }
 
+   if ( &param_value('ppower') eq $YES ) {
+      &checkCommand("ppower","You can switch off ppower support to fix this.");
+   }
+
+
    ### bibtex executable
    if ( &param_value('bibtex') ne $NO ) {
    &checkCommand("which","You can switch off BibTeX support to fix this.");
@@ -1383,7 +1400,7 @@ sub extract_tag_contents {
          # change \and to and
          s/\\and/ and/g;
          # add contents of all occurences of this tag in a line to result list
-         while ( /\\($tag_name)(\[[^{]*\])?{+([^{}]*)}/ ) {
+         while ( /\\($tag_name)(\[[^]]*?\])*?{+([^{}]*)}/ ) {
             $text=$3; 
             $text="" if (!defined($text));
             push(@results, $text);
@@ -1414,13 +1431,15 @@ sub identify_files {
    my $regexp_suffixes= '\.('.join('|', @suffixes).')';
 
    @matched_tags = &extract_tag_contents($source, $tag_name);
-   
+
    foreach my $tag_contents (@matched_tags) {
       my $path;
       my $base;
       my $suffix;
       my $kpse_result;
       my $working_dir = cwd."/";
+
+      print "$tag_contents\n";
 
       ($base,$path,$suffix) = fileparse($tag_contents, $regexp_suffixes);
 
@@ -1564,6 +1583,12 @@ sub convert_tex2tmp {
                print "% no thumbpdf support\n";
             }
  
+            if ( &param_value('ppower') eq $YES ) {
+#               print '\usepackage{thumbpdf}' . "\n";
+            } else {
+               print "% no ppower support\n";
+            }
+
             print '\makeatletter' . "\n";
             print '\usepackage['.join(',', @$hyperref_params_ref).']{hyperref}'
                ."\n";
@@ -1589,6 +1614,20 @@ sub convert_tex2tmp {
 
       # replace the suffix 'pstex_t' with 'pdf_t'
       s/(\\input\{[^}]+\.)pstex_t\}/$1pdf_t}/g;
+
+      if ( &param_value('preamble') eq $NO ) {
+         # replace the suffix 'mp' with '.0'
+         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.(mp)\}/$1\.0}/g;
+
+         # cut off the suffix of mmp graphics
+         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.(mmp)\}/$1}/g;
+      } else {
+         # replace the suffix 'mp' with '-mp.0'
+         s/((\\convertMPtoPDF)(\[[^]]*\])?(\{[^}]+))\.(mp)\}/$1-mp\.0}/g;
+
+         # replace the suffix 'mp' with '-mp.0'
+         s/((\\multiinclude)(\[[^]]*\])?(\{[^}]+))\.(mmp)\}/$1-mp}/g;
+      }
 
       # insert the tmp_suffix in tex filenames
       # I assume that files with no extension are TeX files as well; correct?
@@ -1698,6 +1737,102 @@ sub convert_pstex2pdf {
    }
 }
 
+### Convert the given MP image to PDF
+# parameters $1: MP image filename with absolute path
+# return value: none
+
+sub convert_mp2pdf {
+   my $image = $_[0];
+   my $image_path;
+   my $image_base;
+   my $image_name;
+   my $suffix;
+   my $image_target;
+
+   ($image_base,$image_path,$suffix) = fileparse($image, '\.mp|\.mmp');
+   $image_name = $image_base . $suffix;
+   #### dirty hack: it is only valid for metapost files created via xfig
+   # '.0' must be extracted from the mp file 
+   # it is the number in the tagname beginfig(#)
+   $image_target = $image_path . $image_base . '.0';
+   
+   #### check if image file really exists
+   #&check_file($image, "Could not convert referenced image.");
+
+   ### return if image directory is not writeable
+   if (! -w $image_path) {
+      print "$MYNAME: WARNING - Image directory not writable: $image_path\n";
+      print " Skipping '$image_name', assume you have converted it manually.\n";
+      return;
+   }
+
+   if ( ! -f $image_target or -M $image_target > -M $image ) {
+      print "Converting image $image_name ...\n";
+      my $working_dir = cwd."/";
+      chdir("$image_path") || die "cannot cd to $image_path($!)";
+      if ( &param_value('preamble') eq $YES ) {
+         &modify_mp_file($image_base,$suffix);
+         $image=$image_base."-mp".$suffix;
+      }
+      system('mpost', $image)
+          and &abort("mpost failed on $image_name: $!");
+      chdir("$working_dir") || die "cannot cd to $working_dir($!)";
+      if (&param_value('delete_pdf_images') eq $YES) {
+         push(@TMPFILES, $image_target);
+      }
+   } else {
+      print "$image_base.0 newer than $image_name, conversion skipped...\n";
+   }
+}
+
+### Convert the given MP image to PDF
+# parameters $1: MP image filename with absolute path
+# return value: none
+
+sub modify_mp_file {
+   my $base=$_[0];
+   my $suffix=$_[1];
+   my $preamble_file="preamble.cfg";
+
+   my $mp_source=$base.$suffix;
+   my $mp_target=$base.'-mp'.$suffix;
+
+   ### open source and target file
+   open(SOURCE_FILE, "<$mp_source") or
+      &abort("Could not open $mp_source to add $preamble_file ($mp_source).");
+
+   open(TARGET_FILE, ">$mp_target") or
+      &abort("Could not open $mp_target to add $preamble_file ($mp_source).");
+
+   open(PREAMBLE_FILE, "<$preamble_file") or
+      &abort("Could not open $preamble_file to be added to metapost files ($mp_source).");
+
+   ### set target file as stdout
+   select TARGET_FILE;
+   print  'verbatimtex' . "\n";
+   print  '%&latex' . "\n"; # This forces metapost to use latex in the compilation
+   print  '\documentclass[english]{article}' . "\n"; # we have to decide if this sentence goes in preamble.cfg or here
+                                                     # english must be added
+                                                     # to preamble in order to
+                                                     # make work mpost, why ???
+   while(<PREAMBLE_FILE>) {
+      print $_
+   }
+   print  '\begin{document}' . "\n"; # we have to decide if this sentence goes in preamble.cfg or here
+   print  'etex' . "\n";
+   while(<SOURCE_FILE>) {
+      print $_
+   }
+   print  'verbatimtex' . "\n";
+   print  '\end{document}' . "\n";
+   print  'etex' . "\n";
+
+   ### set STDOUT as stdout again
+   select STDOUT;
+
+}
+
+
 ### Convert included images to pdf
 # parameter 1: tex source file
 # no return value
@@ -1706,6 +1841,8 @@ sub convert_images {
    my $tex_source=$_[0];
    my @pstex_file_list;
    my @eps_image_list;
+   my @mp_image_list;
+   my @mmp_image_list;
 
    print "\nConverting images referenced in $tex_source.\n";
 
@@ -1730,6 +1867,26 @@ sub convert_images {
       print "None.\n";
    }
 
+   ##### Get MP images from the source file
+   print "\nScanning for MP images (.mp):\n";
+   @mp_image_list=&identify_files($tex_source,'convertMPtoPDF',['mp']);
+   if ( @mp_image_list > 0 ) {
+      print join("\n", @mp_image_list);
+      print "\n";
+   } else {
+      print "None.\n";
+   }
+
+   ##### Get MMP images from the source file
+   print "\nScanning for MMP images (.mmp):\n";
+   @mmp_image_list=&identify_files($tex_source,'multiinclude',['mmp']);
+   if ( @mmp_image_list > 0 ) {
+      print join("\n", @mmp_image_list);
+      print "\n";
+   } else {
+      print "None.\n";
+   }
+
    ### Convert all EPS images to PDF
    if ( @eps_image_list > 0) {
       print "\n$MYNAME: Converting EPS images to PDF\n";
@@ -1743,6 +1900,22 @@ sub convert_images {
       print "\n$MYNAME: Converting pstex_t docs to pdf_t docs\n";
       foreach my $image (@pstex_file_list) {
          &convert_pstex2pdf($image);
+      }
+   }
+
+   ### Convert all MP images to PDF
+   if ( @mp_image_list > 0) {
+      print "\n$MYNAME: Converting MP images to PDF\n";
+      foreach my $image (@mp_image_list) {
+         &convert_mp2pdf($image);
+      }
+   }
+
+   ### Convert all MMP images to PDF
+   if ( @mmp_image_list > 0) {
+      print "\n$MYNAME: Converting MMP images to PDF\n";
+      foreach my $image (@mmp_image_list) {
+         &convert_mp2pdf($image);
       }
    }
 
@@ -1871,6 +2044,45 @@ sub run_thumbpdf {
    push(@TMPFILES, $texfile.'.tpt');
 }
 
+
+#### run ppower command to make presentations
+# more informations: 
+# parameter 1: LaTeX file without extension
+# parameter 2: log-file where the full out put is stored
+
+sub run_ppower {
+   my $texfile=$_[0];
+   my $logfile=$_[1];
+   my $exit_status=0;
+   my $infile;
+   my $outfile;
+
+   $infile=$texfile.'.pdf';
+   $outfile=$texfile.'_p4.pdf';
+
+   print "\nPostprocessing PDF file with 'ppower'\n\n";
+   system('ppower', $infile, $outfile);
+   $exit_status=$?;
+   if ( $exit_status != 0 ) {
+      print "\n$MYNAME: ppower exit with status $exit_status.\n";
+      print "I will continue, but maybe there will not be pause effects in the PDF doc.\n";
+   }
+   else{
+     print "\nThe postprocessed pdf file is: $outfile\n\n";
+   }
+   if ( -f 'ppower.log' ) {
+      move('ppower.log', $logfile);
+      print "\n$MYNAME: See $logfile for details.\n";
+   }
+
+   ### store possible tmp files
+#   push (@TMPFILES, glob 'thumb???.png');
+#   push (@TMPFILES, 'thumbpdf.pdf');
+#   push(@TMPFILES, 'thumbdta.tex'); 
+#   push(@TMPFILES, $texfile.'.tpt');
+}
+
+
 ##### read and analyse configuration and options and adjust basic variables
 ##### accordingly
 #### The following sources are considered (last value overrides previous)
@@ -1951,7 +2163,7 @@ sub prepare_logdir {
    
    if( <$log_dir/*.log> and &param_value('clean_logs') eq $YES ) { 
       print "\nRemoving old log files ($log_dir).\n";
-      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/thumbpdf-*.log>);
+      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/thumbpdf-*.log>, <$log_dir/ppower-*.log>);
    } else {
       print "\nAll log files will be stored in ($log_dir).\n";
    }
@@ -2223,10 +2435,11 @@ sub generate_pdf_doc {
    my $log_dir= &param_value('logdir');
    $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
    
-   # setting the log files for the output of pdflatex, bibtex and thumbpdf
+   # setting the log files for the output of pdflatex, bibtex, thumbpdf and ppower
    my $pdflog_base = $log_dir."pdflatex-$$-";
    my $bibtex_log = $log_dir."bibtex-$$.log";
    my $thumbpdf_log = $log_dir."thumbpdf-$$.log";
+   my $ppower_log = $log_dir."ppower-$$.log";
 
    ##### Getting document name, suffix and path
    ($base,$path,$suffix) = fileparse($source, ('\.tex'));
@@ -2271,11 +2484,17 @@ sub generate_pdf_doc {
       &run_thumbpdf($doc, $thumbpdf_log);
       $rerun=$TRUE;
    }
-   
+
    ### One final pdflatex run if requested
    if ( $rerun ) {
       print "\n************ One final pdflatex run no. $runno *************\n";
       &run_pdflatex($doc, $pdflog_base.$runno.'.log');
+   }
+
+   ### if the ppower option is switched on then run ppower
+   if ( &param_value('ppower') eq $YES ) {
+      print "\n****************** ppower postprocess *****************\n";
+      &run_ppower($doc, $ppower_log);
    }
 
    if ( ! -f $pdf_doc ) {
