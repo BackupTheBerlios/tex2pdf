@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.20";
+my $MYRELEASE="3.1a";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1422,9 +1422,12 @@ sub check_commands {
       &report(9, "Good: ghostscript option '-dCompatibilityLevel=1.1' detected "
          ."in\n'$exec_epstopdf'.");
    } else {
-      &report(4, "WARNING: no ghostscript option '-dCompatibilityLevel=1.1' "
-         ."in\n'$exec_epstopdf'. You may run into problems with the "
-         ."conversions of bitmaps.");
+      &report(4, "\nWARNING: no ghostscript option '-dCompatibilityLevel=1.1' "
+         ."in\n'$exec_epstopdf'.\n"
+         ."You might run into trouble with the conversions of bitmaps.\n"
+         ."Adjusting epstopdf or setting the environment variable GS_OPTIONS "
+         ."to \n".'"$GS_OPTIONS -dCompatibilityLevel=1.1" before calling this '
+         ."script\nmight help in this case.\n");
    }
 
    if ( &param_value('thumbpdf') eq $YES ) {
