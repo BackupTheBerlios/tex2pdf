@@ -67,8 +67,12 @@
 #     (thanks to Matt Bandy for this patch)
 #  * minor changes
 #
+# Oct 15th, 2000 -- Version 1.7
+#  * fixed checkCommand function - buggy output redirection generated file '1'
+#     (thanks to Nicolas Marsgui for this patch)
+#
 
-MYVERSION="1.6"
+MYVERSION="1.7"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -151,7 +155,7 @@ fi
 
 ##### Check other dependencies with which if turned on
 checkCommand(){
-   WHICHRESULT=`which $1 2>1`
+   WHICHRESULT=`which $1 2>&1`
    WHICHBASE=`basename "$WHICHRESULT"`
    if [ "$WHICHBASE" != "$1" ]
    then
