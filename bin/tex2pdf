@@ -2,7 +2,7 @@
 
 #      tex2pdf - script for translating latex docs to pdf
 #
-#      Copyright (C) 2000,2001 by Steffen Evers and others
+#      Copyright (C) 2000,2001 by Steffen Evers
 #
 #      This program is free software; you can redistribute it and/or modify
 #      it under the terms of the GNU General Public License version 2 as 
@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0beta7";
+my $MYRELEASE="3.0beta8";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -1270,7 +1270,7 @@ sub reserve_tmp_texname {
    ($original_base,$original_path,$suffix) = fileparse($original_name, '\.tex');
    
    # set the path of the tmp file
-   if(!defined($tmp_path) or $tmp_path eq "") {
+   if(!$tmp_path) {
       $tmp_path=$original_path;
    } else {
       $tmp_path .= '/' if( $tmp_path ne "" and ! ($tmp_path =~ m#/$#) );
@@ -1322,6 +1322,7 @@ sub generate_tex_file {
    my $lyx_doc = $_[0];
    my $tex_doc = $_[1];
    my $lyx_dir = &param_value('lyxrc_path');
+   $lyx_dir .= '/' if( ! ($lyx_dir =~ m#/$#) );
 
    ### Check if LyX file can be accessed
    &check_file($lyx_doc,"Cannot read the specified LyX document!");
@@ -1461,11 +1462,11 @@ sub identify_files {
 # This function recurses, and is maybe smart enough to detect cycles.
 # Be sure to set FILES to the empty string prior to calling this.
 # parameter 1: tex file to start with
-# parameter 2: path for referenced material (default: doc path)
+# no return value
+# result is appended to global variable FILES
 
 sub get_file_list {
    my $source = $_[0];
-   my $input_path = $_[1];
    my @imports = ();
 
    # This is the cycle avoidance logic.
@@ -1671,12 +1672,11 @@ sub convert_pstex2pdf {
 }
 
 ### Converted included images to pdf
-# parameter ($1): tex source file
-# parameter ($1): input path for referenced images (default: doc path)
+# parameter 1: tex source file
+# no return value
 
 sub convert_images {
    my $tex_source=$_[0];
-   my $input_path=$_[1];
    my @pstex_file_list;
    my @eps_image_list;
 
@@ -2006,7 +2006,7 @@ sub process_inputpath {
    $input_path=$matches[0];
    
    ## check if input_path is ok
-   if ( defined ($input_path) and $input_path ne "" ) {
+   if ($input_path) {
       print "$MYNAME: Found an input path in the latex document: $input_path\n";
       if( &check_dir($input_path, 'The retrieved input@path seems not to be valid.', $NO)) {
          &set_param_value('input_path', $input_path);
@@ -2136,15 +2136,14 @@ sub generate_hyperref_params {
 # parameter 2: parameter list of hyperref parameters
 
 sub prepare_documents {
-   my ($main_tex_doc, @hyperref_params) = @_;
-   my $input_path = &param_value('input_path');
+   my ($main_tex_doc, $input_path, @hyperref_params) = @_;
    @REF_DOCS=();
 
    ## get a name for the tmp tex file
    my $main_tmp_doc = &reserve_tmp_texname($main_tex_doc, $input_path);
 
    ## Get the list of imported files from the tex file
-   &get_file_list($main_tex_doc, $input_path);
+   &get_file_list($main_tex_doc);
    
    ## remove main file from list (first element; needs special handling)
    shift @REF_DOCS;
@@ -2163,7 +2162,7 @@ sub prepare_documents {
    ## main doc
    print "\n$MYNAME: Generating main temporary LaTeX document: $main_tmp_doc\n";
    &convert_tex2tmp($main_tex_doc, $main_tmp_doc, \@hyperref_params);
-   &convert_images($main_tex_doc, $input_path);
+   &convert_images($main_tex_doc);
    
    ## referenced docs
    foreach my $file (@REF_DOCS) {
@@ -2194,6 +2193,7 @@ sub generate_pdf_doc {
    my $max_run_no= &param_value('maxrun');
    my $min_run_no= &param_value('minrun');
    my $log_dir= &param_value('logdir');
+   $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
    
    # setting the log files for the output of pdflatex, bibtex and thumbpdf
    my $pdflog_base = $log_dir."pdflatex-$$-";
@@ -2318,7 +2318,7 @@ $target_name = &get_target_name($texdoc, $input_path);
 ##### Generate adjusted temp tex files and convert all their images
 
 print "\n$MYNAME: Preparing all documents and images.\n";
-$tmp_tex_doc = &prepare_documents($texdoc, @hyperref_params);
+$tmp_tex_doc = &prepare_documents($texdoc, $input_path, @hyperref_params);
 
 ##### Generate the final PDF document
 
