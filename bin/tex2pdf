@@ -47,7 +47,7 @@
 ######## Imports
 
 use File::Basename;
-use Getopt::Std;
+use Getopt::Long;
 use Cwd;
 
 ####### Release version
@@ -82,12 +82,23 @@ $TRUE=1;
 # default: $HOME/.tex2pdfrc
 $RC_FILENAME="$ENV{'HOME'}/.tex2pdfrc";
 
+
 ########################## NEW PERL CONFIGURATON
 
 %CONFIGURATION = ();
 %PARAMETER_LIST = ();
 %PARAMETER_TYPES = ();
  
+## Array index for the various information in each parameter specifcation
+## referenced by %PARAMETER_LIST
+$TYPE=0;
+$ALIAS=1;
+$OPT_SPEC=2;
+$DEF_VALUE=3;
+$DESCRIPTION=4;
+$EXPLANATION=5;
+$QUESTION=6;
+
 &add_param_type('paper',
    { 'a4paper' => 'a4 paper',
      'letterpaper' => 'letter paper',
@@ -113,32 +124,36 @@ $NIL => 'do not set this value - leave it to hyperref'
      'custom' => 'custom directory as specified'
    } );
 
-# $key, $type, $value, $alias, $linkage, $description, $explanation, $question
-&add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/");
-&add_param('cleanlogs' , 'bool', $YES);
-&add_param('check-commands' , 'bool', $YES);
-&add_param('append-regexp' , 'text', '^\\documentclass(\[[^]]*\])?\{.*\}');
-&add_param('destination', 'destination', 'source');
-&add_param('custom-path', 'directory', $ENV{'HOME'});
-&add_param('tmp-base-suffix', 'text', '-pdf');
-&add_param('colorlinks', 'three', $YES);
-&add_param('paper', 'paper', 'a4paper');
-&add_param('citecolor', 'color', 'red');
-&add_param('urlcolor', 'color', 'blue');
-&add_param('linkcolor', 'color', 'green');
-&add_param('pagecolor', 'color', 'magenta');
-&add_param('linktocpage', 'three', $YES);
-&add_param('default-title', 'text', $NIL);
-&add_param('title', 'text', undef);
-&add_param('default-author', 'text', $NIL);
-&add_param('author', 'text', undef);
-&add_param('forceindex', 'bool', $NO);
-&add_param('bibtex', 'three', $NIL);
-&add_param('thumbpdf', 'bool', $NO);
-&add_param('maxrun', 'integer', 6);
-&add_param('minrun', 'integer', 2);
-&add_param('pdftex-opts', 'text', $NIL);
-&add_param('hyperref-opts', 'text', $NIL);
+# $key, $type, $def_value, $opt_alias, $opt_spec, $description, $explanation, $question
+&add_param('help', 'action', undef, '|h', '');
+&add_param('version', 'action', undef, '|v', '');
+&add_param('print_config', 'action', undef, '|o', '');
+&add_param('configure', 'action', undef, '|r', '');
+&add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s');
+&add_param('clean_logs', 'bool', $YES, '|l', '!');
+&add_param('check_commands', 'bool', $YES, '|c', '!');
+&add_param('regexp_append', 'text', '^\\documentclass(\[[^]]*\])?\{.*\}', '', '=s');
+&add_param('destination', 'destination', 'source', '', '=s');
+&add_param('custom_path', 'directory', $ENV{'HOME'}, '|d', '=s');
+&add_param('tmp_base_suffix', 'text', '-pdf', '', '=s');
+&add_param('colorlinks', 'three', $YES, '', '!');
+&add_param('paper', 'paper', 'a4paper', '|p', '=s');
+&add_param('citecolor', 'color', 'red', '', '=s');
+&add_param('urlcolor', 'color', 'blue', '', '=s');
+&add_param('linkcolor', 'color', 'green', '', '=s');
+&add_param('pagecolor', 'color', 'magenta', '', '=s');
+&add_param('link_toc_page', 'bool', $YES, '', '!');
+&add_param('default_title', 'text', $NIL, '', '=s');
+&add_param('title', 'text', undef, '|t', '=s');
+&add_param('default_author', 'text', $NIL, '', '=s');
+&add_param('author', 'text', undef, '|a', '=s');
+&add_param('force_index', 'bool', $NO, '|i', '!');
+&add_param('bibtex', 'three', $NIL, '|b', '!');
+&add_param('thumbpdf', 'bool', $NO, '|n', '!');
+&add_param('maxrun', 'integer', 6, '', '=i');
+&add_param('minrun', 'integer', 2, '', '=i');
+&add_param('pdftex_opts', 'text', $NIL, '', '=s');
+&add_param('hyperref_opts', 'text', $NIL, '', '=s');
 
 # the following parameter types should be set now:
 #  'color' => \%VALUES,
@@ -465,7 +480,7 @@ sub add_param_type {
 # parameter 2: type
 # parameter 3: default value
 # parameter 4: alias for command line options
-# parameter 5: subroutine linkage for command line options
+# parameter 5: specification for command line options
 # parameter 6: short description for help
 # parameter 7: explanation
 # parameter 8: question
@@ -473,11 +488,11 @@ sub add_param_type {
 
 sub add_param {
  
-   my ($key, $type, $value, $alias, $linkage, $description, $explanation, $question) = @_;
+   my ($key, $type, $def_value, $opt_alias, $opt_spec, $description, $explanation, $question) = @_;
  
    $CONFIGURATION{$key} = $value;
 
-   $PARAMETER_LIST{$key} = [ $type, $alias, $linkage, $value, $description, $explanation, $question ];
+   $PARAMETER_LIST{$key} = [ $type, $alias, $opt_spec, $def_value, $description, $explanation, $question ];
    
    if (! exists $PARAMETER_TYPES{$type}) {
       $PARAMETER_TYPES{$type} = undef;
@@ -499,6 +514,23 @@ sub param_value {
    return $current_value;
 }
 
+### get the value of an existing parameter
+# parameter 1: a parameter key
+# return value: parameter value
+
+sub param_type {
+   my $key = $_[0];
+   my $def_ref;
+   my $type;
+
+   exists(%PARAMETER_LIST{$key})
+      or &abort "unknown parameter: $key";
+   $def_ref = %PARAMETER_LIST{$key};
+   $type = @{$def_ref}[$TYPE];
+
+   return $type;
+}
+
 ### set the value of an existing parameter
 # parameter 1: a parameter key
 # parameter 2: the new value
@@ -511,6 +543,95 @@ sub set_param_value {
    exists(%CONFIGURATION{$key})
       or &abort "unknown parameter: $key";
    %CONFIGURATION{$key}=$new_value;
+}
+
+### get option specifier for getopts
+# parameter 1: option key
+# return value: string - option specifier
+
+sub option_specifier {
+   my $key = $_[0];
+   my $spec;
+   my $def_ref;
+ 
+   exists(%PARAMETER_LIST{$key})
+      or &abort "unknown parameter: $key";
+   $def_ref = %PARAMETER_LIST{$key};
+   $spec = $key . @{$def_ref}[$OPT_ALIAS] . @{$def_ref}[$OPT_SPEC];
+ 
+   return $spec;
+}
+
+### handle an option
+# parameter 1: a parameter/option key
+# parameter 2: the option value
+# return value: none
+
+sub handle_option {
+   my $key = $_[0];
+   my $value = $_[1];
+   my $type;
+   
+   $type = &param_type($key);
+
+   if ($type eq 'action') {
+      &handle_action_opt($key, $value);
+   } else {
+      &set_param_value($key, $value);
+   }
+# bash code FIXME
+#     case "$OPTION" in;
+#       i) &setYNValue MAKEINDEX $OPTARG i ;;;
+#       t) $TITLE=$OPTARG ;;;
+#       a) $AUTHOR=$OPTARG ;;;
+#       b) &setValue BIBTEX $OPTARG b $POSSIBLE_BIBTEX ;;;
+#       p) &setValue PAPERSIZE $OPTARG p $POSSIBLE_PAPER ;;;
+#       c) &setYNValue COMMANDCHECK $OPTARG r ;;;
+#       n) &setYNValue THUMBNAILS $OPTARG n ;;;
+#       l) &setYNValue CLEANLOGS $OPTARG l ;;;
+#       d) if &check_dir($OPTARG);
+#   	     $PDFCUSTOMDIR=$OPTARG;
+#   	     $PDFOUT=@$POSSIBLE_PDFOUT[2];
+#   	  } else {
+#   	     &abort("Please, choose a VALID path.");
+#   	  fi ;;;
+#     esac;
+}
+
+### handle all action options 
+# parameter 1: a option key
+# parameter 2: the option value
+# return value: none
+
+sub handle_action_opt {
+   my $key = $_[0];
+   my $value = $_[1];
+
+   if ($key eq 'help') {
+      &help;
+      
+   } elsif ($key eq 'version') {
+      &print_version;
+      
+   } elsif ($key eq 'configure') {
+      if ( -f $RC_FILENAME ) {
+         &read_configuration $RC_FILENAME;
+      }
+      &configure;
+      &write_configuration $RC_FILENAME;
+      &print_configuration;
+      
+   } elsif ($key eq 'print_config') {
+      if ( -f $RC_FILENAME ) {
+         &read_configuration $RC_FILENAME;
+      }
+      &print_configuration;
+
+   } else {
+      &usage; 
+      exit 1;
+   }
+   exit 0;
 }
 
 ### set a variable by a command line option to 'yes' or' no'; abort on error
@@ -626,7 +747,7 @@ sub write_configuration {
    print "# Generated $date by $ENV{'USER'} on $ENV{'HOSTNAME'}\n";
    
    while (($key, $value) = each %CONFIGURATION ) {
-      print "$key".'='."$value\n";
+      print "$key".'='."$value\n" if(&param_type($key) ne 'action');
    }
    
    print "# EOF\n";
@@ -643,7 +764,7 @@ sub print_configuration {
    print "Configuration for $MYNAME V$MYRELEASE\n";
    
    while (($key, $value) = each %CONFIGURATION ) {
-      print "$key".'='."$value\n";
+      print "$key".'='."$value\n" if(&param_type($key) ne 'action');
    }
    
    print "\n";
@@ -760,12 +881,12 @@ sub configure {
 
    print "The default title for the document info of all generated documents.\n";
    print "$NIL will be recognized and means pass no value at all than.\n\n";
-   &config_param("Default document title?",'default-title');
+   &config_param("Default document title?",'default_title');
 
    print "\n----------------\n";
    print "The default author for the document info of all generated documents.\n";
    print "$NIL will be recognized and means pass no value at all than.\n\n";
-   &config_param("Default document author?",'default-author');
+   &config_param("Default document author?",'default_author');
 
    print "\n----------------\n";
    print "If you like you can make me pass additional parameters to hyperref.\n";
@@ -1024,87 +1145,44 @@ sub generate_hyperref_params {
 # command line options
 
 sub adjust_configuration {
-   my $config_request=$NO;
-   my $print_request=$NO;
+   my $configured=$FALSE;
+   my %opt_specs =();
 
    ### Check number of arguments
    if ( @ARGV == 0 ) {
       print "\n$MYNAME: I need at least one argument!\n";
-      @usage;
+      &usage;
       exit 1;
    }
    
    ##### command line options and private configuration files handling
    
-   ### scan parameters (1st level)
-   getopts('hvorb:c:p:i:t:a:l:n:d:',%cmd_options);
-   while getopts('hvorb:c:p:i:t:a:l:n:d:',%cmd_options);
-   {
-      case "$OPTION" in;
-         h) &help; exit 0 ;;;
-         v) &print_version; exit 0 ;;;
-         o) $print_request=$YES ;;;
-         r) $config_request=$YES;;;
-         *) &usage; exit 1 ;;;
-      esac;
-   }
-   
    ### set parameters from rc file
    if ( -f $RC_FILENAME ) {
-     &read_configuration $RC_FILENAME;
-     #### compatibilty with old RC files where SEDEXE could be ""
-     if ( &param_value('SEDEXE') eq "" ) { $SEDEXE=sed; }
-   } else {
-     if ( $print_request ne $YES and $config_request ne $YES ) {
-        &abort "Script is not configured. Please run $MYNAME -r.";
-     }
+      &read_configuration $RC_FILENAME;
+      $configured=$TRUE;
    }
    
-   ### configure parameters
-   if ( $config_request eq $YES ) {
-     &configure;
-     &write_configuration $RC_FILENAME;
-     &print_configuration;
-     exit 0;
+   ### scan parameters 
+   foreach (keys %PARAMETER_LIST) {
+      %opt_specs{&option_specifier($_)} = \&handle_option;
    }
-   
-   ### scan parameters (2nd level)
-   $OPTIND=1;
-   while getopts b:p:i:t:a:l:c:n:d: OPTION;
-   {
-     case "$OPTION" in;
-       i) &setYNValue MAKEINDEX $OPTARG i ;;;
-       t) $TITLE=$OPTARG ;;;
-       a) $AUTHOR=$OPTARG ;;;
-       b) &setValue BIBTEX $OPTARG b $POSSIBLE_BIBTEX ;;;
-       p) &setValue PAPERSIZE $OPTARG p $POSSIBLE_PAPER ;;;
-       c) &setYNValue COMMANDCHECK $OPTARG r ;;;
-       n) &setYNValue THUMBNAILS $OPTARG n ;;;
-       l) &setYNValue CLEANLOGS $OPTARG l ;;;
-       d) if &check_dir($OPTARG);
-   	     $PDFCUSTOMDIR=$OPTARG;
-   	     $PDFOUT=@$POSSIBLE_PDFOUT[2];
-   	  } else {
-   	     &abort("Please, choose a VALID path.");
-   	  fi ;;;
-     esac;
-   }
-   
-   ### print configuration parameters
-   
-   if ( $print_request eq $YES ) {
-      &print_configuration;
-      exit 0;
-   }
-   
-   #### remove all command line options, leave the document argument as $1
-   shift $(($OPTIND - 1));
-}
+   GetOptions(%opt_specs);
 
-#### do some test in order to secure as good as possible that we will
-#### succeed before to much work was done and maybe some data as damaged
+   if( ! $configured ) {
+      &abort "Script is not configured. Please run $MYNAME -r.";
+   }
+   
+   #### do some test in order to secure as good as possible that we will
+   #### succeed before to much work was done and maybe some data as damaged
 
-sub do_basic_test {
+   ### Check number of arguments
+   if ( @ARGV != 1 ) {
+      print "\n$MYNAME: Wrong number of arguments. I need exactly one file.\n";
+      &usage;
+      exit 1;
+   }
+   
    ### make sure that TMPBASESUFFIX is not empty
    if ( &param_value('TMPBASESUFFIX') eq "" ) {
       print "\n$MYNAME: CAUTION: Parameter TMPBASESUFFIX is not set.\n";
@@ -1112,15 +1190,7 @@ sub do_basic_test {
    }
    
    ##### check for required commands
-   if ( &param_value('SEDEXE') ne "`basename &param_value('SEDEXE')`" and ! -x &param_value('SEDEXE') ) {
-      print "\n";
-      print "$MYNAME: Specified sed executable not found (&param_value('SEDEXE'))\n";
-      print "Using sed executable in your path.\n";
-      print "Maybe it does not work. GNU sed v3.02 or higher is recommended.\n";
-      $SEDEXE='sed';
-   }
-   
-   if ( $COMMANDCHECK ne $NO ) {
+   if (&param_value('COMMANDCHECK') ne $NO ) {
       &check_commands;
    }
 }
@@ -1145,8 +1215,8 @@ sub prepare_logfiles {
    }
    
    # setting the log files for the output of pdflatex, bibtex and thumbpdf
-   $PDFLOGBASE="${log_dir}pdflatex-$$-";
-   $BIBTEXLOG=${log_dir}bibtex-$$.log";
+   $PDFLOGBASE="${log_dir}pdflatex-$$-"; #FIXME
+   $BIBTEXLOG="${log_dir}bibtex-$$.log";
    $THUMBPDFLOG="${log_dir}thumbpdf-$$.log";
 }
 
