@@ -44,7 +44,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.4"
+MYRELEASE="2.2.5"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -170,9 +170,13 @@ MAKEINDEX="yes"
 ## the following parameters should NOT be modified by regular users!
 ## study the script carefully before you change them !!!
 
-# the sed executable this script should use
-# no value means script should use the sed in your path
-SEDEXE=
+# the sed executable this script should use for the configuration part
+# simply 'sed' means script should use the sed in your path
+SEDCMD=sed
+
+# the sed executable this script should use for the parsing
+# simply 'sed' means script should use the sed in your path
+SEDEXE=sed
 
 # additional options for pdflatex
 PDFTEXOPTS=""
@@ -267,7 +271,7 @@ input_number() {
          RESPONSE=$2
          return
       else
-         RESPONSE=`echo $user_input | sed -n "s/^\([[:digit:]]\+\)$/\1/p"`
+         RESPONSE=`echo $user_input | $SEDCMD -n "s/^\([[:digit:]]\+\)$/\1/p"`
          if [ -z "$RESPONSE" ] || [ $RESPONSE -lt $3 -o $RESPONSE -gt $4 ]
          then
             echo "Invalid input. Please enter a positve integer from $3 to $4."
@@ -462,7 +466,7 @@ setYNValue() {
 # $4 list of possible values
 
 setValue() {
-   if [ -z "`echo $4 | sed -n "\|$2|p"`" ]
+   if [ -z "`echo $4 | $SEDCMD -n "\|$2|p"`" ]
    then
       echo
       echo "$1 allows: $4."
@@ -530,7 +534,7 @@ read_configuration() {
 
    for i in $RC_VARIABLES
    do
-      TEMPVAR=`sed -n "s/^\($i=[[:print:]]*\)$/\1/1p" $RC_FILE`
+      TEMPVAR=`$SEDCMD -n "s/^\($i=[[:print:]]*\)$/\1/1p" $RC_FILE`
       if [ -n "$TEMPVAR" ]
       then
         export $i="`echo $TEMPVAR | cut -d = -f 2-`"
@@ -712,9 +716,9 @@ configure() {
 
    echo ----------------
    echo "The sed executable to use can be specified."
-   echo "Leave blank in order to use the sed in the path."
+   echo "Type 'sed' in order to use the sed in your path."
    echo
-   input_text "What sed executable should be used?"
+   input_text "What sed executable should be used?" "$SEDEXE"
    SEDEXE=$RESPONSE
    echo
 
@@ -793,7 +797,7 @@ check_commands() {
    ### sed executable
    # GNU sed version 3.02 or higher is recommended
    # Download: ftp://ftp.gnu.org/pub/gnu/sed
-   if [ "$SEDEXE" = "sed" ]
+   if [ "$SEDEXE" == "sed" ]
    then
       checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed"
    fi
@@ -890,9 +894,14 @@ convert_eps2pdf() {
       #### check if image file really exists
       check_file ${IMAGEPATH}${IMAGENAME} "Could not convert included image."
 
-      echo Converting image ${IMAGENAME} ...
-      epstopdf -outfile=${IMAGEPATH}${IMAGEBASE}.pdf ${IMAGEPATH}${IMAGENAME}
-      TMPFILES="$TMPFILES ${IMAGEPATH}${IMAGEBASE}.pdf"
+      if [ ${IMAGEPATH}${IMAGEBASE}.pdf -ot ${IMAGEPATH}${IMAGENAME} ]
+      then
+         echo Converting image ${IMAGENAME} ...
+         epstopdf -outfile=${IMAGEPATH}${IMAGEBASE}.pdf ${IMAGEPATH}${IMAGENAME}
+         TMPFILES="$TMPFILES ${IMAGEPATH}${IMAGEBASE}.pdf"
+      else
+         echo ${IMAGEBASE}.pdf newer than ${IMAGENAME}, conversion skipped...
+      fi
    done
 }
 
@@ -916,7 +925,7 @@ convert_pstex2pdf() {
       echo Converting file ${PSTEXNAME} ...
 
       # create .pdf_t file
-      sed -e "s/\(^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{.*\.\)pstex\(.*$\)/\2pdf\3/g" ${PSTEXPATH}${PSTEXNAME} > "${PSTEXPATH}${PSTEXBASE}.pdf_t"
+      $SEDEXE -e "s/\(^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{.*\.\)pstex\(.*$\)/\2pdf\3/g" ${PSTEXPATH}${PSTEXNAME} > "${PSTEXPATH}${PSTEXBASE}.pdf_t"
 
       # find included EPS image
       EPSIMAGE=`${SEDEXE} -n "s/^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{\([^}]\+\)}.*$/\2/pg" ${PSTEXPATH}${PSTEXNAME}`
@@ -1182,6 +1191,8 @@ done
 if [ -f "$RC_FILE" ]
 then
   read_configuration
+  #### compatibilty with old RC files where SEDEXE could be ""
+  [ -z "$SEDEXE" ] && SEDEXE=sed
 else
   if [ "$PRINT_ONLY" != "yes" -a "$CONFIGURE_REQ" != "yes" ]
   then
@@ -1260,17 +1271,12 @@ then
 fi
 
 ##### check for required commands
-if [ -n "$SEDEXE" ]
+if [ "$SEDEXE" != "`basename $SEDEXE`" -a ! -x "$SEDEXE" ]
 then
-   if [ ! -x "$SEDEXE" ]
-   then
-      echo
-      echo "$MYNAME: Specified sed executable not found (${SEDEXE})"
-      echo "Using sed executable in your path."
-      echo "Maybe it does not work. GNU sed v3.02 or higher is recommended."
-      SEDEXE=sed
-   fi
-else
+   echo
+   echo "$MYNAME: Specified sed executable not found (${SEDEXE})"
+   echo "Using sed executable in your path."
+   echo "Maybe it does not work. GNU sed v3.02 or higher is recommended."
    SEDEXE=sed
 fi
 
@@ -1380,7 +1386,7 @@ generate_parameters
 # relative to another directory than the PASSED document's directory.
 # This is useful when the calling application (e.g. LyX) generates a temporary
 # TeX file and calls the tex2pdf with it instead of the original file.
-INPUTPATH=`sed -n "s|^[\]def[\]input@path{\+\([^{}]*\)}\+|\1|1p" $PASSEDTEXDOC`
+INPUTPATH=`$SEDEXE -n "s|^[\]def[\]input@path{\+\([^{}]*\)}\+|\1|1p" $PASSEDTEXDOC`
 
 ## check if INPUTPATH is ok
 if [ -n "$INPUTPATH" ]
