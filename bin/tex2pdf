@@ -2059,6 +2059,10 @@ sub process_textags {
          @new_params = grep {$_->{context_depth}<$CONTEXT_DEPTH} @PSFRAG_TAGS;
          @PSFRAG_TAGS = @new_params;
          $CONTEXT_DEPTH--;
+         if ($contents =~ /pspicture/) {
+            $contents .= "}\n";
+         }
+         
       } elsif ( $name eq "graphicspath" or $name =~ /input\@path/ ) {
          my $dirs = $contents;
          my @directories = ();
@@ -2274,9 +2278,6 @@ sub process_textags {
       
       $tag{contents} = $contents;
       $result .= join_tag(%tag);
-      if ($name eq "end" and  $contents =~ /pspicture/) {
-         $result = $result . "\n}";
-      }
    }
    report(9, "<<<<< process_textags");
 
