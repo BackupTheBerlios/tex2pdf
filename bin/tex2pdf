@@ -47,6 +47,7 @@
 ######## Imports
 
 use File::Basename;
+use Getopt::Std;
 
 ####### Release version
 
@@ -67,7 +68,7 @@ $NIL="NOVALUE";
 
 ### token for boolean 'false', 'no' 
 $NO="no";
-$FALSE=undef;
+$FALSE=0;
 
 ### token for boolean 'true', 'yes' 
 $YES="yes";
@@ -78,7 +79,7 @@ $TRUE=1;
 
 # possible paper sizes
 # this list MUST have the syntax "PAPER1 PAPER2 ..."
-@POSSIBLE_PAPER = (qw< a4paper letterpaper legalpaper executivepaper >, $NIL);
+$POSSIBLE_PAPER = [ qw< a4paper letterpaper legalpaper executivepaper >, $NIL ];
 
 # papersize of the resulting pdf document
 $PAPERSIZE="a4paper";
@@ -89,7 +90,7 @@ $COLORLINKS=$YES;
 
 # possible link colors
 # this list MUST have the syntax "COLOR1 COLOR2 ..."
-@LINK_COLORS= (qw< yellow red green cyan blue magenta black >, $NIL);
+$LINK_COLORS= [ qw< yellow red green cyan blue magenta black >, $NIL ];
 
 # color to use for page links in resulting document
 # some possible values: see above
@@ -134,8 +135,8 @@ $LINKTOCPAGE=$YES;
 # source_dir - same directory as the LaTeX file
 # input_dir  - same directory as the input files of the LaTeX file
 # custom     - specified directory PDFCUSTOMDIR
-@POSSIBLE_PDFOUT= qw< source_dir input_dir custom >;
-$PDFOUT = $POSSIBLE_PDFOUT[0];
+$POSSIBLE_PDFOUT= [ qw< source_dir input_dir custom > ];
+$PDFOUT = @$POSSIBLE_PDFOUT[0];
 
 # custom directory where the generated pdf file is stored
 $PDFCUSTOMDIR=$ENV{'HOME'};
@@ -143,7 +144,7 @@ $PDFCUSTOMDIR=$ENV{'HOME'};
 # usage of bibtex
 # possible values: 'yes' (always run bibtex), 'no' (never run bibtex),
 # 'test' (scan tex file for a bibtex entry and run it if required)
-@POSSIBLE_BIBTEX= ($YES, $NO, "test");
+$POSSIBLE_BIBTEX= [ $YES, $NO, "test" ];
 $BIBTEX="test";
 
 # maximal number of runs for pdflatex
@@ -209,9 +210,9 @@ $CLEAN_ON_ABORT=$NO;
 # preamble
 # try the following commands if you have strange errors or junk on the
 # first PDF document page
-# INSERT_REGEXP="/^[\]begin{document}$/i"
+# INSERT_REGEXP="/^\\begin\{document\}$/i"
 # INSERT_REGEXP="/^[\]makeatletter$/i"
-$INSERT_REGEXP='/^[\]documentclass\(\[[^]]*\]\)\?{.*}/a';
+$INSERT_REGEXP='^\\documentclass(\[[^]]*\])?\{.*\}';
 
 ### file to store private parameters
 # If you only want to change your private parameters change them there
@@ -221,10 +222,11 @@ $RC_FILENAME="$ENV{'HOME'}/.tex2pdfrc";
 # variables for the rc file
 # list of all variables that should be stored/read in/from the rc file
 # this list MUST have the syntax "VARIABLE1 VARIABLE2 ..."
-@RC_VARIABLES= qw< PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR CITECOLOR
-   DEFAULT_TITLE DEFAULT_AUTHOR LINKTOCPAGE ADDITIONAL_PARAMETERS PDFOUT
-   PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS PDFTEXOPTS
-   COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERT_REGEXP >;
+$RC_VARIABLES= [ qw< PAPERSIZE COLORLINKS PAGECOLOR LINKCOLOR URLCOLOR
+   CITECOLOR DEFAULT_TITLE DEFAULT_AUTHOR LINKTOCPAGE ADDITIONAL_PARAMETERS
+   PDFOUT PDFCUSTOMDIR SEDEXE BIBTEX MAXRUNNO MINRUNNO LOGDIR CLEANLOGS
+   PDFTEXOPTS COMMANDCHECK THUMBNAILS TMPBASESUFFIX MAKEINDEX INSERT_REGEXP
+   > ];
 
 ##### Functions ###########################################
 
@@ -327,30 +329,28 @@ sub input_number {
 }
 
 ### interactively choose between several given values
-# $1 question
-# $2 default value
-# $3 ... $x possible values
+# 1 question
+# 2 default value
+# 3 reference to a list of possible values
 # $RESPONSE chosen value
 
-sub chooseValue {
+sub choose_value {
    my $question=$_[0];
    my $default=$_[1];
+   my @possible_values=@$_[2];
    my $list_index=1;
    my $default_no=1;
 
-   shift @_;
-   shift @_;
-
    print "$question\n";
-   foreach (@_)
+   foreach (@possible_values)
    {
       print "$list_index) $_\n";
       if ( $default eq $_ ) { $default_no=$list_index; }
       $list_index = $list_index + 1;
    }
 
-   &input_number("Please enter the corresponding number", $default_no, 1, scalar @_);
-   $RESPONSE = $_[$RESPONSE - 1 ];
+   &input_number("Please enter the corresponding number", $default_no, 1, $#possible_values);
+   $RESPONSE = $_[$RESPONSE - 1];
 }
 
 ### interactively answer a question
@@ -570,7 +570,7 @@ sub write_configuration {
    print "# Configuration file for $MYNAME V$MYRELEASE\n";
    print "# Generated $date by $ENV{'USER'} on $ENV{'HOSTNAME'}\n";
    
-   foreach my $variable (@RC_VARIABLES) {
+   foreach my $variable (@$RC_VARIABLES) {
       print "$variable".'='."$$variable\n";
    }
    
@@ -583,7 +583,7 @@ sub write_configuration {
 sub print_configuration {
    print "Configuration for $MYNAME V$MYRELEASE\n";
    
-   foreach my $variable (@RC_VARIABLES) {
+   foreach my $variable (@$RC_VARIABLES) {
       print "$variable".'='."$$variable\n";
    }
    
@@ -600,7 +600,7 @@ sub read_configuration {
       &abort("Could not open configuration file for reading ($RC_FILENAME)");
 
    while (defined($line = <RCFILE>)) {
-      foreach my $parameter (@RC_VARIABLES) {
+      foreach my $parameter (@$RC_VARIABLES) {
          $_ = $line;
          chomp;
          if( s/^$parameter=([[:print:]]*)$/$1/ ) {
@@ -640,8 +640,8 @@ sub help {
    print " -n BOOL   : generate thumbnails for PDF document\n";
    print " -t TITLE  : specify title for PDF document info\n";
    print " -a AUTHOR : specify author for PDF document info\n";
-   print " -p SELECT : select papersize: @POSSIBLE_PAPER\n";
-   print " -b SELECT : select bibtex handling: @POSSIBLE_BIBTEX\n";
+   print " -p SELECT : select papersize: @$POSSIBLE_PAPER\n";
+   print " -b SELECT : select bibtex handling: @$POSSIBLE_BIBTEX\n";
    print " -d PATH   : custom directory where the final PDF is stored\n";
    print "\n";
 }
@@ -654,17 +654,6 @@ sub print_version   {
    print "\n";
 }
 
-### Check number of arguments
-# parameters ($@): all arguments that were passed to the script by the shell
-
-sub check_arguments  {
-   if ( @_ == 0 ) {
-      print "\n";
-      print "$MYNAME: I need at least one argument!\n";
-      @usage;
-      exit 1;
-   }
-}
 
 ### configure tex2pdf parameters interactively
 
@@ -681,7 +670,7 @@ sub configure  {
 
    print "----------------\n";
    print "$MYNAME can set the papersize of the resulting PDF document.\n";
-   &chooseValue("What papersize should be used?",$PAPERSIZE,@POSSIBLE_PAPER);
+   &choose_value("What papersize should be used?",$PAPERSIZE,$POSSIBLE_PAPER);
    $PAPERSIZE=$RESPONSE;
    print "\n";
 
@@ -702,25 +691,25 @@ sub configure  {
    if ( $COLORLINKS eq $YES ) {
         print "----------------\n";
         print "It is possible to specify the color for page links.\n";
-        &chooseValue("What color should be used for page links?",$PAGECOLOR,@LINK_COLORS);
+        &choose_value("What color should be used for page links?",$PAGECOLOR,@LINK_COLORS);
         $PAGECOLOR=$RESPONSE;
         print "\n";
 
         print "----------------\n";
         print "It is possible to specify the color for normal internal links.\n";
-        &chooseValue("What color should be used for normal links?",$LINKCOLOR,@LINK_COLORS);
+        &choose_value("What color should be used for normal links?",$LINKCOLOR,@LINK_COLORS);
         $LINKCOLOR=$RESPONSE;
         print "\n";
 
         print "----------------\n";
         print "It is possible to specify the URL color.\n";
-        &chooseValue("What color should be used for URLs?",$URLCOLOR,@LINK_COLORS);
+        &choose_value("What color should be used for URLs?",$URLCOLOR,@LINK_COLORS);
         $URLCOLOR=$RESPONSE;
         print "\n";
 
         print "----------------\n";
         print "It is possible to specify the citation color.\n";
-        &chooseValue("What color should be used for citation?",$CITECOLOR,@LINK_COLORS);
+        &choose_value("What color should be used for citation?",$CITECOLOR,@LINK_COLORS);
         $CITECOLOR=$RESPONSE;
         print "\n";
    }
@@ -761,18 +750,18 @@ sub configure  {
    print "----------------\n";
    print "You can now specify in which directory the resulting document should\n";
    print "be written by default:\n";
-   print "- '$POSSIBLE_PDFOUT[0]' means the same directory as the LaTeX file.\n";
-   print "- '$POSSIBLE_PDFOUT[1]' means the same directory as the input files of your\n";
+   print "- '@$POSSIBLE_PDFOUT[0]' means the same directory as the LaTeX file.\n";
+   print "- '@$POSSIBLE_PDFOUT[1]' means the same directory as the input files of your\n";
    print "  LaTeX file (e.g. images, included documents, etc.).\n";
    print "  This path should be specified in the source LaTeX document otherwise\n";
-   print "  it is identical with the '$POSSIBLE_PDFOUT[0]' option.\n";
-   print "- '$POSSIBLE_PDFOUT[2]' means you want to specify your own directory where the\n";
+   print "  it is identical with the '@$POSSIBLE_PDFOUT[0]' option.\n";
+   print "- '@$POSSIBLE_PDFOUT[2]' means you want to specify your own directory where the\n";
    print "  generated document should be written.\n";
-   &chooseValue("Which output directory?",$PDFOUT,@POSSIBLE_PDFOUT);
+   &choose_value("Which output directory?",$PDFOUT,$POSSIBLE_PDFOUT);
    $PDFOUT=$RESPONSE;
    print "\n";
 
-   if ( $PDFOUT eq $POSSIBLE_PDFOUT[2] ) {
+   if ( $PDFOUT eq @$POSSIBLE_PDFOUT[2] ) {
       print "----------------\n";
       print "You have choosen to specifiy a custom output directory.\n";
       &input_dir("What custom directory should be used?",$PDFCUSTOMDIR,$YES);
@@ -790,10 +779,10 @@ sub configure  {
 
    print "----------------\n";
    print "The bibtex usage can be specified.\n";
-   print "Possible values are: '$POSSIBLE_BIBTEX[0]' (always run bibtex), '$POSSIBLE_BIBTEX[1]' (never run\n";
-   print "bibtex) and '$POSSIBLE_BIBTEX[3]' (scan tex file for a bibtex entry and run it\n";
+   print "Possible values are: '@$POSSIBLE_BIBTEX[0]' (always run bibtex), '@$POSSIBLE_BIBTEX[1]' (never run\n";
+   print "bibtex) and '@$POSSIBLE_BIBTEX[3]' (scan tex file for a bibtex entry and run it\n";
    print "if required).\n";
-   &chooseValue("How should bibtex be used?",$BIBTEX,@POSSIBLE_BIBTEX);
+   &choose_value("How should bibtex be used?",$BIBTEX,$POSSIBLE_BIBTEX);
    $BIBTEX=$RESPONSE;
    print "\n";
 
@@ -1006,43 +995,47 @@ sub generate_parameters {
 # command line options
 
 sub adjust_configuration {
+   my $config_request=$NO;
+   my $print_request=$NO;
 
-   ##### Check arguments
-   &check_arguments $@;
+   ### Check number of arguments
+   if ( @ARGV == 0 ) {
+      print "\n$MYNAME: I need at least one argument!\n";
+      @usage;
+      exit 1;
+   }
    
    ##### command line options and private configuration files handling
-   $CONFIGURE_REQ=$NO;
    
    ### scan parameters (1st level)
-   $OPTIND=1;
-   while getopts hvorb:c:p:i:t:a:l:n:d: OPTION;
+   getopts('hvorb:c:p:i:t:a:l:n:d:',%cmd_options);
+   while getopts('hvorb:c:p:i:t:a:l:n:d:',%cmd_options);
    {
       case "$OPTION" in;
-         h) help; exit 0 ;;;
-         v) print_version; exit 0 ;;;
-         o) $PRINT_ONLY=$YES ;;;
-         r) $CONFIGURE_REQ=$YES;;;
-   	 b|c|p|i|t|a|l|n|d) ;;;
-         *) usage; exit 1 ;;;
+         h) &help; exit 0 ;;;
+         v) &print_version; exit 0 ;;;
+         o) $print_request=$YES ;;;
+         r) $config_request=$YES;;;
+         *) &usage; exit 1 ;;;
       esac;
    }
    
    ### set parameters from rc file
    if ( -f $RC_FILENAME ) {
-     read_configuration;
+     &read_configuration;
      #### compatibilty with old RC files where SEDEXE could be ""
      if ( $SEDEXE eq "" ) { $SEDEXE=sed; }
    } else {
-     if ( $PRINT_ONLY ne $YES and $CONFIGURE_REQ ne $YES ) {
+     if ( $print_request ne $YES and $config_request ne $YES ) {
         &abort "Script is not configured. Please run $MYNAME -r.";
      }
    }
    
    ### configure parameters
-   if ( $CONFIGURE_REQ eq $YES ) {
-     configure;
-     write_configuration;
-     print_configuration;
+   if ( $config_request eq $YES ) {
+     &configure;
+     &write_configuration;
+     &print_configuration;
      exit 0;
    }
    
@@ -1051,27 +1044,27 @@ sub adjust_configuration {
    while getopts b:p:i:t:a:l:c:n:d: OPTION;
    {
      case "$OPTION" in;
-       i) setYNValue MAKEINDEX $OPTARG i ;;;
+       i) &setYNValue MAKEINDEX $OPTARG i ;;;
        t) $TITLE=$OPTARG ;;;
        a) $AUTHOR=$OPTARG ;;;
-       b) setValue BIBTEX $OPTARG b "$POSSIBLE_BIBTEX" ;;;
-       p) setValue PAPERSIZE $OPTARG p "$POSSIBLE_PAPER" ;;;
-       c) setYNValue COMMANDCHECK $OPTARG r ;;;
-       n) setYNValue THUMBNAILS $OPTARG n ;;;
-       l) setYNValue CLEANLOGS $OPTARG l ;;;
-       d) if check_dir $OPTARG;
+       b) &setValue BIBTEX $OPTARG b $POSSIBLE_BIBTEX ;;;
+       p) &setValue PAPERSIZE $OPTARG p $POSSIBLE_PAPER ;;;
+       c) &setYNValue COMMANDCHECK $OPTARG r ;;;
+       n) &setYNValue THUMBNAILS $OPTARG n ;;;
+       l) &setYNValue CLEANLOGS $OPTARG l ;;;
+       d) if &check_dir($OPTARG);
    	     $PDFCUSTOMDIR=$OPTARG;
-   	     $PDFOUT=$POSSIBLE_PDFOUT[2];
+   	     $PDFOUT=@$POSSIBLE_PDFOUT[2];
    	  } else {
-   	     &abort "Please, choose a VALID path.";
+   	     &abort("Please, choose a VALID path.");
    	  fi ;;;
      esac;
    }
    
    ### print configuration parameters
    
-   if ( $PRINT_ONLY eq $YES ) {
-      print_configuration;
+   if ( $print_request eq $YES ) {
+      &print_configuration;
       exit 0;
    }
    
@@ -1697,9 +1690,9 @@ print "\n$MYNAME: Parsing main LaTeX document.\n";
    
 ##### set the directory where the final pdf will be stored
 $PDFOUTDIR=;
-if ($PDFOUT eq $POSSIBLE_PDFOUT[2]) {
+if ($PDFOUT eq @$POSSIBLE_PDFOUT[2]) {
    $PDFOUTDIR=$PDFCUSTOMDIR;
-} elsif ($PDFOUT eq $POSSIBLE_PDFOUT[1]) {
+} elsif ($PDFOUT eq @$POSSIBLE_PDFOUT[1]) {
    $PDFOUTDIR=$INPUTPATH;
 } else {
    $PDFOUTDIR=$DOCPATH;
