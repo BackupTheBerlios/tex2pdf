@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#      lyx2pdf - script for translating lyx docs to pdf
+#      tex2pdf - script for translating latex docs to pdf
 #
 #      Copyright (C) 2000 by Steffen Evers (tron@cs.tu-berlin.de)
 #
@@ -101,8 +101,16 @@
 #  * better code structure (more functions)
 #  * minor changes
 #
+# Mar 11nd, 2001 -- Version 2.0 beta 2
+#  * renamed lyx2pdf script tex2pdf to reflect change of functionality
+#  * accept both: lyx and tex files
+#  * restructured the code - most code is no in functions
+#  * fixed bug: only documents in current working directory have been found
+#  * changed WHICHON in COMMANDCHECK
+#  * minor changes
+#
 
-MYVERSION="1.8"
+MYVERSION="2.0 beta 2"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -140,7 +148,7 @@ AUTHOR=
 ### other parameters
 
 # directory where the generated pdf file is stored
-# no value means the same directory as the lyx file
+# no value means the same directory as the LaTeX file
 PDFOUTDIR=
 
 # the sed executable this script should use
@@ -163,8 +171,9 @@ THUMBPDFLOG=/tmp/thumbpdf-$USER-$$.log
 # additional options for pdflatex
 PDFTEXOPTS=""
 
-# Use which command to check executables
-WHICHON="yes"
+# Use which command to check for required executables
+# possible values: 'yes', 'no' 
+COMMANDCHECK="yes"
 
 # use thumbpdf to include thumbnails of all PDF document pages
 # requires ghostscript version 5.50 or higher to generate the thumbnails (PNG)
@@ -172,17 +181,71 @@ WHICHON="yes"
 # possible values: "yes" for thumbnails, "no" - without thumbnails
 THUMB="no"
 
+# When the files' path (images, included documents, etc.) in your document is
+# relative to another directory than the PASSED document's directory you might
+# want to set a different directory here. So these files can be found for the
+# generation.
+# This is useful when the calling application (e.g. LyX) generates a temporary
+# TeX file and calls the tex2pdf with it instead of the original file.
+# possible values: absolute path or blank
+# DOES NOT WORK AT THE MOMENT !!!!
+# REALPATH=
+
+# suffix for tmp files that will be put in between the basename and suffix of
+# the original file
+# CAUTION: If you leave this blank you will overwrite the original files
+TMPBASESUFFIX=-pdf
+
 ##### Functions
 
-### Removing all temporary files
-clean_up() {
-   echo $MYNAME: Removing temporary files ... 
-   [ -n "$TMPFILES" ] && rm $TMPFILES
-   rm ${TMPBASE}.*
+### Check arguments
+# parameters ($@): all arguments that were passed to the script by the shell
+
+check_arguments() {
+   if [ $# -ne 1 ]
+   then
+      echo
+      echo $MYNAME: Wrong number of arguments.
+      echo
+      echo "Usage: $MYNAME DOCUMENT.lyx"
+      echo "       $MYNAME DOCUMENT.tex"
+      echo
+      exit 1
+   fi
 }
 
-### Check for required command with 'which' 
-checkCommand(){
+##### Make sure that specified file exists and is readable; abort if missing 
+# parameter $1: file to check
+# parameter $2: remark if check fails on specified file
+
+check_file() {
+   local MESSAGE=$2
+   [ -z "$MESSAGE" ] && MESSAGE="Required file cannot be accessed!"
+
+   if [ ! -f "$1" ]
+   then
+      echo
+      echo "$MYNAME: Sorry. I cannot find '$1'."
+      echo "$MESSAGE"
+      echo "Aborting ..."
+      echo
+      exit 1
+   elif [ ! -r "$1" ]
+   then
+      echo
+      echo "$MYNAME: Sorry. File '$1' exists, but is not readable."
+      echo "$MESSAGE"
+      echo "Aborting ..."
+      echo
+      exit 1
+   fi
+}
+
+### Check for required command with 'which'; abort if not found 
+# parameter $1: command to check
+# parameter $2: remark if specified command is not found
+
+checkCommand() {
    WHICHRESULT=`which $1 2>&1`
    WHICHBASE=`basename "$WHICHRESULT"`
    if [ "$WHICHBASE" != "$1" ]
@@ -193,15 +256,134 @@ checkCommand(){
       echo "$MYNAME: Required command '$1' seems not to be in your path."
       if [ -n "$2" ]
       then
-         echo $MYNAME: "$2"
+         echo "$2"
       fi
-      echo "$MYNAME: Aborting ..."
+      echo "Aborting ..."
       exit 1
    fi
 }
 
+### check if the most important executables are installed on the system
+# parameters: none
+
+check_commands() {
+   ### check for which command
+   checkCommand which "You can switch off all command checks by setting COMMANDCHECK=no in the parameter section of $MYNAME."
+
+   ### sed executable
+   # GNU sed version 3.02 or higher is recommended
+   # Download: ftp://ftp.gnu.org/pub/gnu/sed"
+   if [ "$SEDEXE" = "sed" ]
+   then
+      checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed"
+   fi
+   
+   ### pdftex executables
+   # Homepage: http://tug.org/applications/pdftex
+   checkCommand pdflatex "See pdftex homepage for details: http://tug.org/applications/pdftex"
+   checkCommand epstopdf "See pdftex homepage for details: http://tug.org/applications/pdftex"
+
+   if [ "$THUMB" = "yes" ]
+   then
+      checkCommand thumbpdf "You can switch off thumbpdf support by setting THUMB=no in the parameter section of $MYNAME."
+   fi
+
+   ### bibtex executable
+   if [ "$BIBTEX" != "no" ]
+   then
+      checkCommand bibtex "You can switch off BibTeX support by setting BIBTEX=no in the parameter section of $MYNAME."
+   fi
+}
+
+### generate LaTeX file from LyX document with LyX itself
+# parameter ($1): Lyx document
+# parameter ($2): Latex document
+
+generate_tex_file() {
+   local LYXDOC=$1
+   local TEXDOC=$2
+
+   ### Check if LyX file can be accessed
+   check_file "$LYXDOC" "Cannot read the specified LyX document!"
+
+   ### Check if LaTeX file exists and is newer than the LyX file
+   if [ -f "$TEXDOC" -a "$TEXDOC" -nt "$LYXDOC" ]
+   then
+      echo
+      echo "$MYNAME: LaTeX file is newer than LyX document '$LYXDOC'."
+      echo "Using existing TeX file: $TEXDOC"
+      echo "Remove it to force its new generation."
+      echo 
+   else
+      ### export LaTeX file with LyX (needs a display!)
+      checkCommand lyx "Cannot generate LaTeX document without LyX!"
+      echo
+      echo $MYNAME: Exporting LaTeX file 
+      [ -f $HOME/.lyx/lyxpipe.out ] && mv $HOME/.lyx/lyxpipe.out $HOME/.lyx/lyxpipe.out~
+      [ -f $HOME/.lyx/lyxpipe.in ] && mv $HOME/.lyx/lyxpipe.in $HOME/.lyx/lyxpipe.in~
+      [ -f $TEXDOC ] && mv $TEXDOC $TEXDOC~
+      lyx --export latex $LYXDOC
+      
+      ### check if LaTeX file now really exists
+      check_file $TEXDOC "The LaTeX document was not generated by LyX!"
+   fi
+}
+
+### translate filename to tmp filename 
+# abort if not possible
+# parameter $1: original filename 
+# parameter $2: possible filename suffix
+# TMPFILENAME: result (available tmp file name with path) is stored here
+
+get_tmpfilename() {
+   local NAME=`basename $1`
+   local BASE=`basename $NAME $2`
+   local PATH=`echo $1 | ${SEDEXE} -e "s/^\(.*\)${NAME}/\1/"`
+   TMPFILENAME=${PATH}${BASE}${TMPBASESUFFIX}$2
+}
+
+### find an available filename base with the proposed name and maybe a number
+# abort if not possible
+# parameter $1: proposed tmp filename base
+# parameter $2: filename suffix
+# TMPFILEBASE: result (available tmp filename base) is stored here
+
+get_tmpfile_base() {
+   # check if the proposed filename itself is available
+   if [ ! -f "$1$2" ]
+   then
+      TMPFILEBASE=$1
+      return
+   fi
+
+   # find an available filename with number suffix
+   local BASE=$1
+   local NUMBER=0
+   local SUFFIX=$2
+    
+   while [ -f "$BASE$NUMBER$SUFFIX" ]
+   do
+      NUMBER=`expr $NUMBER + 1`
+      if [ $NUMBER -gt 100 ]
+      then
+         echo "$MYNAME: Could not determine a suitable temp filename for '$BASE$SUFFIX'."
+         echo "Aborting ..."
+         exit 1
+      fi
+   done
+   TMPFILENAME=$BASE$NUMBER
+}
+
+### Removing all temporary files
+
+clean_up() {
+   echo $MYNAME: Removing temporary files ... 
+   [ -n "$TMPFILES" ] && rm $TMPFILES
+   rm ${TMPBASE}.*
+}
+
 ### Build a list of all files which are included from the root file.
-### This function recurses, and is maybe smart enough to detect cycles.
+# This function recurses, and is maybe smart enough to detect cycles.
 # One input parameter for this ($1): a tex file.
 # Be sure to set FILES to the empty string prior to calling this.
 
@@ -241,7 +423,7 @@ convert_eps2pdf() {
          echo
          echo "$MYNAME: Could not find the image ${IMAGEPATH}${IMAGENAME} "
 	 clean_up
-         echo "$MYNAME: Aborting ..."
+         echo "Aborting ..."
          echo
          exit 1
       fi
@@ -272,7 +454,7 @@ convert_pstex2pdf() {
          echo
          echo "$MYNAME: Could not find the image ${PSTEXPATH}${PSTEXNAME} "
 	 clean_up
-         echo "$MYNAME: Aborting ..."
+         echo "Aborting ..."
          echo
          exit 1
       fi
@@ -298,26 +480,29 @@ convert_pstex2pdf() {
 ### Converted included images to pdf and change the corresponding
 ### reference in the tmp-tex files
 # parameter ($1): tex source file
+# parameter ($2): tex target file
 
 imagePDFify() {
   
    ### set required variables 
-   TEXSOURCE=$1
-   SOURCEBASE=`basename $TEXSOURCE .tex`
-   SOURCEPATH=`echo $TEXSOURCE | ${SEDEXE} -e "s/^\(.*\)$SOURCEBASE\.tex/\1/"`
-   TARGETNAME=${SOURCEBASE}-pdf.tex
-   TARGETFILE="${SOURCEPATH}${SOURCEBASE}-pdf.tex"
+   local TEXSOURCE=$1
+   local TARGETFILE=$2
 
+   echo
+   echo "Converting images in $TEXSOURCE."
+   
    ### Save the filename so we can delete it later.
    TMPFILES="$TMPFILES $TARGETFILE"
 
    ##### Get EPS images from the source file
    EPSIMAGES=`${SEDEXE} -n "s/^[^%]*[\]includegraphics{\([^}]\+\.\(e\)*ps\)}.*$/\1 /pg" $TEXSOURCE`
-   echo "Identified EPS images (.eps/.ps): $EPSIMAGES"
+   echo
+   [ -n "$EPSIMAGES" ] && echo "Identified EPS images (.eps/.ps): $EPSIMAGES"
    
    ##### Get PSTEX_T files from the source file
    PSTEXS=`${SEDEXE} -n "s/^[^%]*[\]input{\([^}]\+\.pstex_t\)}.*$/\1 /p" $TEXSOURCE`
-   echo "Identified PSTEX_T files (.pstex_t): $PSTEXS"
+   echo
+   [ -n "$PSTEXS" ] && echo "Identified PSTEX_T files (.pstex_t): $PSTEXS"
 
    ### Insert pdf conversation tags in tex file and write it to TARGETFILE
    echo
@@ -325,7 +510,7 @@ imagePDFify() {
 
    ${SEDEXE} -e "s/\([\]includegraphics{[^}]\+\.\)\(e\)*ps}/\1pdf}/g" \
    -e "s/\([\]input{[^}]\+\.\)pstex_t}/\1pdf_t}/g" \
-   -e 's/\([\]include{[^}]\+\)}/\1-pdf}/g' \
+   -e 's/\([\]include{[^}]\+\)}/\1${TMPBASESUFFIX}}/g' \
    -e '/^\\makeatletter$/i \
    \\usepackage{pslatex}' \
    -e '/^\\makeatletter$/i \
@@ -345,6 +530,9 @@ imagePDFify() {
    
    ### Convert all PSTEX_T files to PDF_T
    [ -n "$PSTEXS" ] && convert_pstex2pdf $PSTEXS
+   
+   echo
+   echo "Finished: ${TEXSOURCE}."
 }
 
 run_pdflatex() {
@@ -361,7 +549,7 @@ run_pdflatex() {
 	 echo
 	 echo "$MYNAME: Fatal error occured. I am lost."
 	 clean_up
-	 echo "$MYNAME: Aborting ..."
+	 echo "Aborting ..."
 	 exit 1
       fi
       grep "Error:\|LaTeX Warning:" $PDFLOGFILE
@@ -373,9 +561,11 @@ run_pdflatex() {
 } 
 
 #### run bibtex if BIBTEX=yes or a bibliography tag is found
-# included tex files are not parsed (would that be useful?)
+# included tex files are not parsed for a bibliography
+# parmeter $1: filename of the aux file without .aux suffix
 
 handle_bibtex() {
+   AUXFILE=$1
    echo
    if [ "$BIBTEX" = "yes" ]
    then
@@ -383,7 +573,7 @@ handle_bibtex() {
       echo "$MYNAME: BibTeX paramter set to 'yes'; running BibTeX."
    else
       echo "$MYNAME: Checking for BibTeX bibliography in document."
-      BIBLIO=`grep "[\]bibliography{" ${TMPBASE}.tex | wc -l`
+      BIBLIO=`grep "[\]bibliography{" ${AUXFILE}.tex | wc -l`
       if [ $BIBLIO -ne 0 ]
       then
          echo "Bibliography detected; running BibTeX."
@@ -393,7 +583,7 @@ handle_bibtex() {
    fi
    if [ $BIBLIO -ne 0 ]
    then
-      if ! bibtex ${TMPBASE} > ${BIBTEXLOG}
+      if ! bibtex ${AUXFILE} > ${BIBTEXLOG}
       then
          BIBTEXERR=1
       else
@@ -426,7 +616,7 @@ run_thumbpdf() {
    echo
    echo "$MYNAME: See $THUMBPDFLOG for details."
    echo
-   echo "$MYNAME: Cleaning up (thumbpdf) ..."
+   echo "Cleaning up (thumbpdf) ..."
    echo
    rm thumb???.png
    rm thumbpdf.pdf
@@ -437,59 +627,38 @@ run_thumbpdf() {
    rm thumbdta.tex
 }
 
-##### Lift off
+################## Lift off !!!! (main part) ##################
 MYNAME=`basename $0`
+TMPFILES=
 
 echo
 echo "$MYNAME: Script starts (Version $MYVERSION)"
 
-##### set the sed executable
-# GNU sed version 3.02 or higher is recommended
-
+##### check for required commands
 if [ -n "$SEDEXE" -a ! -x "$SEDEXE" ]
 then
    echo
    echo "$MYNAME: Specified sed executable not found (${SEDEXE})"
    echo "Using sed executable in your path."
    echo "Maybe it does not work. GNU sed v3.02 or higher is recommended." 
-   SEDEXE=
 fi
 
-if [ "$WHICHON" = "yes" ] 
+[ -z "$SEDEXE" ] && SEDEXE=sed
+
+if [ "$COMMANDCHECK" != "no" ]
 then
-   checkCommand pdflatex "See pdftex homepage for details: http://tug.org/applications/pdftex"
-   checkCommand epstopdf "See pdftex homepage for details: http://tug.org/applications/pdftex"
-   if [ -z "$SEDEXE" ]
-   then
-      checkCommand sed "You should get GNU sed 3.02 or later: ftp://ftp.gnu.org/pub/gnu/sed"
-      SEDEXE=sed
-   fi
-   if [ "$BIBTEX" != "no" ]
-   then
-      checkCommand bibtex "You can switch off BibTeX support by setting BIBTEX=no in the parameter section of $MYNAME."
-   fi
+   check_commands
 fi
 
 ##### Check arguments
-if [ $# -ne 1 ]
-then
-   echo
-   echo $MYNAME: Wrong number of arguments.
-   echo
-   echo Usage: $MYNAME DOCUMENT.lyx
-   echo
-   exit 1
-fi
-
-###### set environment variables
 echo
-echo $MYNAME: Setting environment variables
-LYXDOC=$1
-DOCUMENTBASE=`basename $LYXDOC .lyx`
-DOCPATH=`echo $LYXDOC | ${SEDEXE} -e "s/^\(.*\)$DOCUMENTBASE\.lyx/\1/"`
-TEXDOC=${DOCUMENTBASE}.tex
-TMPBASE=${DOCUMENTBASE}-pdf
-TMPFILES=
+echo "$MYNAME: Processing your argument(s)."
+check_arguments $@
+
+##### Getting document name and path
+DOCUMENT="$1"
+DOCNAME=`basename $DOCUMENT`
+DOCPATH=`echo "$DOCUMENT" | ${SEDEXE} -e "s/^\(.*\)$DOCNAME/\1/"`
 
 ###### change working directory to document directory
 if [ -n "$DOCPATH" ]
@@ -497,59 +666,36 @@ then
    cd $DOCPATH
 fi
 
-##### some variables not used ...
-#VERSION=`rlog ${DOCPATH}$DOCUMENTBASE.lyx,v | ${SEDEXE} -n "s/^head: \([[:digit:].]*\)$/\1/1p"`
-#TRANSTIME=`date`
-
-##### Make sure that everything is alright with the LyX and TeX file 
-if [ ! -f "$LYXDOC" ]
+###### Cut off suffix and do lyx or tex specific stuff
+DOCBASE=`basename $DOCNAME .lyx`
+if [ "$DOCBASE" != "$DOCNAME" ]
 then
-   echo
-   echo "$MYNAME: Sorry. I cannot find '$LYXDOC'."
-   echo "$MYNAME: The specified LyX document does not exist!"
-   echo "$MYNAME: Aborting ..."
-   echo
-   exit 1
-fi
-
-if [ -f "$TEXDOC" -a "$TEXDOC" -nt "$LYXDOC" ]
-then
-   echo
-   echo "$MYNAME: TeX file is newer than LyX document '$LYXDOC'."
-   echo "$MYNAME: Using existing TeX file: $TEXDOC"
-   echo "$MYNAME: Remove it to force its new generation."
-   echo 
+   ### DOCNAME has an extention .lyx => Lyx document
+   # generate Latex document if required
+   generate_tex_file ${DOCBASE}.lyx ${DOCBASE}.tex
 else
-   ### export TEX file with lyx (needs a display!)
-   echo
-   echo $MYNAME: Exporting latex file 
-   [ -f $HOME/.lyx/lyxpipe.out ] && mv $HOME/.lyx/lyxpipe.out $HOME/.lyx/lyxpipe.out~
-   [ -f $HOME/.lyx/lyxpipe.in ] && mv $HOME/.lyx/lyxpipe.in $HOME/.lyx/lyxpipe.in~
-   [ -f $TEXDOC ] && mv $TEXDOC $TEXDOC~
-   lyx --export latex ${DOCUMENTBASE}.lyx
+   ### given file is a LaTeX file
+   # cut off .tex extension if there is one
+   DOCBASE=`basename $DOCNAME .tex`
    
-   ### check if tex file now really exists
-   if [ ! -f $TEXDOC ]
-   then
-      echo
-      echo "$MYNAME: The LaTeX document was not generated by LyX!"
-      echo "$MYNAME: Aborting ..."
-      echo
-      exit 1
-   fi
+   ###### check access to given LaTeX document
+   check_file ${DOCBASE}.tex "Cannot read the specified LaTeX document!"
 fi
+
+TEXNAME=${DOCBASE}.tex
+TMPBASE=${DOCBASE}${TMPBASESUFFIX}
 
 ##### Get title and author from the produced parent tex file
 echo
-echo $MYNAME: Parsing latex file 
+echo $MYNAME: Parsing LaTeX file 
 if [ -z "$TITLE" ]
 then
-   TITLE=`${SEDEXE} -n "s/^[\]title{\(.*\)}.*$/\1/1p" $TEXDOC`
+   TITLE=`${SEDEXE} -n "s/[\]title{\(.*\)}.*$/\1/1p" $TEXNAME`
 fi
 
 if [ -z "$AUTHOR" ]
 then
-   AUTHOR=`${SEDEXE} -n "s/^[\]author{\(.*\)}.*$/\1/1p" $TEXDOC`
+   AUTHOR=`${SEDEXE} -n "s/[\]author{\(.*\)}.*$/\1/1p" $TEXNAME`
 fi
 
 echo
@@ -557,7 +703,7 @@ echo Document title: $TITLE
 echo Document author: $AUTHOR
 
 ##### Get the list of imported files from the tex file.
-getFileList $TEXDOC
+getFileList $TEXNAME
 echo 
 echo "Found the following included TeX files:"
 for file in $FILES ; do
@@ -566,10 +712,8 @@ done
 
 ##### Convert all refered images
 for file in $FILES ; do
-   echo
-   echo "Converting images in $file."
-   imagePDFify $file
-   echo "Finished: $file"
+   get_tmpfilename $file .tex
+   imagePDFify $file $TMPFILENAME
 done
 
 ##### Generate the final PDF document
@@ -585,7 +729,7 @@ do
    ### Execute BibTeX after first run if set (and required)
    if [ $runno -eq 1 -a "$BIBTEX" != "no" ]
    then
-      handle_bibtex
+      handle_bibtex ${TMPBASE}
    fi
 
    runno=$((runno+1))
@@ -600,12 +744,12 @@ fi
 ##### Clean up
 if [ -f ${TMPBASE}.pdf ]
 then
-   mv ${TMPBASE}.pdf ${PDFOUTDIR}${DOCUMENTBASE}.pdf
+   mv ${TMPBASE}.pdf ${PDFOUTDIR}${DOCBASE}.pdf
 else
    echo
    echo "$MYNAME: The PDF file ${TMPBASE}.pdf was not generated."
    clean_up
-   echo "$MYNAME: Aborting ..."
+   echo "Aborting ..."
    exit 1
 fi
 
@@ -613,6 +757,6 @@ echo
 clean_up
 
 echo
-echo "The new pdf file is: ${PDFOUTDIR}${DOCUMENTBASE}.pdf"
+echo "The new pdf file is: ${PDFOUTDIR}${DOCBASE}.pdf"
 echo
 
