@@ -2312,23 +2312,23 @@ sub run_pdflatex {
 sub handle_bibtex {
    my $auxfile=$_[0];
    my $logfile=$_[1];
-   my $run_bibtex=$FALSE;
+   my $run_biblio=$FALSE;
    my $bibtex_param=&param_value('bibtex');
    
    if ( $bibtex_param eq $YES ) {
-      $run_bibtex=$TRUE;
+      $run_biblio=$TRUE;
       &report(7, "BibTeX parameter set to '$YES':");
    } else {
       &report(7, "Checking for BibTeX bibliography in main document: ");
       if( &grep_file($auxfile.'.tex', '^[^%]*\\\\bibliography{') != 0) {
-         $run_bibtex=$TRUE;
+         $run_biblio=$TRUE;
          &report(7, "Bibliography detected.");
       } else {
          if ( @REF_DOCS > 0 ) {
             &report(7, "Checking for BibTeX bibliography in included documents:");
             foreach my $file (@REF_DOCS) {
                if( &grep_file($file, '^[^%]*\\\\bibliography{') != 0) {
-                   $run_bibtex=$TRUE;
+                   $run_biblio=$TRUE;
                    &report(7, "Bibliography detected.");
                } else {
                  &report(7, "No bibliography detected in $file.");
@@ -2340,26 +2340,151 @@ sub handle_bibtex {
       }
    }
 
-   if ( $run_bibtex ) {
+   if ( $run_biblio ) {
+      &run_bibtex($auxfile,$logfile);
+   }
+
+}
+
+#### run bibtex if BIBTEX=$YES or a bibtopics tag is found
+# included tex files are not parsed for a bibliography
+# parameter 1: filename of the aux file without .aux suffix
+# parameter 2: log-file where the full out put is stored
+
+sub handle_bibtopics {
+   my $auxfile=$_[0];
+   my $logfile=$_[1];
+   my $run_bibtopic=$FALSE;
+   my $bibtex_param=&param_value('bibtex');
+   
+   if ( $bibtex_param eq $YES ) {
+# This must be a problem
+#      $run_biblio=$TRUE;
+      &report(7, "BibTeX parameter set to '$YES':");
+   } else {
+      &report(7, "Checking for bibtopic tags in main document: ");
+      if( &grep_file($auxfile.'.tex', '^[^%]*\\\\begin{bt') != 0) {
+         $run_bibtopic=$TRUE;
+         &report(7, "Bibtopic tags detected.");
+      } else {
+         if ( @REF_DOCS > 0 ) {
+            &report(7, "Checking for bibtopic tags in included documents:");
+            foreach my $file (@REF_DOCS) {
+               if( &grep_file($file, '^[^%]*\\\\begin{bt') != 0) {
+                   $run_bibtopic=$TRUE;
+                   &report(7, "Bibtopic tags detected.");
+               } else {
+                 &report(7, "No bibtopic tags detected in $file.");
+               }
+            }
+         } else {
+           &report(7, "No bibtopic tags detected.");
+        }
+      }
+
+   }
+
+   if ( $run_bibtopic ) {
+      ### extract all bibtopic tags and aux files from the log file
+      my $bt_base;
+      my $bt_path;
+      my $bt_suffix;
+      ($bt_base,$bt_path,$bt_suffix) = fileparse($auxfile, ('\.aux'));
+
+      my @topicfile;
+      my $i = 0;
+      my @bibtopics=&grep_file($auxfile.'.log', '\(bibtopic\)');
+
+      foreach (@bibtopics) {
+        if (/\(bibtopic\)\s+($bt_base(\.)?\d)/){
+          $topicfile[$i] = $1; 
+          $i++;
+	}
+      }
+
+      foreach (@topicfile) {
+        &run_bibtex($_,$logfile);
+      }
+
+   }
+
+}
+#### run bibtex if BIBTEX=$YES or a bibunit tag is found
+# included tex files are not parsed for a bibliography
+# parameter 1: filename of the aux file without .aux suffix
+# parameter 2: log-file where the full out put is stored
+
+sub handle_bibunits {
+   my $auxfile=$_[0];
+   my $logfile=$_[1];
+   my $run_bibunit=$FALSE;
+   my $bibtex_param=&param_value('bibtex');
+   
+   if ( $bibtex_param eq $YES ) {
+# This must be a problem
+#      $run_biblio=$TRUE;
+      &report(7, "BibTeX parameter set to '$YES':");
+   } else {
+      &report(7, "Checking for bibunit tags in main document: ");
+      if( &grep_file($auxfile.'.tex', '^[^%]*\\\\putbib') != 0) {
+         $run_bibunit=$TRUE;
+         &report(7, "Bibunit tags detected.");
+      } else {
+         if ( @REF_DOCS > 0 ) {
+            &report(7, "Checking for bibunit tags in included documents:");
+            foreach my $file (@REF_DOCS) {
+               if( &grep_file($file, '^[^%]*\\\\putbib') != 0) {
+                   $run_bibunit=$TRUE;
+                   &report(7, "Bibunit tags detected.");
+               } else {
+                 &report(7, "No bibunit tags detected in $file.");
+               }
+            }
+         } else {
+           &report(7, "No bibunit tags detected.");
+        }
+      }
+   }
+
+   if ( $run_bibunit ) {
+      foreach (<bu*aux>) {
+        my $bu_base;
+	my $bu_path;
+	my $bu_suffix;
+        ($bu_base,$bu_path,$bu_suffix) = fileparse($_, ('\.aux'));
+        &run_bibtex($bu_base,$logfile);
+      }
+   }
+
+}
+
+#### run bibtex on aux filename
+# parameter 1: aux filename 
+# parameter 2: log-file where the full out put is stored
+sub run_bibtex {
+
+      my $aux = $_[0];
+      my $log = $_[1];
       my @errors=();
       my $exit_status=0;
 
-      &report(7, "Running bibtex. This may take a while.\n");
-      system "bibtex $auxfile > $logfile";
+      &report(7, "\nRunning bibtex on $aux. This may take a while");
+      system "bibtex $aux > $log";
       $exit_status=$?;
       &report(7, "Bibtex finished. Errors:");
 
       ### extract all errors and warnings from the log file
-      @errors=&grep_file($logfile, 'error message');
+      @errors=&grep_file($log, 'error message');
 
       if ( @errors != 0 or $exit_status != 0 ) {
-         &report(4, &file_tail($logfile));
+         &report(4, &file_tail($log));
          &report(4, "\nYou can switch off BibTeX support by setting the bibtex parameter accordingly.");
       } else {
-         &report(7, "None detected (log file: $logfile).");
+         &report(7, "None detected (log file: $log).");
       }
-   }
+
 }
+
 
 #### run bibtex on file.gls if BIBTEX=$YES or a bibliography tag is found
 # included tex files are not parsed for a bibliography
@@ -2910,6 +3035,8 @@ sub generate_pdf_doc {
       if ( $runno == 1 and &param_value('bibtex') ne $NO ) {
          &report(6, "\n****************** BibTeX handling ***********************");
          &handle_bibtex($doc, $bibtex_log);
+         &handle_bibtopics($doc, $bibtex_log);
+         &handle_bibunits($doc, $bibtex_log);
       }
 
       ### Execute BibTeX on file.gls after first run if set (and required)
