@@ -44,7 +44,7 @@
 # Send feedback to: tex2pdf-devel@lists.berlios.de
 #
 
-MYRELEASE="2.2.5"
+MYRELEASE="2.2.6"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -117,8 +117,8 @@ LINKTOCPAGE=yes
 
 # place where generated pdf file is stored:
 # source_dir - same directory as the LaTeX file
-# input_dir - same directory as the input files of the LaTeX file
-# custom      - specified directory PDFCUSTOMDIR
+# input_dir  - same directory as the input files of the LaTeX file
+# custom     - specified directory PDFCUSTOMDIR
 PDFOUT=source_dir
 
 # custom directory where the generated pdf file is stored
@@ -852,15 +852,45 @@ generate_tex_file() {
    fi
 }
 
+#### search for filenames in given TeX Tag in entire document
+### skip all comments and duplicates while parsing
+# parameter ($1): file to parse
+# parameter ($2): full TeX tag name
+# parameter ($3): regular expression for the filname suffix (including '.')
+# $FOUND_FILES: result
+
+extract_files() {
+   local SOURCE=$1
+   local TAGNAME=$2
+   local SUFFIX=$3
+   local FILES=
+   FOUND_FILES=
+
+   FOUND_FILES=`sed -n -e "s/\(^\|[^\]\)%.*$/\1/" \
+     -e "s/^.*[\]\($TAGNAME\)\(\[[^{.]*\]\)\?{\([^}]*\($SUFFIX\)\)}.*$/\3/p" $SOURCE`
+
+   if [ -n "$FILES" ]
+   then
+      for i in $FILES
+      do
+         [ -z `echo $FOUND_FILES | ${SEDEXE} -n "\| $i\( \|$\)|p"` ] \
+	  && FOUND_FILES="$FOUND_FILES $i"
+      done
+   fi
+}
+
 ### Build a list of all files which are included from the root file.
 # This function recurses, and is maybe smart enough to detect cycles.
 # One input parameter for this ($1): a tex file.
 # Be sure to set FILES to the empty string prior to calling this.
 
 getFileList() {
+   local IMPORTS=
+
    # This is the cycle avoidance logic.
-   flag=`echo $FILES | ${SEDEXE} -n "\W ${1}Wp"`
-   if [ -z "$flag" ] ; then
+   flag=`echo $FILES | ${SEDEXE} -n "\| $1|p"`
+   if [ -z "$flag" ]
+   then
       # Make sure the file can be accessed
       check_file $1 "Included TeX file seems not to be available. Path problem?"
 
@@ -868,11 +898,12 @@ getFileList() {
       FILES="$FILES $1"
 
       # Get the list of files included by the argument.
-      local IMPORTS=`${SEDEXE} -n "s/^[^%]*[\]include{\([^}]\+\)}.*$/\1.tex /p" $1`
+      extract_files "$1" "include\|input" ""
+      IMPORTS="$FOUND_FILES"
 
       # Recurse.
       for file in $IMPORTS ; do
-         getFileList $file
+         getFileList $file.tex
       done
    fi
 }
@@ -979,7 +1010,8 @@ prepare_document() {
    ##### Get EPS images from the source file
    echo
    echo "Scanning for EPS images (.eps/.ps):"
-   EPSIMAGES=`${SEDEXE} -n "s/^[^%]*[\]includegraphics\(\[[^{]*\]\)\?{\([^}]\+\.\(e\)*ps\)}.*$/\2 /pg" $TEXSOURCE`
+   extract_files "$TEXSOURCE" includegraphics "\.e\?ps"
+   EPSIMAGES="$FOUND_FILES"
    if [ -n "$EPSIMAGES" ]
    then
       echo "$EPSIMAGES"
@@ -990,7 +1022,8 @@ prepare_document() {
    ##### Get PSTEX_T files from the source file
    echo
    echo "Scanning for PSTEX_T files (.pstex_t):"
-   PSTEXS=`${SEDEXE} -n "s/^[^%]*[\]input{\([^}]\+\.pstex_t\)}.*$/\1 /p" $TEXSOURCE`
+   extract_files "$TEXSOURCE" input "\.pstex_t"
+   PSTEXS="$FOUND_FILES"
    if [ -n "$PSTEXS" ]
    then
       echo "$PSTEXS"
