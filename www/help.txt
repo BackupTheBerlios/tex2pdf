@@ -1,9 +1,5 @@
 
-tex2pdf: Script starts (Release 3.0.6)
-
-tex2pdf: Processing given parameters and arguments.
-
-tex2pdf Version 3.0.6
+tex2pdf Version 3.0.21
 
 Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
        tex2pdf [OPTIONS] DOCUMENT[.tex]
@@ -39,6 +35,9 @@ Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
 
 --lyxrc_path VALUE:
    set the configuration directory of LyX
+
+--lyx_exec VALUE:
+   specify the LyX executable for converting lyx to latex
 
 --[no]debug:
    do not delete temporary files after execution and be as verbose as possible
@@ -97,14 +96,23 @@ Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
 --[no]force_index | -i:
    force explicit inclusion of (existing) index in PDF doc
 
+--makeindex_opts VALUE:
+   specify extra options for shell execution of makeindex
+
 --[no]bibtex | -b:
    set bibtex behavior
+
+--[no]gloss:
+   set gloss behavior
 
 --[no]thumbpdf | -n:
    generate thumbnails for PDF document
 
 --[no]ppower | -w:
    postprocess PDF document with ppower
+
+--[no]authorindex:
+   generate author index for PDF document
 
 --[no]mtp_preamble | -r:
    add the file preamble.cfg at the current dir to metapost files
@@ -114,6 +122,9 @@ Usage: tex2pdf [OPTIONS] DOCUMENT.lyx
 
 --minrun VALUE:
    specify minimal number of pdflatex runs if no problems are detected
+
+--verbosity VALUE:
+   set the level of verbosity
 
 --pdftex_opts VALUE:
    specify extra options for shell execution of pdflatex
