@@ -90,7 +90,7 @@ my $CONFIGURED=$FALSE;
 
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.15";
+my $MYRELEASE="3.1.16";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -2292,7 +2292,10 @@ sub convert_tex2tmp {
       $body = $&.$';
       $preamble = &adjust_preamble($preamble, $hyperref_params_ref);
       $preamble = &process_textags($preamble);
-   }
+   } else {
+      $preamble = "";
+      $body = $contents;
+   } 
    
    $body = &process_textags($body);
       
