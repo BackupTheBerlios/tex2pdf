@@ -93,7 +93,7 @@ my $CONFIGURED=$FALSE;
 my $RUN_PSforPDF = $NO;
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.21";
+my $MYRELEASE="3.1.22";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -1233,7 +1233,7 @@ sub set_enum_value {
       if(!defined($enum_array_ref));
 
    ### find out if the given value is allowed  
-   foreach my $value_array_ref (${$enum_array_ref}) {
+   foreach my $value_array_ref (@{$enum_array_ref}) {
       if(${$value_array_ref}[0] eq $value) {
          ### found it, so it is okay!
          &set_param_value($key, $value);
