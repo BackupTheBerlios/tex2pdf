@@ -55,7 +55,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0beta4";
+my $MYRELEASE="3.0beta5";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -124,11 +124,13 @@ $DEF_VALUE=3;
      [ 'custom', 'custom directory as specified' ]
    ] );
 
-# $key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation
 ### Option parameters: these parameters have no default value and can not
-### be configured interactively, but only as a command line option
-### an option parameter is not allowed to have a question and is not allowed
-### to be of type action
+# be configured interactively, but only as a command line option
+# an option parameter is not allowed to have a default value, question or
+# explanation
+# and all parameter of type action are treated as option parameters
+# $key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation
+
 &add_param('help', 'action', undef, '|h', '',
    'print a short help text and exit');
 
@@ -151,6 +153,9 @@ $DEF_VALUE=3;
    'set path for referenced material in main document');
 
 ### Full parameters
+# parameter type action is not allowed
+# $key, $type, $def_value, $opt_alias, $opt_spec, $description, $question, $explanation
+
 &add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s',
    'set directory for saving log files',
    'What log directory should be used?',
@@ -165,7 +170,15 @@ $DEF_VALUE=3;
    ."be backuped and normally\ndo not contain any valuable data anyway. If "
    ."you do not use LyX, simply leave\nthe default.");
 
-&add_param('clean_on_abort', 'bool', $NO, '', '!',
+&add_param('debug', 'bool', $NO, '', '!',
+'do not delete temporary files after execution and be as verbose as possible',
+   'Do you want to debug this script?',
+   "I will not remove any temporary files. This could cause problems on a "
+   ."second\nexecution as I might refuse to overwrite these files for security "
+   ."reasons.\nYou have to remove them manually in this case. Additionally, I "
+   ."will provide\nas much information during execution as possible.");
+
+&add_param('clean_on_abort', 'bool', $YES, '', '!',
    'also delete temporary files after abort',
    'Should temporary files be deleted when aborting?',
    "When the generation of the PDF file fails for some reason you might still "
@@ -314,14 +327,15 @@ $DEF_VALUE=3;
    ."This\nis the right place to do that. Everyone else can leave this empty.");
 
 # the following parameter types should be set now:
-#  'color' => \@VALUES,
+#  'color'       => \@VALUES,
 #  'destination' => \@VALUES,
-#  'paper' => \@VALUES,
-#  'three' => undef,
-# 'bool' => undef,
-#  'integer' => undef,
-#  'text' => undef,
-#  'directory' => undef
+#  'paper'       => \@VALUES,
+#  'action'      => undef,
+#  'three'       => undef,
+#  'bool'        => undef,
+#  'integer'     => undef,
+#  'text'        => undef,
+#  'directory'   => undef
 
 ##### Functions ###########################################
 
@@ -425,11 +439,48 @@ sub clean_up {
    }
 }
 
+### Output of all temp files
+
+sub print_temp_files {
+   if (scalar @TMPFILES > 0) {
+      print "Stored the following explicit temporary files:\n";
+      foreach (@TMPFILES) {
+         if (-f $_) {
+            print "> ".$_."\n";
+         } else {
+	    print "> ".$_." (does not exist)\n";
+         }
+      }
+      print "\n";
+   }
+   
+   if (scalar @TMP_TEX_FILES > 0) {
+      print "Stored the following temporary TeX base names:\n";
+      foreach (@TMP_TEX_FILES) {
+         if( $_ ne "" and -f $_.'.tex' ) {
+            print "> ".$_.": "; 
+            foreach my $file (glob($_.".???")) {
+	       print basename($file)." ";
+	    }
+            print "\n"; 
+         } else {
+            print "> ".$_.": bad file for temp TeX file\n";
+         }
+      }
+      print "\n";
+   }
+}
+
 ###  exit with an error message
 
 sub abort {
    print "$MYNAME: @_\n";
-   if ( &param_value('clean_on_abort') eq $YES ) { &clean_up; }
+   if (&param_value('clean_on_abort') eq $YES 
+       and &param_value('debug') eq $NO) {
+      &clean_up;
+   } else {
+      &print_temp_files;
+   }
    print "Aborting ...\n";
    exit 1;
 }
@@ -997,8 +1048,9 @@ sub config_param {
    ($description, $explanation, $question) = &param_config_output($key);
 
    ### tell the user the facts
-   print "\n\n----------------\n";
-   print "*** ".$description."\n\n";
+   print "\n\n--------------------------------------------\n";
+   print "Parameter: ".$key."\n";
+   print $description."\n\n";
    print $explanation."\n\n" if($explanation ne "");
    
    ### ask him what he wants
@@ -2177,8 +2229,14 @@ print "\n$MYNAME: Processing the actual generation of the PDF document.\n";
 $new_pdf_doc = &generate_pdf_doc($tmp_tex_doc);
 
 ##### Finalize
-move($new_pdf_doc, $target_name) or warn "Could not move PDF file to final destination: $!";
+move($new_pdf_doc, $target_name) or &abort("Could not move PDF file to final destination: $!");
+
 print "\n";
-&clean_up;
+if ( &param_value('debug') eq $NO ) {
+   &clean_up;
+} else {
+   &print_temp_files;
+}
+
 print "\nThe new pdf file is: $target_name\n\n";
 
