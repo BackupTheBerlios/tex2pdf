@@ -68,6 +68,9 @@ my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
 my @REF_DOCS=();
 my $MAIN_PREAMBLE = undef;
+my $CONTEXT_DEPTH=0;
+my @PSFRAG_TAGS=();
+my @PATH_TAGS=();
 
 ### text token for no value
 my $NIL="NOVALUE";
@@ -87,7 +90,7 @@ my $CONFIGURED=$FALSE;
 
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.1.13";
+my $MYRELEASE="3.1.14";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -1458,7 +1461,6 @@ sub check_commands {
    &checkCommand("dvips","See dvips homepage for details: http://www.radicaleye.com/dvips.html");
    &checkCommand(&param_value('pdftex_exec'),
          "See pdftex homepage for details: http://tug.org/applications/pdftex");
-   &checkCommand("ps2eps","See ps2eps homepage for details: http://www.telematik.informatik.uni-karlsruhe.de/~bless/ps2eps.html");
    &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
    $exec_epstopdf = `which epstopdf`;
    chomp $exec_epstopdf;
@@ -1845,6 +1847,8 @@ sub pdffrag {
    my ($eps_base,$eps_path,$suffix);
    my $dvi_log;
    my $tex_log; 
+   
+   &checkCommand("ps2eps","See ps2eps homepage for details: http://www.telematik.informatik.uni-karlsruhe.de/~bless/ps2eps.html");
 
    my $latex_code .= "\n" . '\begin{document}' . "\n" . '\thispagestyle{empty}' . "\n";
    my $latex_end = "\n".'\end{document}';
@@ -2008,13 +2012,12 @@ sub comment_out {
 # return value: adjusted code
 
 sub process_textags {
+   #modifies global $CONTEXT_DEPTH, @PSFRAG_TAGS and @PATH_TAGS 
    my $source = $_[0];
    my $tmp_suffix = &param_value('tmp_base_suffix');
    my $mtp_preamble = &param_value('mtp_preamble');
    my $result="";
    my $handled_tagnames="psfrag|begin|end|graphicspath|includegraphics|input|include|multiinclude|convertMPtoPDF";
-   my $context_depth=0;
-   my @graphic_params = ();
    
    report(10, ">>>>>>>>>>>process_textags started");
    while(defined($source) and $source ne "") {
@@ -2034,14 +2037,15 @@ sub process_textags {
       $contents = $tag{contents};
 
       if ( $name eq "begin" ) {
-         $context_depth++;
+         $CONTEXT_DEPTH++;
       } elsif ( $name eq "end" ) {
-         my @new_params = ();
-         foreach (@graphic_params) {
-            push (@new_params, $_) if ($_->{context_depth} < $context_depth);
-         }
-         @graphic_params = @new_params;
-         $context_depth--;
+         ### remove parameter tags of current scope
+         my @new_params;
+         @new_params = grep {$_->{context_depth}<$CONTEXT_DEPTH} @PSFRAG_TAGS;
+         @PSFRAG_TAGS = @new_params;
+         @new_params = grep {$_->{context_depth} < $CONTEXT_DEPTH} @PATH_TAGS;
+         @PATH_TAGS = @new_params;
+         $CONTEXT_DEPTH--;
       } elsif ( $name eq "graphicspath" ) {
          my $dirs = $contents;
          my @directories = ();
@@ -2049,9 +2053,9 @@ sub process_textags {
          $dirs =~ s/^\s*{?\s*|\s*}?\s*$//g; # remove leading/trailing brackets
          @directories = split(/\s*}\s*{\s*/m, $dirs ); # split string in dirctory list
          $tag{directories} = \@directories;
-         $tag{context_depth} = $context_depth;
+         $tag{context_depth} = $CONTEXT_DEPTH;
          report(7,"tag graphicspath parsed: ".join(", ", @directories)."\n");
-         push @graphic_params, \%tag;
+         push @PATH_TAGS, \%tag;
       } elsif( $name eq "psfrag" ) {
          # Comment out the psfrag statements
          #s/(\\psfrag\{.*\}(\[[^]]*?\])*?\{.*\})/\%$1/g;
@@ -2064,9 +2068,9 @@ sub process_textags {
             pos($source) = $source_pos;
          } else {
             $extra_code = $prefix.$extra_code;
-            $tag{context_depth} = $context_depth;
+            $tag{context_depth} = $CONTEXT_DEPTH;
             $tag{extra_code} = $extra_code; 
-            push @graphic_params, \%tag;
+            push @PSFRAG_TAGS, \%tag;
             $result .= comment_out(join_tag(%tag).$extra_code);
             report(7, "psfrag code extracted successfully and commented out("
                   .$contents.")");
@@ -2086,9 +2090,9 @@ sub process_textags {
          if ($contents =~ s/\.($suffixes_regexp|\d+)\s*$//) {
             $found_suffix = $1; 
          }
-         # identify corresponding file (taking @graphic_params into account)
+         # identify corresponding file (taking @PATH_TAGS into account)
          $found_file = identify_file($contents, \@suffixes);
-         # translate to pdf (taking @graphic_params into account)
+         # translate to pdf (taking @PSFRAG_TAGS into account)
          if ($found_file and $found_file =~ /\.($suffixes_regexp)$/ ) {
             my $file_suffix = $1;
             my $params = defined($tag{params}) ? $tag{params} : "";
@@ -2613,8 +2617,8 @@ sub run_pdftex {
          &report($errors_verbosity, "\nSee $logfile for details.");
          $rerun = $TRUE;
       } else {
-         &report(7, "$pdftex_exec_base finished without detected errors."
-            ."(log file: $logfile).");
+         &report(7, "$pdftex_exec_base finished without detected errors.\n"
+            ."See $logfile for details.");
          $rerun = $FALSE;
       }
    }
