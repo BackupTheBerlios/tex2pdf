@@ -56,7 +56,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.8";
+my $MYRELEASE="3.0.9";
 my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
@@ -304,12 +304,25 @@ $DEF_VALUE=3;
    ."force the\ncall of makeindex on the condition that an index file was "
    ."generated.");
 
+&add_param('makeindex_opts', 'text', '', '', '=s',
+   'specify extra options for shell execution of makeindex',
+   'What additional options for makeindex should be used?',
+   "Sometimes, people would like to pass some extra options over to makeindex. "
+   ."This\nis the right place to do that. Everyone else can leave this empty.");
+
 &add_param('bibtex', 'three', $NIL, '|b', '!',
    'set bibtex behavior',
    'How should bibtex be used?',
    "The bibtex usage can be specified.\nPossible values are: '$YES' (always "
    ."run bibtex), '$NO' (never run bibtex)\nand '$UNDEF' (scan tex file for "
    ."a bibtex entry and run it if required).");
+
+&add_param('gloss', 'three', $NIL, '', '!',
+   'set gloss behavior',
+   'How should gloss be used?',
+   "The gloss usage can be specified.\nPossible values are: '$YES' (always "
+   ."run bibtex on file.gls), '$NO' (never run bibtex on file gls)\nand '$UNDEF' (scan tex file for "
+   ."a gloss entry and run it if required).");
 
 &add_param('thumbpdf', 'bool', $NO, '|n', '!',
    'generate thumbnails for PDF document',
@@ -322,6 +335,13 @@ $DEF_VALUE=3;
    'Should ppower postprocess the PDF document?',
    "I can use ppower to postprocess the PDF "
    ."file.\nThis requires ppower 4.0 or higher.");
+
+&add_param('authorindex', 'bool', $NO, '', '!',
+   'generate author index for PDF document',
+   'Should authorindex process the PDF document?',
+   "I can use authorindex to process to include an author index in the PDF "
+   ."file.\nThis requires authorindex.");
+
 
 &add_param('mtp_preamble', 'bool', $NO, '|r', '!',
    "add the file $MTP_PREAMBLE_FILENAME at the current dir to metapost files",
@@ -1269,9 +1289,13 @@ sub check_commands {
       &checkCommand("ppower","You can switch off ppower support to fix this.");
    }
 
+   ### authorindex perl script
+   if ( &param_value('authorindex') eq $YES ) {
+      &checkCommand("authorindex","You can switch off authorindex support to fix this.");
+   }
 
    ### bibtex executable
-   if ( &param_value('bibtex') ne $NO ) {
+   if ( &param_value('bibtex') ne $NO or &param_value('gloss') ne $NO) {
    &checkCommand("which","You can switch off BibTeX support to fix this.");
    }
 }
@@ -1591,6 +1615,13 @@ sub convert_tex2tmp {
 #               print '\usepackage{mpmulti}' . "\n";
             } else {
                print "% no ppower support\n";
+            }
+
+            if ( &param_value('authorindex') eq $YES ) {
+               print '\usepackage[pages]{authorindex}' . "\n";
+               print '\let\cite=\aicite' . "\n";
+            } else {
+               print "% no authorindex support\n";
             }
 
             print '\makeatletter' . "\n";
@@ -1991,7 +2022,7 @@ sub handle_bibtex {
    
    if ( $bibtex_param eq $YES ) {
       $run_bibtex=$TRUE;
-      print "BibTeX paramter set to '$YES':\n";
+      print "BibTeX parameter set to '$YES':\n";
    } else {
       print "Checking for BibTeX bibliography in document: ";
       if( &grep_file($auxfile.'.tex', '^[^%]*\\\\bibliography{') != 0) {
@@ -2017,6 +2048,63 @@ sub handle_bibtex {
       if ( @errors != 0 or $exit_status != 0 ) {
          &file_tail($logfile);
          print "\nYou can switch off BibTeX support by setting the bibtex parameter accordingly.\n";
+      } else {
+         print "None detected (log file: $logfile).\n";
+      }
+   }
+}
+
+#### run bibtex on file.gls if BIBTEX=$YES or a bibliography tag is found
+# included tex files are not parsed for a bibliography
+# parameter 1: filename of the aux file without .aux suffix
+# parameter 2: log-file where the full out put is stored
+
+sub handle_gloss {
+   my $auxfile=$_[0];
+   my $logfile=$_[1];
+   my $run_gloss=$FALSE;
+   my $gloss_param=&param_value('gloss');
+   my $glsfile=$auxfile.'.gls';
+   
+   if ( $gloss_param eq $YES ) {
+      $run_gloss=$TRUE;
+      print "Gloss parameter set to '$YES':\n";
+   } else {
+      print "Checking for Gloss bibliography in document: ";
+      if( &grep_file($auxfile.'.tex', '^[^%]*\\\\printgloss{') != 0) {
+         $run_gloss=$TRUE;
+	 print "Gloss bibliography detected.\n";
+      } else {
+        if ( @REF_DOCS > 0 ) {
+           print "Checking for Gloss bibliography in included documents:\n";
+           foreach my $file (@REF_DOCS) {
+              if( &grep_file($file, '^[^%]*\\\\printgloss') != 0) {
+                  $run_gloss=$TRUE;
+                  print "Gloss bibliography detected.\n";
+              } else {
+                print "No gloss database detected in $file.\n";
+              }
+           }
+        } else {
+          print "No gloss database detected.\n";	
+	}
+      }
+   }
+   if ( $run_gloss ) {
+      my @errors=();
+      my $exit_status=0;
+
+      print "Bibtex is running on $glsfile. Please wait.\n\n";
+      system "bibtex $glsfile > $logfile";
+      $exit_status=$?;
+      print "Bibtex finished. Errors:\n";
+
+      ### extract all errors and warnings from the log file
+      @errors=&grep_file($logfile, 'error message');
+
+      if ( @errors != 0 or $exit_status != 0 ) {
+         &file_tail($logfile);
+         print "\nYou can switch off Gloss support by setting the gloss parameter accordingly.\n";
       } else {
          print "None detected (log file: $logfile).\n";
       }
@@ -2081,6 +2169,31 @@ sub run_ppower {
    }
    if ( -f 'ppower.log' ) {
       move('ppower.log', $logfile);
+      print "\n$MYNAME: See $logfile for details.\n";
+   }
+
+}
+
+#### run authorindex command to obtain an author index
+# more informations: 
+# parameter 1: LaTeX file without extension
+# parameter 2: log-file where the full out put is stored
+
+sub run_authorindex {
+   my $texfile=$_[0];
+   my $logfile=$_[1];
+   my $exit_status=0;
+
+   print "\nPocessing file with 'authorindex'\n\n";
+   system('authorindex', $texfile);
+   $exit_status=$?;
+   if ( $exit_status != 0 ) {
+      print "\n$MYNAME: ppower exit with status $exit_status.\n";
+      print "I will continue, but maybe there will not be author index in the PDF doc.\n";
+   }
+
+   if ( -f 'authorindex.log' ) {
+      move('authorindex.log', $logfile);
       print "\n$MYNAME: See $logfile for details.\n";
    }
 
@@ -2167,7 +2280,7 @@ sub prepare_logdir {
    
    if( <$log_dir/*.log> and &param_value('clean_logs') eq $YES ) { 
       print "\nRemoving old log files ($log_dir).\n";
-      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/thumbpdf-*.log>, <$log_dir/ppower-*.log>);
+      unlink (<$log_dir/pdflatex-*.log>, <$log_dir/bibtex-*.log>, <$log_dir/gloss-*.log>, <$log_dir/thumbpdf-*.log>, <$log_dir/ppower-*.log>, <$log_dir/authorindex-*.log>);
    } else {
       print "\nAll log files will be stored in ($log_dir).\n";
    }
@@ -2438,12 +2551,15 @@ sub generate_pdf_doc {
    my $min_run_no= &param_value('minrun');
    my $log_dir= &param_value('logdir');
    $log_dir .= '/' if( ! ($log_dir =~ m#/$#) );
+   my $makeindex_options=&param_value('makeindex_opts');
    
-   # setting the log files for the output of pdflatex, bibtex, thumbpdf and ppower
+   # setting the log files for the output of pdflatex, bibtex, gloss, thumbpdf, ppower and authorindex
    my $pdflog_base = $log_dir."pdflatex-$$-";
    my $bibtex_log = $log_dir."bibtex-$$.log";
+   my $gloss_log = $log_dir."gloss-$$.log";
    my $thumbpdf_log = $log_dir."thumbpdf-$$.log";
    my $ppower_log = $log_dir."ppower-$$.log";
+   my $authorindex_log = $log_dir."authorindex-$$.log";
 
    ##### Getting document name, suffix and path
    ($base,$path,$suffix) = fileparse($source, ('\.tex'));
@@ -2468,17 +2584,42 @@ sub generate_pdf_doc {
          print "\n****************** BibTeX handling ***********************\n";
          &handle_bibtex($doc, $bibtex_log);
       }
-   
+
+      ### Execute BibTeX on file.gls after first run if set (and required)
+      if ( $runno == 1 and &param_value('gloss') ne $NO ) {
+         print "\n****************** Gloss handling ***********************\n";
+         &handle_gloss($doc, $gloss_log);
+      }
+
+      ### generate index file exists
+      if ( $runno == 1 and -f $doc.'.idx' and &param_value('force_index') ne $NO ) {
+         if( !defined($makeindex_options) or $makeindex_options eq $NIL ) {
+            $makeindex_options = "";
+         }
+         print "\n****************** Extra index generation ***************\n";
+         print "Document seems to have an index. Generating ...\n\n";
+         system "makeindex $makeindex_options $doc'.idx'";
+      }
+
       $runno += 1;
    }
-   
+
    $rerun = $FALSE;
+
+   ### if the authorindex option is switched on then run authorindex
+   if ( &param_value('authorindex') eq $YES ) {
+      print "\n****************** authorindex generation *****************\n";
+      &run_authorindex($doc, $authorindex_log);
+   }
    
    ### generate index file exists
    if ( -f $doc.'.idx' and &param_value('force_index') ne $NO ) {
-         print "\n****************** Extra index generation ***************\n";
+      if( !defined($makeindex_options) or $makeindex_options eq $NIL ) {
+         $makeindex_options = "";
+      }
+      print "\n****************** Extra index generation ***************\n";
       print "Document seems to have an index. Generating ...\n\n";
-      system ('makeindex', $doc.'.idx');
+      system "makeindex $makeindex_options $doc'.idx'";
       $rerun=$TRUE;
    }
    
