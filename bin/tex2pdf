@@ -53,45 +53,45 @@ use strict;
 
 ####### global variables
 
-our $MYRELEASE="2.4alpha1";
-our $MYNAME="tex2pdf.pl";
-our @TMPFILES=();
-our $NUM_PARAM_MIN=0;
-our $NUM_PARAM_MAX=9;  
-our @REF_DOCS;
+my $MYRELEASE="2.4alpha3";
+my $MYNAME="tex2pdf.pl";
+my @TMPFILES=();
+my $NUM_PARAM_MIN=0;
+my $NUM_PARAM_MAX=9;  
+my @REF_DOCS;
 
 ### text token for no value
-our $NIL="NOVALUE";
-our $UNDEF="undefined";
+my $NIL="NOVALUE";
+my $UNDEF="undefined";
 
 ### token for boolean 'false', 'no' 
-our $NO="no";
-our $FALSE=0;
+my $NO="no";
+my $FALSE=0;
 
 ### token for boolean 'true', 'yes' 
-our $YES="yes";
-our $TRUE=1;
+my $YES="yes";
+my $TRUE=1;
 
 ### file to store private parameters
 # If you only want to change your private parameters change them there
 # default: $HOME/.tex2pdfrc
-our $RC_FILENAME="$ENV{'HOME'}/.tex2pdfplrc";
+my $RC_FILENAME="$ENV{'HOME'}/.tex2pdfplrc";
 
 ########################## NEW PERL CONFIGURATON
 
-our %CONFIGURATION = ();
-our %PARAMETER_LIST = ();
-our %PARAMETER_TYPES = ();
+my %CONFIGURATION = ();
+my %PARAMETER_LIST = ();
+my %PARAMETER_TYPES = ();
  
 ## Array index for the various information in each parameter specifcation
 ## referenced by %PARAMETER_LIST
-our $TYPE=0;
-our $OPT_ALIAS=1;
-our $OPT_SPEC=2;
-our $DEF_VALUE=3;
-our $DESCRIPTION=4;
-our $EXPLANATION=5;
-our $QUESTION=6;
+my $TYPE=0;
+my $OPT_ALIAS=1;
+my $OPT_SPEC=2;
+my $DEF_VALUE=3;
+my $DESCRIPTION=4;
+my $EXPLANATION=5;
+my $QUESTION=6;
 
 $QUESTION=6;
 $DEF_VALUE=3;
@@ -191,8 +191,10 @@ sub array_index {
 
 sub clean_up {
    print "$MYNAME: Removing temporary files ...\n";
-   if ( @TMPFILES > 0 ) { unlink @TMPFILES; }
-   # if ( $TMPBASE ne "" ) { unlink glob "$TMPBASE.*"; }
+   foreach (@TMPFILES) {
+      unlink($_) or 
+         warn "$MYNAME: Could not remove '$_':\n--> $!";
+   }
 }
 
 ###  exit with an error message
@@ -1052,10 +1054,10 @@ sub extract_tag_contents {
       &abort($error_message." ($source).");
 
    while(<SOURCE_FILE>) {
-      s/([^\\])%.*$/$1/;
+      s/(^|[^\\])%.*$/$1/;
       while ( /\\($tag_name)(\[[^{]*\])?{+([^{}]*)}/ ) {
          $text=$3; 
-	 die "Oopps!" if (!defined($text));
+	 $text="" if (!defined($text));
 	 push(@results, $text);
 	 $_ = $';
       }
@@ -1078,12 +1080,17 @@ sub extract_files {
    my $tag_name=$_[1];
    my $suffix=$_[2];
    my @matched_tags;
+   my $source_path;
    my @found_files=();
+
+   $source_path= dirname $source;
+   if ($source_path ne "") { $source_path .= '/'; }
 
    @matched_tags = &extract_tag_contents($source, $tag_name);
    
    foreach (@matched_tags) {
       if( m#^([^{}]*/)?[^{}/.]+($suffix)$# ) {
+         s#^([^/])#$source_path$1#;
          if( &array_index($_, @found_files) < 0 ) {
 	    push(@found_files, $_);
 	 }
@@ -1104,7 +1111,6 @@ sub get_file_list {
    
 
    # This is the cycle avoidance logic.
-   if (!defined($source)) { die "OOOps!";}
    if ( &array_index($source, @REF_DOCS) < 0 ) {
       # Make sure the file can be accessed
       &check_file($source, "Included TeX file seems not to be available. Path problem?");
@@ -1118,7 +1124,6 @@ sub get_file_list {
       # Recurse.
       foreach my $file (@imports) {
          if( ! ($file =~ /\.tex$/) ) { $file .= '.tex'; }
-         print"\n$file\n";
          &get_file_list($file);
       }
    }
@@ -1191,6 +1196,9 @@ sub convert_tex2tmp {
       print $_;
    }
 
+   #### put target in the tmp file list
+   push(@TMPFILES, $target);
+
    ### set STDOUT as stdout again
    select STDOUT;
 
@@ -1258,12 +1266,10 @@ sub convert_pstex2pdf {
       @eps_images=&extract_files($pstex_file, 'includegraphics', '\.pstex');
 
       # create .pdf_t file
-      &convert_tex2tmp($pstex_file, $pstex_target, $NO); 
+      &convert_tex2tmp($pstex_file, $pstex_target, undef); 
 
       # convert image(s) to pdf
       &convert_eps2pdf(@eps_images);
-
-      push(@TMPFILES, $pstex_target);
    }
 }
 
@@ -1281,7 +1287,8 @@ sub convert_images {
    print "\nScanning for EPS images (.eps/.ps):\n";
    @eps_image_list=&extract_files($tex_source, 'includegraphics', '\.e?ps');
    if ( @eps_image_list > 0 ) {
-      print "@eps_image_list\n";
+      print join("\n", @eps_image_list);
+      print "\n";
    } else {
       print "None.\n";
    }
@@ -1290,7 +1297,8 @@ sub convert_images {
    print "\nScanning for PSTEX_T files (.pstex_t):\n";
    @pstex_file_list=&extract_files($tex_source, 'input', '\.pstex_t');
    if ( @pstex_file_list > 0 ) {
-      print "@pstex_file_list\n";
+      print join('\n', @pstex_file_list);
+      print "\n";
    } else {
       print "None.\n";
    }
@@ -1343,10 +1351,10 @@ sub run_pdflatex {
          system('tail',$logfile);
       }
       print "\n$MYNAME: See $logfile for details.\n";
-      return 1;
+      return $FALSE;
    } else {
       print "None detected (log file: $logfile).\n";
-      return 0;
+      return $TRUE;
    }
 }
 
@@ -1520,7 +1528,7 @@ sub process_doc_argument {
    }
    
    ###### make DOCPATH an absolute path
-   $doc_path = cwd;
+   $doc_path = cwd.'/';
    
    ###### Cut off suffix and do lyx or tex specific stuff
    if ( $arg_suffix eq '.lyx' ) {
@@ -1531,7 +1539,7 @@ sub process_doc_argument {
       &check_file($doc_base.'.tex', "Cannot read the specified LaTeX document!");
    }
    
-   return $doc_path.'/'.$doc_base.'.tex';
+   return $doc_path.$doc_base.'.tex';
 }
 
 #### hanlde the dir of the input path if the document has one and
@@ -1613,7 +1621,7 @@ sub get_target_name {
       $pdf_path=$doc_path;
    }
 
-   return $pdf_path.'/'.$doc_base.'.pdf';
+   return $pdf_path.$doc_base.'.pdf';
 }
 
 ### generate hyperref parameters from given settings
@@ -1731,6 +1739,8 @@ sub generate_pdf_doc {
    my $source = $_[0];
    my $runno=1;
    my $rerun=$TRUE;
+   my $doc;
+   my $pdf_doc;
    my $base;
    my $path;
    my $suffix;
@@ -1746,12 +1756,20 @@ sub generate_pdf_doc {
 
    ##### Getting document name, suffix and path
    ($base,$path,$suffix) = fileparse($source, ('\.tex'));
+   $doc = $path.$base;
+   $pdf_doc = $doc.'.pdf';
+
+   #### store the generated files in the tmp file list
+   push(@TMPFILES, $doc.'.aux');
+   push(@TMPFILES, $doc.'.log');
+   push(@TMPFILES, $doc.'.out');
+   push(@TMPFILES, $doc.'.toc');
    
    ### run pdflatex until no more errors are reported (max MAXRUNNO)
-   while ( $rerun == $TRUE and $runno <= $max_run_no )
+   while ( $rerun and $runno <= $max_run_no )
    {
       print "\n************ Pdflatex run no. $runno *************\n";
-      if ( &run_pdflatex($path.$base, $pdflog_base.$runno.'.log') == $TRUE 
+      if ( &run_pdflatex($doc, $pdflog_base.$runno.'.log') == $TRUE 
          and ( $min_run_no <= $runno )) {
          # no errors detected and min. no. of runs are done
          $rerun=$FALSE;
@@ -1762,7 +1780,7 @@ sub generate_pdf_doc {
    
       ### Execute BibTeX after first run if set (and required)
       if ( $runno == 1 and &param_value('bibtex') ne $NO ) {
-         &handle_bibtex($path.$base, $bibtex_log);
+         &handle_bibtex($doc, $bibtex_log);
       }
    
       $runno += 1;
@@ -1772,29 +1790,29 @@ sub generate_pdf_doc {
    
    ### if the THUMBNAILS option is switched on then make thumbnails
    if ( &param_value('thumbpdf') eq $YES ) {
-      &run_thumbpdf($path.$base, $thumbpdf_log);
+      &run_thumbpdf($doc, $thumbpdf_log);
       $rerun=$TRUE;
    }
    
    ### generate index file exists
-   if ( -f $path.$base.'.idx' and &param_value('forceindex') ne $NO ) {
+   if ( -f $doc.'.idx' and &param_value('forceindex') ne $NO ) {
       print "\n$MYNAME: Document seems to have an index. Generating ...\n\n";
-      &makeindex($path.$base.'.idx');
+      system ('makeindex', $doc.'.idx');
       $rerun=$TRUE;
    }
    
    ### One final pdflatex run if requested
    if ( $rerun ) {
       print "\n************ One final pdflatex run no. $runno *************\n";
-      &run_pdflatex($path.$base, $pdflog_base.$runno.'.log');
+      &run_pdflatex($doc, $pdflog_base.$runno.'.log');
    }
 
-   if ( ! -f $path.$base.'.pdf' ) {
+   if ( ! -f $pdf_doc ) {
       print "\n";
-      &abort("The new PDF file could not be generated: ".$path.$base.'.pdf');
+      &abort("The new PDF file could not be generated: ".$pdf_doc);
    }
 
-   return $path.$base.'.pdf';
+   return $pdf_doc;
 }
    
 ################## Lift off !!!! (main part) ##################
