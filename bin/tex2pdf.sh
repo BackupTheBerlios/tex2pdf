@@ -132,9 +132,11 @@
 #     (thanks to Richard for the bug report)
 #  * bugfix: commented out \include and \bibliography have been processed
 #     (thanks to Ahmet Sekercioglu for the bug report)
+#  * added optional makeindex support (set MAKEINDEX=test to activate)
+#     (thanks to Steffen Macke for his work)
 #
 
-MYRELEASE="2.0.6"
+MYRELEASE="2.0.7"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -227,6 +229,12 @@ THUMB="no"
 # the original file
 # CAUTION: If you leave this blank you will overwrite the original files!
 TMPBASESUFFIX=-pdf
+
+# execution of the makeindex command for index handling
+# this should fix the problem with a missing document index
+# possible values: "test" - check for index file and if found call makeindex 
+#                  "no" - never execute it
+MAKEINDEX="no"
 
 # sed command which is used to insert additional TeX commands in the LaTeX
 # preamble
@@ -631,11 +639,7 @@ run_thumbpdf() {
    echo
    rm thumb???.png
    rm thumbpdf.pdf
-
-   echo
-   echo "************ One final pdflatex run no. $runno *************"
-   run_pdflatex $TEXFILE
-   rm thumbdta.tex
+   TMPFILES="$TMPFILES thumbdta.tex"
 }
 
 ################## Lift off !!!! (main part) ##################
@@ -824,10 +828,31 @@ do
    runno=$((runno+1))
 done
 
+rerun=0
+
 ### if the THUMB option is switched on then make thumbnails
 if [ "$THUMB" = "yes" ]
 then
    run_thumbpdf ${TMPBASE}
+   rerun=1
+fi
+
+### generate index if required
+if [ -f ${TMPBASE}.idx  -a "$MAKEINDEX" != "no" ]
+then
+   echo
+   echo "$MYNAME: Document seems to have an index. Generating ..."
+   echo
+   makeindex ${TMPBASE}.idx
+   rerun=1
+fi
+
+### One final pdflatex run if requested
+if [ $rerun -ne 0 ]
+then
+   echo
+   echo "************ One final pdflatex run no. $runno *************"
+   run_pdflatex ${TMPBASE}
 fi
 
 ##### Clean up
