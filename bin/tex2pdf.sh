@@ -126,10 +126,11 @@
 # ?????????????? -- Version 2.1
 #  * bugfix: included graphics haven't been recognised with [...] parameter
 #     (thanks to Ahmet Sekercioglu for this bug report)
-#  * introduced parameters MINRUNNO and CLEANLOGS
+#  * introduced parameters MINRUNNO, INSERTCOMMAND and CLEANLOGS
+#  * bugfix: env variable in single quotes (handling of included TeX files)
 #
 
-MYVERSION="2.0.4"
+MYVERSION="2.0.5"
 
 ##### You will need pdftex and epstopdf for the generation!
 ##### See pdftex homepage for details: http://tug.org/applications/pdftex/
@@ -222,6 +223,15 @@ THUMB="no"
 # the original file
 # CAUTION: If you leave this blank you will overwrite the original files!
 TMPBASESUFFIX=-pdf
+
+# sed command which is used to insert additional TeX commands in the LaTeX
+# preamble
+# try the following commands if you have strange errors or junk on the
+# first PDF document page
+# INSERTCOMMAND="/^[\]begin{document}$/i"
+# INSERTCOMMAND="/^[\]makeatletter$/i"
+INSERTCOMMAND="/^[\]documentclass\(\[[^]]*\]\)\?{.*}/a"
+
 
 ##### Functions
 
@@ -490,23 +500,23 @@ prepare_document() {
    echo
    echo $MYNAME: Generating temporary LaTeX document
 
-   ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^{]*\]\)\?\({[^}]\+\.\)\(e\)*ps}/\1\2\3pdf}/g" \
+   ${SEDEXE} -e "s/\([\]includegraphics\)\(\[[^]]*\]\)\?\({[^}]\+\.\)\(e\)*ps}/\1\2\3pdf}/g" \
    -e "s/\([\]input{[^}]\+\.\)pstex_t}/\1pdf_t}/g" \
-   -e 's/\([\]include{[^}]\+\)}/\1${TMPBASESUFFIX}}/g' \
+   -e "s/\([\]include{[^}]\+\)}/\1${TMPBASESUFFIX}}/g" \
    -e "1,/^[\]begin{document}$/s/^[\]batchmode$//" \
-   -e '/^[\]begin{document}$/i \
+   -e "$INSERTCOMMAND"' \
    \\usepackage{pslatex}' \
-   -e '/^[\]begin{document}$/i \
+   -e "$INSERTCOMMAND"' \
    \\makeatletter' \
-   -e '/^[\]begin{document}$/i \
+   -e "$INSERTCOMMAND"' \
    \\usepackage[pdftex,pdftitle={'"$TITLE},pdfauthor={$AUTHOR},linktocpage,$PAPERSIZE,colorlinks={$COLORLINKS},urlcolor={$URLCOLOR},citecolor={$CITECOLOR}]{hyperref}"  \
-   -e '/^[\]begin{document}$/i \
+   -e "$INSERTCOMMAND"' \
    \\makeatother' \
    $1 > $TARGETFILE
 
    if [ "$THUMB" = "yes" ]
    then
-      ${SEDEXE} -e '/^[\]begin{document}$/i \
+      ${SEDEXE} -e "$INSERTCOMMAND"' \
       \\usepackage{thumbpdf}' $TARGETFILE > ${TARGETFILE}2
       rm $TARGETFILE
       mv ${TARGETFILE}2 $TARGETFILE
