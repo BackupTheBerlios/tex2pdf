@@ -57,7 +57,7 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="3.0.16";
+my $MYRELEASE="3.0.17";
 my $MYHOSTNAME=hostname;
 my $MYNAME=basename $0;
 my $MYUSER=$ENV{'USER'};
@@ -1653,6 +1653,7 @@ sub identify_files {
          # if there is a '.' in the basename assume that this is a reference
          # to a file of another type and skip it
          if( $base =~ /\./ ) {
+            &report(9, "Found an unknown extension. Ignoring '$tag_contents'.");
             next;
          }
 
