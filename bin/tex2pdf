@@ -53,8 +53,8 @@ use strict;
 
 ####### global variables
 
-my $MYRELEASE="2.4alpha4";
-my $MYNAME="tex2pdf.pl";
+my $MYRELEASE="3.0alpha1";
+my $MYNAME=basename $0;
 my @TMPFILES=();
 my @TMP_TEX_FILES=(); 
 my $NUM_PARAM_MIN=0;
@@ -82,6 +82,7 @@ my $RC_FILENAME="$ENV{'HOME'}/.tex2pdfplrc";
 
 my %CONFIGURATION = ();
 my %PARAMETER_LIST = ();
+my @PARAMETER_ORDER = ();
 my %PARAMETER_TYPES = ();
  
 ## Array index for the various information in each parameter specifcation
@@ -100,67 +101,67 @@ $DESCRIPTION=4;
 $EXPLANATION=5;
 
 &add_param_type('paper',
-   { 'a4paper' => 'a4 paper',
-     'letterpaper' => 'letter paper',
-     'legalpaper' => 'legal paper',
-     'executivepaper' => 'executive paper',
-     $NIL => 'do not set value - leave it to hyperref'
-   } );
+   [ ['a4paper' , 'a4 paper' ],
+     [ 'letterpaper', 'letter paper' ],
+     [ 'legalpaper', 'legal paper' ],
+     [ 'executivepaper', 'executive paper' ],
+     [ $NIL, 'do not set value - leave it to hyperref' ]
+   ] );
 		  
 &add_param_type('color', 
-   { 'yellow' => 'LaTeX color yellow',
-     'red' => 'LaTeX color red',
-     'green' => 'LaTeX color green',
-     'cyan' => 'LaTeX color cyan',
-     'blue' => 'LaTeX color blue',
-     'magenta' => 'LaTeX color magenta',
-     'black' => 'LaTeX color black',
-$NIL => 'do not set this value - leave it to hyperref'
-   } );
+   [ [ 'yellow', 'LaTeX color yellow' ],
+     [ 'red', 'LaTeX color red' ],
+     [ 'green', 'LaTeX color green' ],
+     [ 'cyan', 'LaTeX color cyan' ],
+     [ 'blue', 'LaTeX color blue' ],
+     [ 'magenta', 'LaTeX color magenta' ],
+     [ 'black', 'LaTeX color black' ],
+     [ $NIL , 'do not set this value - leave it to hyperref' ]
+   ] );
 
 &add_param_type('destination',
-   { 'source' => 'directory of the LaTeX source document' ,
-     'input' => 'root directory of referenced material',
-     'custom' => 'custom directory as specified'
-   } );
+   [ [ 'source', 'directory of the LaTeX source document' ] ,
+     [ 'input', 'root directory of referenced material' ],
+     [ 'custom', 'custom directory as specified' ]
+   ] );
 
 # $key, $type, $def_value, $opt_alias, $opt_spec, $description, $explanation, $question
-&add_param('help', 'action', undef, '|h', '');
-&add_param('version', 'action', undef, '|v', '');
-&add_param('print_config', 'action', undef, '|o', '');
-&add_param('configure', 'action', undef, '|r', '');
-&add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s');
-&add_param('lyxrc_path', 'directory', "$ENV{'HOME'}/.lyx/", '', '=s');
-&add_param('clean_on_abort', 'bool', $NO, '', '!');
-&add_param('overwrite', 'bool', $NO, '', '!');
-&add_param('clean_logs', 'bool', $YES, '|l', '!');
-&add_param('check_commands', 'bool', $YES, '|c', '!');
-&add_param('destination', 'destination', 'source', '', '=s');
-&add_param('custom_path', 'directory', $ENV{'HOME'}.'/', '|d', '=s');
-&add_param('tmp_base_suffix', 'text', '-pdf', '', '=s');
-&add_param('colorlinks', 'three', $YES, '', '!');
-&add_param('paper', 'paper', 'a4paper', '|p', '=s');
-&add_param('citecolor', 'color', 'red', '', '=s');
-&add_param('urlcolor', 'color', 'blue', '', '=s');
-&add_param('linkcolor', 'color', 'green', '', '=s');
-&add_param('pagecolor', 'color', 'magenta', '', '=s');
-&add_param('link_toc_page', 'bool', $YES, '', '!');
-&add_param('default_title', 'text', $NIL, '', '=s');
-&add_param('title', 'text', undef, '|t', '=s');
-&add_param('default_author', 'text', $NIL, '', '=s');
-&add_param('author', 'text', undef, '|a', '=s');
-&add_param('force_index', 'bool', $NO, '|i', '!');
-&add_param('bibtex', 'three', $NIL, '|b', '!');
-&add_param('thumbpdf', 'bool', $NO, '|n', '!');
-&add_param('maxrun', 'integer', 6, '', '=i');
-&add_param('minrun', 'integer', 2, '', '=i');
-&add_param('pdftex_opts', 'text', $NIL, '', '=s');
-&add_param('hyperref_opts', 'text', $NIL, '', '=s');
+&add_param('help', 'action', undef, '|h', '', 'print a short help text and exit');
+&add_param('version', 'action', undef, '|v', '', 'print the version of this script and exit');
+&add_param('print_config', 'action', undef, '|o', '', 'print the current configuration and exit');
+&add_param('configure', 'action', undef, '|r', '', 'configure all parameters interactivly, store them and exit');
+&add_param('logdir', 'directory',"/tmp/tex2pdf-$ENV{'USER'}/", '', '=s', 'set directory for saving log files');
+&add_param('lyxrc_path', 'directory', "$ENV{'HOME'}/.lyx/", '', '=s', 'set the configuration directory of LyX');
+&add_param('clean_on_abort', 'bool', $NO, '', '!', 'also delete temporary files after abort');
+&add_param('overwrite', 'bool', $NO, '', '!', 'ignore existence of files with same basename as temporary TeX files');
+&add_param('clean_logs', 'bool', $YES, '|l', '!', 'delete all log files in log directory before execution');
+&add_param('check_commands', 'bool', $YES, '|c', '!', 'make sure that required shell commands does exist before start');
+&add_param('destination', 'destination', 'source', '', '=s', 'specifiy final location of generated PDF document');
+&add_param('custom_path', 'directory', $ENV{'HOME'}.'/', '|d', '=s', "specify  custom path for 'destination' parameter");
+&add_param('tmp_base_suffix', 'text', '-pdf', '', '=s', 'specify the extension of the basename for temporary TeX files');
+&add_param('colorlinks', 'three', $YES, '', '!','activate colored links in PDF doc (hyperref)');
+&add_param('paper', 'paper', 'a4paper', '|p', '=s', 'specify papersize of the PDF doc (hyperref)');
+&add_param('citecolor', 'color', 'red', '', '=s','specify color of citations in PDF doc (hyperref)');
+&add_param('urlcolor', 'color', 'blue', '', '=s', 'specify color of URLs in PDF doc (hyperref)');
+&add_param('linkcolor', 'color', 'green', '', '=s', 'specify color of internal links in PDF doc (hyperref)');
+&add_param('pagecolor', 'color', 'magenta', '', '=s','specify color of links to other pages in PDF doc (hyperref)');
+&add_param('link_toc_page', 'bool', $YES, '', '!', 'link table of contents to pages instead of sections (hyperref)');
+&add_param('default_title', 'text', $NIL, '', '=s', 'set default PDF info title');
+&add_param('title', 'text', undef, '|t', '=s', 'set PDF info title for specified document');
+&add_param('default_author', 'text', $NIL, '', '=s','set default PDF info author');
+&add_param('author', 'text', undef, '|a', '=s', 'set PDF info author for specified document');
+&add_param('force_index', 'bool', $NO, '|i', '!', 'force extra inclusion of (existing) index in PDF doc');
+&add_param('bibtex', 'three', $NIL, '|b', '!', 'set bibtex behavior');
+&add_param('thumbpdf', 'bool', $NO, '|n', '!', 'generate thumbnails for PDF document');
+&add_param('maxrun', 'integer', 6, '', '=i', 'specify maximal number of pdflatex runs if problems are detected');
+&add_param('minrun', 'integer', 2, '', '=i','specify minimal number of pdflatex runs if no problems are detected');
+&add_param('pdftex_opts', 'text', $NIL, '', '=s','specify extra options for shell execution of pdflatex');
+&add_param('hyperref_args', 'text', $NIL, '', '=s','specify extra arguments for the hyperref package');
 
 # the following parameter types should be set now:
-#  'color' => \%VALUES,
-#  'destination' => \%VALUES,
-#  'paper' => \%VALUES,
+#  'color' => \@VALUES,
+#  'destination' => \@VALUES,
+#  'paper' => \@VALUES,
 #  'three' => undef,
 # 'bool' => undef,
 #  'integer' => undef,
@@ -392,25 +393,34 @@ sub input_number {
 ### interactively choose between several given values
 # parameter 1: question
 # parameter 2: default value
-# parameter 3: reference to hash list of possible values
+# parameter 3: reference to an array of possible values arrays
 # return value: the chosen value
 
 sub choose_value {
-   my ($question, $default, $values_hash_ref)=@_;
+   my ($question, $default, $enum_array_ref)=@_;
    my $default_no=1;
    my $chosen_no;
-   my @possible_values = keys %$values_hash_ref;
+   my @possible_values = @$enum_array_ref;
+   my @value_array;
+   my $value_key;
+   my $value_output;
 
    print "$question\n";
-   foreach (0..$#possible_values)
-   {
-      my $no = $_ + 1;
-      print "$no) " . ${$values_hash_ref}{$possible_values[$_]} . "\n";
-      if ( $default eq $possible_values[$_] ) { $default_no=$no; }
+   foreach (0..$#possible_values) {
+      my $no     = $_ + 1;
+      @value_array  = @{$possible_values[$_]};
+      $value_key    = $value_array[0];
+      $value_output = $value_array[1];
+
+      print "$no) " . $value_output . "\n";
+      if ( $default eq $value_key ) { $default_no=$no; }
    }
 
    $chosen_no=&input_number("Please enter the corresponding number", $default_no, 1, $#possible_values);
-   return $possible_values[$chosen_no - 1];
+
+   @value_array  = @{$possible_values[$chosen_no - 1]};
+   $value_key    = $value_array[0];
+   return $value_key;
 }
 
 ### interactively answer a question
@@ -544,11 +554,11 @@ sub input_dir {
    return $response;
 }
 
-#### add a new parameter type with corresponding hash table to the adminstrated
+#### add a new parameter type with corresponding additional data argument
 #### parameters types
 # parameter 1: type key
 # parameter 2: additonal data for the type
-#              e.g. for enum type: reference to hash table
+#              e.g. for enum type: reference to list of arrays
 # return value: none
 
 sub add_param_type {
@@ -578,6 +588,8 @@ sub add_param {
 
    $PARAMETER_LIST{$key} = [ $type, $opt_alias, $opt_spec, $def_value, $description, $explanation, $question ];
    
+   push(@PARAMETER_ORDER, $key);
+
    if (! exists $PARAMETER_TYPES{$type}) {
       $PARAMETER_TYPES{$type} = undef;
    }
@@ -585,9 +597,10 @@ sub add_param {
 
 ### get the value of an existing parameter
 # parameter 1: a parameter key
-# return value: referenc to the hash of possible values (undef if not valid)
+# return value: reference to the array of possible value entries 
+#               (undef if not valid)
 
-sub type_values_hash {
+sub type_enum_array {
    my $key = $_[0];
    my $values_ref;
 
@@ -597,7 +610,7 @@ sub type_values_hash {
 
    $values_ref = $PARAMETER_TYPES{$key};
 
-   if(ref $values_ref ne 'HASH') {
+   if(ref $values_ref ne 'ARRAY') {
       $values_ref = undef;
    }
 
@@ -693,7 +706,7 @@ sub handle_option {
          &abort("Illegal value: $value");
       }
       &set_param_value($key, $value);
-   } elsif (defined(&type_values_hash($type))){
+   } elsif (defined(&type_enum_array($type))){
       &set_enum_param($key, $value);
    } else {
       &set_param_value($key, $value);
@@ -743,15 +756,31 @@ sub handle_action_opt {
 sub set_enum_value {
    my ($key, $value) = @_;
    my $type;
-   my $values_hash_ref;
+   my $enum_array_ref;
+   my @allowed_values=();
 
    $type = &param_type($key);
-   $values_hash_ref = &type_values_hash($type);
-   if ( ! exists ${$values_hash_ref}{$value} ) {
-      print "\n$key allows: " . (keys %{$values_hash_ref}) . ".\n";
-      &abort("Illegal value: $value");
+   $enum_array_ref = &type_enum_array($type);
+   die "Internal error: No value array for parameter $key."
+     if(!defined($enum_array_ref));
+
+   ### find out if the given value is allowed  
+   foreach my $value_array_ref (${$enum_array_ref}) {
+      if(${$value_array_ref}[0] eq $value) {
+         ### found it, so it is okay!
+         &set_param_value($key, $value);
+	 return;
+      }
    }
-   &set_param_value($key, $value);
+
+   ### value is not listed, so not allowed
+   ### make a list of all allowed values
+   foreach my $value_array_ref (${$enum_array_ref}) {
+      push(@allowed_values, ${$value_array_ref}[0]);
+   }
+
+   print "\n$key allows: " . @allowed_values . ".\n";
+   &abort("Illegal value: $value");
 }
 
 ### configure an existing parameter interactively
@@ -781,14 +810,14 @@ sub config_param {
       $new_value=&input_number($question, $current_value,
       $NUM_PARAM_MIN, $NUM_PARAM_MAX);  
    } else {
-      my $values_hash_ref; 
+      my $enum_array_ref; 
 
-      $values_hash_ref=&type_values_hash($type); 
-      if (! defined($values_hash_ref)) {
+      $enum_array_ref=&type_enum_array($type); 
+      if (! defined($enum_array_ref)) {
          &abort("do not know how to configure this parameter: $key (type: $type)");
       }
 
-      $new_value=&choose_value($question,$current_value,$values_hash_ref);
+      $new_value=&choose_value($question,$current_value,$enum_array_ref);
    } 
 
    &set_param_value($key, $new_value);
@@ -801,8 +830,6 @@ sub config_param {
 sub write_configuration {
    my $file_name = $_[0];
    my $date;
-   my $key;
-   my $value;
 
    open(RCFILE, ">$file_name") or
       &abort("Could not open configuration file for writing ($file_name)");
@@ -814,7 +841,8 @@ sub write_configuration {
    print "# Configuration file for $MYNAME V$MYRELEASE\n";
    print "# Generated $date by $ENV{'USER'} on $ENV{'HOSTNAME'}\n";
    
-   while (($key, $value) = each %CONFIGURATION ) {
+   foreach my $key (@PARAMETER_ORDER) {
+      my $value = $CONFIGURATION{$key};
       if(&param_type($key) ne 'action' and defined($value)) {
          print $key.'='.$value."\n";
       }
@@ -828,12 +856,10 @@ sub write_configuration {
 ### print the configuration parameters
 
 sub print_configuration {
-   my $key;
-   my $value;
-
    print "\nConfiguration for $MYNAME V$MYRELEASE\n";
    
-   while (($key, $value) = each %CONFIGURATION ) {
+   foreach my $key (@PARAMETER_ORDER) {
+      my $value = $CONFIGURATION{$key};
       if(&param_type($key) ne 'action' and defined($value)) {
          print $key.'='.$value."\n";
       }
@@ -967,7 +993,7 @@ sub configure {
    print "These parameters should normally have the format:\n";
    print "PARAMETERNAME={VALUE},PARAMETERNAME={VALUE},...\n";
    print "Leave blank for no additional values.\n\n";
-   &config_param("Additional parameters ?",'hyperref_opts');
+   &config_param("Additional parameters ?",'hyperref_args');
 
    print "\n----------------\n";
    print "You can now specify in which directory the resulting document should\n";
@@ -1811,7 +1837,7 @@ sub generate_hyperref_params {
       }
    }
 
-   $para=&param_value('hyperref_opts');
+   $para=&param_value('hyperref_args');
    if(defined($para) and $para ne "" and $para ne $NIL) {
       push(@params, $para);
    }
