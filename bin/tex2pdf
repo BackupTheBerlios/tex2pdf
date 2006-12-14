@@ -93,7 +93,7 @@ my $CONFIGURED=$FALSE;
 my $RUN_PSforPDF = $NO;
 ####### HARD CODED PARAMETERS
 
-my $MYRELEASE="3.2.1";
+my $MYRELEASE="3.2.2";
 my $NUM_PARAM_MIN=0;
 my $NUM_PARAM_MAX=10;  
 my $MTP_PREAMBLE_FILENAME="preamble.cfg";
@@ -2143,6 +2143,7 @@ sub process_textags {
          # cut off the suffix of eps, ps, *.gz and pstex graphics
          #s/((\\includegraphics)(\[[^]]*?\])?(\{[^}]+?))\.(e?ps|pstex|e?ps\.gz)
          #\n?\}/$1}/sg;
+	 $contents =~ s/\\lyxdot /\./;
          if ($contents =~ s/\.($suffixes_regexp|\d+)\s*$//) {
             $found_suffix = $1; 
          }
